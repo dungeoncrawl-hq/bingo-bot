@@ -14,8 +14,16 @@ export type TileCondition =
   | { type: 'lootValueGained'; threshold: number }
   // The single biggest drop's own value, not a running total.
   | { type: 'singleDropValue'; threshold: number }
+  // Any tier combined -- separate from the per-tier variants below, mirrors
+  // how OSRS hiscores tracks "Clue Scrolls (all)" as its own stat alongside
+  // each individual tier.
   | { type: 'cluesCompleted'; threshold: number }
+  | { type: 'beginnerCluesCompleted'; threshold: number }
+  | { type: 'easyCluesCompleted'; threshold: number }
+  | { type: 'mediumCluesCompleted'; threshold: number }
   | { type: 'hardCluesCompleted'; threshold: number }
+  | { type: 'eliteCluesCompleted'; threshold: number }
+  | { type: 'masterCluesCompleted'; threshold: number }
   | { type: 'collectionLogGained'; threshold: number }
   // At least one level gained in a specific skill (threshold is usually 1).
   | { type: 'skillLevelGained'; skill: string; threshold: number }
@@ -47,7 +55,12 @@ export interface ParticipantStats {
   lootValueGained: number;
   biggestDropValue: number;
   cluesCompleted: number;
+  beginnerCluesCompleted: number;
+  easyCluesCompleted: number;
+  mediumCluesCompleted: number;
   hardCluesCompleted: number;
+  eliteCluesCompleted: number;
+  masterCluesCompleted: number;
   collectionLogGained: number;
   skillLevelsGained: Record<string, number>;
   skillXpGained: Record<string, number>;
@@ -88,13 +101,15 @@ export function checkTile(cond: TileCondition, stats: ParticipantStats): TileSta
     case 'singleDropValue':
       return { done: stats.biggestDropValue >= cond.threshold, progress: stats.biggestDropValue, goal: cond.threshold };
     case 'cluesCompleted':
-      return { done: stats.cluesCompleted >= cond.threshold, progress: stats.cluesCompleted, goal: cond.threshold };
+    case 'beginnerCluesCompleted':
+    case 'easyCluesCompleted':
+    case 'mediumCluesCompleted':
     case 'hardCluesCompleted':
-      return {
-        done: stats.hardCluesCompleted >= cond.threshold,
-        progress: stats.hardCluesCompleted,
-        goal: cond.threshold,
-      };
+    case 'eliteCluesCompleted':
+    case 'masterCluesCompleted': {
+      const progress = stats[cond.type];
+      return { done: progress >= cond.threshold, progress, goal: cond.threshold };
+    }
     case 'collectionLogGained':
       return {
         done: stats.collectionLogGained >= cond.threshold,
@@ -144,8 +159,18 @@ export function describeTileCondition(cond: TileCondition): string {
       return `a single drop worth ${cond.threshold.toLocaleString()}+ GP`;
     case 'cluesCompleted':
       return `${cond.threshold.toLocaleString()} clue scrolls`;
+    case 'beginnerCluesCompleted':
+      return `${cond.threshold.toLocaleString()} Beginner clue scrolls`;
+    case 'easyCluesCompleted':
+      return `${cond.threshold.toLocaleString()} Easy clue scrolls`;
+    case 'mediumCluesCompleted':
+      return `${cond.threshold.toLocaleString()} Medium clue scrolls`;
     case 'hardCluesCompleted':
       return `${cond.threshold.toLocaleString()} Hard clue scrolls`;
+    case 'eliteCluesCompleted':
+      return `${cond.threshold.toLocaleString()} Elite clue scrolls`;
+    case 'masterCluesCompleted':
+      return `${cond.threshold.toLocaleString()} Master clue scrolls`;
     case 'collectionLogGained':
       return `${cond.threshold.toLocaleString()} new collection log items`;
     case 'skillLevelGained':
@@ -160,6 +185,47 @@ export function describeTileCondition(cond: TileCondition): string {
       return cond.threshold > 1 ? `${cond.threshold} pets` : 'a pet';
     case 'tbd':
       return 'this task';
+  }
+}
+
+// A short, tile-caption-sized rendering of just the goal number -- unlike
+// describeTileCondition's full sentence, this is meant to sit directly
+// under a tile's label on the board grid itself. null for 'tbd', which has
+// no real goal to show.
+export function formatTileGoal(cond: TileCondition): string | null {
+  switch (cond.type) {
+    case 'tbd':
+      return null;
+    case 'maxDeaths':
+      return `≤${cond.threshold.toLocaleString()} deaths`;
+    case 'xpGained':
+    case 'skillXpGained':
+      return `${cond.threshold.toLocaleString()} XP`;
+    case 'skillLevelGained':
+      return `${cond.threshold.toLocaleString()} level${cond.threshold === 1 ? '' : 's'}`;
+    case 'bossKcGained':
+    case 'kcGained':
+      return `${cond.threshold.toLocaleString()} KC`;
+    case 'slayerTasksCompleted':
+      return `${cond.threshold.toLocaleString()} tasks`;
+    case 'lootValueGained':
+      return `${cond.threshold.toLocaleString()} gp`;
+    case 'singleDropValue':
+      return `${cond.threshold.toLocaleString()}+ gp`;
+    case 'itemCount':
+      return `${cond.threshold.toLocaleString()}x`;
+    case 'cluesCompleted':
+    case 'beginnerCluesCompleted':
+    case 'easyCluesCompleted':
+    case 'mediumCluesCompleted':
+    case 'hardCluesCompleted':
+    case 'eliteCluesCompleted':
+    case 'masterCluesCompleted':
+      return `${cond.threshold.toLocaleString()} clues`;
+    case 'collectionLogGained':
+      return `${cond.threshold.toLocaleString()} items`;
+    case 'petsObtained':
+      return `${cond.threshold.toLocaleString()} pet${cond.threshold === 1 ? '' : 's'}`;
   }
 }
 

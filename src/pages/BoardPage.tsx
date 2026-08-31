@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { getSupabase } from '../db/supabaseClient';
 import type { Challenge, Tile } from '../db/types';
-import { describeTileCondition } from '../lib/tileConditions';
+import { describeTileCondition, formatTileGoal } from '../lib/tileConditions';
 
 const GRID_SIZE = 5;
 
@@ -120,6 +120,9 @@ export default function BoardPage() {
                 <>
                   {tile.icon && <img src={tile.icon} alt="" className="h-6 w-6" />}
                   <span className="mt-1 line-clamp-2 text-[11px]">{tile.label}</span>
+                  {formatTileGoal(tile.condition) && (
+                    <span className="text-[9px] text-neutral-500">{formatTileGoal(tile.condition)}</span>
+                  )}
                   {done && <span className="mt-1 text-[10px] text-green-400">✓ done</span>}
                 </>
               ) : (

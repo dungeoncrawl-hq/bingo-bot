@@ -33,8 +33,13 @@ const CONDITION_GROUPS: { group: string; options: { value: TileCondition['type']
   {
     group: 'Clue Scrolls',
     options: [
-      { value: 'cluesCompleted', label: 'Clue scrolls completed' },
+      { value: 'cluesCompleted', label: 'Clue scrolls completed (any tier)' },
+      { value: 'beginnerCluesCompleted', label: 'Beginner clue scrolls completed' },
+      { value: 'easyCluesCompleted', label: 'Easy clue scrolls completed' },
+      { value: 'mediumCluesCompleted', label: 'Medium clue scrolls completed' },
       { value: 'hardCluesCompleted', label: 'Hard clue scrolls completed' },
+      { value: 'eliteCluesCompleted', label: 'Elite clue scrolls completed' },
+      { value: 'masterCluesCompleted', label: 'Master clue scrolls completed' },
     ],
   },
   {
@@ -106,8 +111,18 @@ function defaultLabelFor(type: TileCondition['type'], skill: string, activity: s
       return setName.trim() || 'Item Set';
     case 'cluesCompleted':
       return 'Clue Scrolls';
+    case 'beginnerCluesCompleted':
+      return 'Beginner Clues';
+    case 'easyCluesCompleted':
+      return 'Easy Clues';
+    case 'mediumCluesCompleted':
+      return 'Medium Clues';
     case 'hardCluesCompleted':
       return 'Hard Clues';
+    case 'eliteCluesCompleted':
+      return 'Elite Clues';
+    case 'masterCluesCompleted':
+      return 'Master Clues';
     case 'collectionLogGained':
       return 'Collection Log';
     case 'petsObtained':

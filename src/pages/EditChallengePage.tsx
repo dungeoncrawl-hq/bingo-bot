@@ -5,7 +5,7 @@ import { useAuth } from '../auth/useAuth';
 import { getSupabase } from '../db/supabaseClient';
 import type { Challenge, Tile, TileLayout } from '../db/types';
 import TileEditorForm from '../components/TileEditorForm';
-import type { TileCondition } from '../lib/tileConditions';
+import { formatTileGoal, type TileCondition } from '../lib/tileConditions';
 
 const GRID_SIZE = 5;
 
@@ -127,6 +127,9 @@ export default function EditChallengePage() {
                 <>
                   {tile.icon && <img src={tile.icon} alt="" className="h-6 w-6" />}
                   <span className="mt-1 line-clamp-2 text-[11px]">{tile.label}</span>
+                  {formatTileGoal(tile.condition) && (
+                    <span className="text-[9px] text-neutral-500">{formatTileGoal(tile.condition)}</span>
+                  )}
                 </>
               ) : (
                 <span className="text-xs text-neutral-600">+ Add tile</span>

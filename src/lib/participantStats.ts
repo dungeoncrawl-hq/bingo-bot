@@ -2,8 +2,9 @@
 // Dink-webhook event rows -- pure in-memory reduction, no SQL aggregation,
 // mirroring rs's seasonalBingoStats.ts for the subset of fields that are
 // event-driven (see the Milestone 3 plan for why xpGained/skillXpGained/
-// skillLevelGained/cluesCompleted/hardCluesCompleted need hiscores polling
-// instead and are zero-filled here, deferred to Milestone 4).
+// skillLevelGained/all clue-tier fields need hiscores polling instead and
+// are zero-filled here, deferred to Milestone 4 -- Dink has no CLUE
+// notifier, same reasoning as the XP fields).
 //
 // Date-window filtering compares plain UTC calendar dates (created_at's
 // date portion vs. the challenge's start/end date strings) -- simpler than
@@ -79,7 +80,12 @@ export function computeParticipantStats(raw: RawParticipantData, window: DateWin
     lootValueGained: lootInWindow.reduce((sum, d) => sum + d.total_value, 0),
     biggestDropValue: lootInWindow.reduce((max, d) => Math.max(max, d.total_value), 0),
     cluesCompleted: 0,
+    beginnerCluesCompleted: 0,
+    easyCluesCompleted: 0,
+    mediumCluesCompleted: 0,
     hardCluesCompleted: 0,
+    eliteCluesCompleted: 0,
+    masterCluesCompleted: 0,
     collectionLogGained: raw.collectionLogEntries.filter((e) => inWindow(e.created_at, window)).length,
     skillLevelsGained: {},
     skillXpGained: {},
