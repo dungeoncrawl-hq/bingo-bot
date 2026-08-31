@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import type { FormEvent } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { getSupabase } from '../db/supabaseClient';
@@ -14,6 +15,9 @@ export default function EditChallengePage() {
   const [challenge, setChallenge] = useState<Challenge | null | 'not-found'>(null);
   const [tiles, setTiles] = useState<Tile[]>([]);
   const [editingCell, setEditingCell] = useState<TileLayout | null>(null);
+  const [discordWebhookUrl, setDiscordWebhookUrl] = useState('');
+  const [savingWebhook, setSavingWebhook] = useState(false);
+  const [webhookSaved, setWebhookSaved] = useState(false);
 
   const load = useCallback(async () => {
     if (!slug) return;
@@ -31,6 +35,12 @@ export default function EditChallengePage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (challenge && challenge !== 'not-found') {
+      setDiscordWebhookUrl(challenge.discord_webhook_url ?? '');
+    }
+  }, [challenge]);
 
   const tileAt = (row: number, col: number) => tiles.find((t) => t.layout.row === row && t.layout.col === col) ?? null;
 
@@ -60,6 +70,20 @@ export default function EditChallengePage() {
     if (!challenge || challenge === 'not-found') return;
     const nextStatus = challenge.status === 'draft' ? 'active' : 'draft';
     await getSupabase().from('challenges').update({ status: nextStatus }).eq('id', challenge.id);
+    await load();
+  }
+
+  async function saveDiscordWebhook(e: FormEvent) {
+    e.preventDefault();
+    if (!challenge || challenge === 'not-found') return;
+    setSavingWebhook(true);
+    await getSupabase()
+      .from('challenges')
+      .update({ discord_webhook_url: discordWebhookUrl.trim() || null })
+      .eq('id', challenge.id);
+    setSavingWebhook(false);
+    setWebhookSaved(true);
+    setTimeout(() => setWebhookSaved(false), 2000);
     await load();
   }
 
@@ -110,6 +134,30 @@ export default function EditChallengePage() {
             </button>
           );
         })}
+      </div>
+
+      <div className="mt-10 max-w-md">
+        <h2 className="text-lg font-semibold">Discord notifications</h2>
+        <p className="mt-1 text-sm text-neutral-500">
+          Paste a Discord webhook URL to post here whenever a player completes a tile, line, or the whole board.
+          (Server Settings → Integrations → Webhooks → New Webhook → Copy Webhook URL.)
+        </p>
+        <form onSubmit={saveDiscordWebhook} className="mt-3 flex gap-2">
+          <input
+            type="url"
+            placeholder="https://discord.com/api/webhooks/..."
+            value={discordWebhookUrl}
+            onChange={(e) => setDiscordWebhookUrl(e.target.value)}
+            className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm focus:border-neutral-400 focus:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={savingWebhook}
+            className="rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-300 disabled:opacity-40"
+          >
+            {savingWebhook ? 'Saving…' : webhookSaved ? 'Saved ✓' : 'Save'}
+          </button>
+        </form>
       </div>
 
       {editingCell && (
