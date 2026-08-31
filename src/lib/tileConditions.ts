@@ -38,6 +38,12 @@ export type TileCondition =
   // name for that set, used only by describeTileCondition below (the
   // tile's own on-board label handles the item names themselves).
   | { type: 'itemCount'; itemNames: string[]; setName: string; threshold: number }
+  // A distinct condition from itemCount above: progress is how many of the
+  // named items have been obtained at LEAST ONCE (each capped at 1 toward
+  // progress -- duplicates don't help), not a running total. threshold is
+  // usually itemNames.length ("collect the full set"), but a host can ask
+  // for fewer ("any N of these M items").
+  | { type: 'itemSetCollected'; itemNames: string[]; setName: string; threshold: number }
   // Inverted from every condition above: this tile starts complete (0
   // deaths is always "under the limit") and is LOST once deaths climb past
   // the threshold, rather than being earned by reaching one.
@@ -130,6 +136,10 @@ export function checkTile(cond: TileCondition, stats: ParticipantStats): TileSta
       const progress = cond.itemNames.reduce((sum, name) => sum + (stats.itemCounts[name.toLowerCase()] ?? 0), 0);
       return { done: progress >= cond.threshold, progress, goal: cond.threshold };
     }
+    case 'itemSetCollected': {
+      const progress = cond.itemNames.filter((name) => (stats.itemCounts[name.toLowerCase()] ?? 0) > 0).length;
+      return { done: progress >= cond.threshold, progress, goal: cond.threshold };
+    }
     case 'maxDeaths': {
       const done = stats.deathsInPeriod <= cond.threshold;
       return { done, progress: stats.deathsInPeriod, goal: cond.threshold, failed: !done };
@@ -181,6 +191,10 @@ export function describeTileCondition(cond: TileCondition): string {
       return `${cond.threshold.toLocaleString()} ${cond.skill} XP`;
     case 'itemCount':
       return `${cond.threshold.toLocaleString()} ${cond.setName}`;
+    case 'itemSetCollected':
+      return cond.threshold >= cond.itemNames.length
+        ? `the full ${cond.setName} set (${cond.itemNames.length} items, each counts once)`
+        : `${cond.threshold} of the ${cond.itemNames.length} items in ${cond.setName} (each counts once)`;
     case 'maxDeaths':
       return `${cond.threshold.toLocaleString()} deaths or fewer`;
     case 'petsObtained':
@@ -216,6 +230,8 @@ export function formatTileGoal(cond: TileCondition): string | null {
       return `${formatCompactNumber(cond.threshold)}+ gp`;
     case 'itemCount':
       return `${cond.threshold.toLocaleString()}x`;
+    case 'itemSetCollected':
+      return `${cond.threshold.toLocaleString()}/${cond.itemNames.length} items`;
     case 'cluesCompleted':
     case 'beginnerCluesCompleted':
     case 'easyCluesCompleted':
@@ -247,6 +263,8 @@ export function formatTileProgress(cond: TileCondition, status: TileStatus): str
       return `${formatCompactNumber(status.progress, { roundDown: true })} / ${formatCompactNumber(cond.threshold)} XP`;
     case 'lootValueGained':
       return `${formatCompactNumber(status.progress, { roundDown: true })} / ${formatCompactNumber(cond.threshold)} gp`;
+    case 'itemSetCollected':
+      return `${status.progress}/${status.goal} items`;
     default:
       return null;
   }

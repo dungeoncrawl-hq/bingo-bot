@@ -15,6 +15,8 @@ import {
 import { computeParticipantStats, type RawParticipantData } from '../lib/participantStats';
 import { computeHiscoresRecap, type SnapshotRow } from '../lib/hiscoresRecap';
 import { computeLeaderboard } from '../lib/leaderboard';
+import { computeFirstCompleters } from '../lib/firstCompletions';
+import TileDetailModal from '../components/TileDetailModal';
 
 const GRID_SIZE = 5;
 
@@ -28,6 +30,7 @@ interface CompletionRow {
   participant_id: string;
   kind: 'tile' | 'line' | 'board';
   ref: string;
+  completed_at: string;
 }
 
 export default function BoardPage() {
@@ -46,6 +49,7 @@ export default function BoardPage() {
   const [savingRsn, setSavingRsn] = useState(false);
   const [rsnError, setRsnError] = useState('');
   const [viewedTileStatuses, setViewedTileStatuses] = useState<Record<string, TileStatus>>({});
+  const [selectedTile, setSelectedTile] = useState<Tile | null>(null);
 
   const myParticipant = session ? participants.find((p) => p.profile_id === session.user.id) : undefined;
   // Which participant's board is currently displayed -- explicit via ?p=,
@@ -66,7 +70,10 @@ export default function BoardPage() {
     const [{ data: tilesData }, { data: participantsData }, { data: completionsData }] = await Promise.all([
       supabase.from('tiles').select('*').eq('challenge_id', challengeData.id),
       supabase.from('challenge_participants').select('id, profile_id, rsn').eq('challenge_id', challengeData.id),
-      supabase.from('tile_completions').select('participant_id, kind, ref').eq('challenge_id', challengeData.id),
+      supabase
+        .from('tile_completions')
+        .select('participant_id, kind, ref, completed_at')
+        .eq('challenge_id', challengeData.id),
     ]);
     setTiles((tilesData as Tile[]) ?? []);
     setParticipants((participantsData as ParticipantRow[]) ?? []);
@@ -193,6 +200,7 @@ export default function BoardPage() {
     completions,
     participants.map((p) => p.id),
   );
+  const firstCompleters = computeFirstCompleters(completions);
 
   return (
     <div className="mx-auto max-w-2xl py-12">
@@ -215,11 +223,14 @@ export default function BoardPage() {
           // enough for shorthand to actually help -- everything else
           // falls back to the plain goal-only caption.
           const caption = tile ? (status && formatTileProgress(tile.condition, status)) ?? formatTileGoal(tile.condition) : null;
+          const isFirst = tile != null && done && firstCompleters[tile.id] === viewedParticipantId;
+          const noOneCompleted = tile != null && !completions.some((c) => c.kind === 'tile' && c.ref === tile.id);
           return (
             <div
               key={i}
               title={tile ? describeTileCondition(tile.condition) : undefined}
-              className={`relative flex aspect-square min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden rounded-lg border p-2 text-center shadow-inner ${
+              onClick={tile ? () => setSelectedTile(tile) : undefined}
+              className={`relative flex aspect-square min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden rounded-lg border p-2 text-center shadow-inner ${tile ? 'cursor-pointer' : ''} ${
                 done
                   ? 'border-green-500 bg-green-950/40'
                   : tile
@@ -240,7 +251,13 @@ export default function BoardPage() {
                   {tile.icon && <img src={tile.icon} alt="" className="h-6 w-6 shrink-0" />}
                   <span className="mt-1 line-clamp-2 w-full break-words text-[11px]">{tile.label}</span>
                   {caption && <span className="w-full break-words text-[9px] text-stone-500">{caption}</span>}
-                  {done && <span className="mt-1 text-[10px] text-green-400">✓ done</span>}
+                  {isFirst ? (
+                    <span className="mt-1 text-[10px] text-amber-400">⭐</span>
+                  ) : done ? (
+                    <span className="mt-1 text-[10px] text-green-400">✓</span>
+                  ) : (
+                    noOneCompleted && <span className="mt-1 text-[10px] text-stone-600">○</span>
+                  )}
                 </>
               ) : (
                 <span className="text-xs text-stone-700">—</span>
@@ -360,6 +377,16 @@ export default function BoardPage() {
           {joinError && <p className="mt-2 text-sm text-red-400">{joinError}</p>}
         </div>
       </div>
+
+      {selectedTile && (
+        <TileDetailModal
+          tile={selectedTile}
+          participants={participants}
+          challenge={challenge}
+          firstCompleters={firstCompleters}
+          onClose={() => setSelectedTile(null)}
+        />
+      )}
     </div>
   );
 }

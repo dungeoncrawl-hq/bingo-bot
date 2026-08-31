@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import type { TileCondition } from '../lib/tileConditions';
 import type { Tile } from '../db/types';
 import { SKILL_ORDER, PRESET_ICONS, defaultIconFor } from '../lib/tileIcons';
+import { PRESET_ITEM_SETS } from '../lib/itemSets';
 
 // Keeps a label from overflowing the tile grid cell it renders in
 // (BoardPage.tsx/EditChallengePage.tsx both cap the label at 2 lines with
@@ -33,6 +34,7 @@ const CONDITION_GROUPS: { group: string; options: { value: TileCondition['type']
       { value: 'lootValueGained', label: 'Total GP looted' },
       { value: 'singleDropValue', label: 'A single drop worth at least...' },
       { value: 'itemCount', label: 'Obtain a set of items' },
+      { value: 'itemSetCollected', label: 'Collect a full item set (each item once)' },
     ],
   },
   {
@@ -76,6 +78,7 @@ function conditionFromForm(
     case 'skillXpGained':
       return { type, skill, threshold };
     case 'itemCount':
+    case 'itemSetCollected':
       return {
         type,
         itemNames: itemNames
@@ -113,6 +116,7 @@ function defaultLabelFor(type: TileCondition['type'], skill: string, activity: s
     case 'singleDropValue':
       return 'Big Drop';
     case 'itemCount':
+    case 'itemSetCollected':
       return setName.trim() || 'Item Set';
     case 'cluesCompleted':
       return 'Clue Scrolls';
@@ -142,8 +146,8 @@ function formFromCondition(cond: TileCondition) {
     threshold: 'threshold' in cond ? cond.threshold : 1,
     activity: cond.type === 'kcGained' ? cond.activity : '',
     skill: cond.type === 'skillLevelGained' || cond.type === 'skillXpGained' ? cond.skill : '',
-    itemNames: cond.type === 'itemCount' ? cond.itemNames.join(', ') : '',
-    setName: cond.type === 'itemCount' ? cond.setName : '',
+    itemNames: cond.type === 'itemCount' || cond.type === 'itemSetCollected' ? cond.itemNames.join(', ') : '',
+    setName: cond.type === 'itemCount' || cond.type === 'itemSetCollected' ? cond.setName : '',
   };
 }
 
@@ -175,8 +179,15 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
   const [labelIsDefault, setLabelIsDefault] = useState(
     !existing || existing.label === defaultLabelFor(type, skill, activity, setName),
   );
-  const [icon, setIcon] = useState(existing?.icon ?? defaultIconFor(type, skill) ?? '');
-  const [iconIsDefault, setIconIsDefault] = useState(!existing || existing.icon === defaultIconFor(type, skill));
+  // When defaultIconFor resolves to a real icon, that condition has exactly
+  // one sensible choice -- the icon is forced to it (see #15 below) and any
+  // previously-stored divergent icon (e.g. from before this restriction
+  // existed) is snapped back in line rather than respected.
+  const initialDefaultIcon = defaultIconFor(type, skill);
+  const [icon, setIcon] = useState(initialDefaultIcon ?? existing?.icon ?? '');
+  const [iconIsDefault, setIconIsDefault] = useState(
+    initialDefaultIcon !== null || !existing || existing.icon === initialDefaultIcon,
+  );
   const [points, setPoints] = useState(existing?.points ?? 1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -184,13 +195,25 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
   function applyType(newType: TileCondition['type']) {
     setType(newType);
     if (labelIsDefault) setLabel(defaultLabelFor(newType, skill, activity, setName));
-    if (iconIsDefault) setIcon(defaultIconFor(newType, skill) ?? '');
+    const forced = defaultIconFor(newType, skill);
+    if (forced !== null) {
+      setIcon(forced);
+      setIconIsDefault(true);
+    } else if (iconIsDefault) {
+      setIcon('');
+    }
   }
 
   function applySkill(newSkill: string) {
     setSkill(newSkill);
     if (labelIsDefault) setLabel(defaultLabelFor(type, newSkill, activity, setName));
-    if (iconIsDefault) setIcon(defaultIconFor(type, newSkill) ?? '');
+    const forced = defaultIconFor(type, newSkill);
+    if (forced !== null) {
+      setIcon(forced);
+      setIconIsDefault(true);
+    } else if (iconIsDefault) {
+      setIcon('');
+    }
   }
 
   function applyActivity(newActivity: string) {
@@ -201,6 +224,17 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
   function applySetName(newSetName: string) {
     setSetName(newSetName);
     if (labelIsDefault) setLabel(defaultLabelFor(type, skill, activity, newSetName));
+  }
+
+  function applyItemPreset(presetName: string) {
+    const preset = PRESET_ITEM_SETS.find((p) => p.name === presetName);
+    if (!preset) return;
+    applySetName(preset.name);
+    setItemNames(preset.items.join(', '));
+    // "Collect a full item set" defaults to requiring every item in the
+    // preset -- itemCount's threshold is a different scale entirely (a
+    // total-quantity goal), so it's left for the host to set by hand.
+    if (type === 'itemSetCollected') setThreshold(preset.items.length);
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -220,6 +254,8 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
       setSaving(false);
     }
   }
+
+  const isIconForced = defaultIconFor(type, skill) !== null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
@@ -265,38 +301,44 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
         </div>
         <div>
           <label className="block text-sm text-stone-400">Icon</label>
-          <div className="mt-1 flex max-h-32 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-stone-800 bg-stone-900 p-2">
-            <button
-              type="button"
-              title="No icon"
-              onClick={() => {
-                setIcon('');
-                setIconIsDefault(false);
-              }}
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded border text-[9px] text-stone-500 ${
-                icon === '' ? 'border-stone-100' : 'border-stone-700 hover:border-stone-500'
-              }`}
-            >
-              None
-            </button>
-            {PRESET_ICONS.map((opt) => (
+          {isIconForced ? (
+            <div className="mt-1 flex items-center gap-2 rounded-lg border border-stone-800 bg-stone-900 p-2">
+              {icon && <img src={icon} alt="" className="h-8 w-8 object-contain" />}
+              <p className="text-xs text-stone-500">Icon is set automatically for this condition</p>
+            </div>
+          ) : (
+            <div className="mt-1 flex max-h-32 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-stone-800 bg-stone-900 p-2">
               <button
-                key={opt.url}
                 type="button"
-                title={opt.label}
+                title="No icon"
                 onClick={() => {
-                  setIcon(opt.url);
+                  setIcon('');
                   setIconIsDefault(false);
                 }}
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded border bg-stone-800 p-1 ${
-                  icon === opt.url ? 'border-stone-100' : 'border-stone-700 hover:border-stone-500'
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded border text-[9px] text-stone-500 ${
+                  icon === '' ? 'border-stone-100' : 'border-stone-700 hover:border-stone-500'
                 }`}
               >
-                <img src={opt.url} alt={opt.label} className="h-full w-full object-contain" />
+                None
               </button>
-            ))}
-          </div>
-          {iconIsDefault && icon && <p className="mt-1 text-xs text-stone-500">Default icon for this condition</p>}
+              {PRESET_ICONS.map((opt) => (
+                <button
+                  key={opt.url}
+                  type="button"
+                  title={opt.label}
+                  onClick={() => {
+                    setIcon(opt.url);
+                    setIconIsDefault(false);
+                  }}
+                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded border bg-stone-800 p-1 ${
+                    icon === opt.url ? 'border-stone-100' : 'border-stone-700 hover:border-stone-500'
+                  }`}
+                >
+                  <img src={opt.url} alt={opt.label} className="h-full w-full object-contain" />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         {type === 'kcGained' && (
           <div>
@@ -316,8 +358,23 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
             </select>
           </div>
         )}
-        {type === 'itemCount' && (
+        {(type === 'itemCount' || type === 'itemSetCollected') && (
           <>
+            <div>
+              <label className="block text-sm text-stone-400">Load a preset (optional)</label>
+              <select
+                value=""
+                onChange={(e) => e.target.value && applyItemPreset(e.target.value)}
+                className={inputClass}
+              >
+                <option value="">Load a preset…</option>
+                {PRESET_ITEM_SETS.map((p) => (
+                  <option key={p.name} value={p.name}>
+                    {p.name} ({p.items.length})
+                  </option>
+                ))}
+              </select>
+            </div>
             <div>
               <label className="block text-sm text-stone-400">Set name (e.g. "Barrows pieces")</label>
               <input value={setName} onChange={(e) => applySetName(e.target.value)} className={inputClass} />

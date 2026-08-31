@@ -90,6 +90,7 @@ export function defaultIconFor(type: TileCondition['type'], skill?: string): str
     case 'petsObtained':
       return PETS_ICON_URL;
     case 'itemCount':
+    case 'itemSetCollected':
     case 'tbd':
       return null;
   }

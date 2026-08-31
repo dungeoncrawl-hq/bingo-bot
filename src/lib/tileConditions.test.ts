@@ -84,6 +84,42 @@ describe('checkTile', () => {
     expect(checkTile({ type: 'easyCluesCompleted', threshold: 1 }, s).done).toBe(false);
   });
 
+  it('itemSetCollected counts distinct items obtained at least once -- duplicates of one item do not substitute for another', () => {
+    const cond: TileCondition = {
+      type: 'itemSetCollected',
+      itemNames: ["Dharok's helm", "Dharok's platebody", "Dharok's platelegs", "Dharok's greataxe"],
+      setName: "Dharok's set",
+      threshold: 4,
+    };
+    // Five copies of the same piece -- only 1 distinct item, nowhere near the set.
+    const s = stats({ itemCounts: { "dharok's helm": 5 } });
+    expect(checkTile(cond, s)).toEqual({ done: false, progress: 1, goal: 4 });
+  });
+
+  it('itemSetCollected completes once every distinct item has at least one copy', () => {
+    const cond: TileCondition = {
+      type: 'itemSetCollected',
+      itemNames: ["Dharok's helm", "Dharok's platebody"],
+      setName: "Dharok's set",
+      threshold: 2,
+    };
+    const s = stats({ itemCounts: { "dharok's helm": 1, "dharok's platebody": 3 } });
+    expect(checkTile(cond, s)).toEqual({ done: true, progress: 2, goal: 2 });
+  });
+
+  it('itemSetCollected supports a partial-set threshold (any N of M)', () => {
+    const cond: TileCondition = {
+      type: 'itemSetCollected',
+      itemNames: ['a', 'b', 'c', 'd', 'e'],
+      setName: 'Some set',
+      threshold: 3,
+    };
+    const s = stats({ itemCounts: { a: 1, b: 1 } });
+    expect(checkTile(cond, s).done).toBe(false);
+    const s2 = stats({ itemCounts: { a: 1, b: 1, c: 1 } });
+    expect(checkTile(cond, s2).done).toBe(true);
+  });
+
   it('tbd never completes', () => {
     expect(checkTile({ type: 'tbd' }, stats({ xpGained: 999_999_999 }))).toEqual({
       done: false,
@@ -110,6 +146,17 @@ describe('formatTileProgress', () => {
     const cond: TileCondition = { type: 'skillXpGained', skill: 'Attack', threshold: 1_524_000 };
     const status = checkTile(cond, stats({ skillXpGained: { Attack: 1_524_000 } }));
     expect(formatTileProgress(cond, status)).toBe('1.52M / 1.52M XP');
+  });
+
+  it('formats itemSetCollected as a plain progress/goal item count', () => {
+    const cond: TileCondition = {
+      type: 'itemSetCollected',
+      itemNames: ["Dharok's helm", "Dharok's platebody", "Dharok's platelegs", "Dharok's greataxe"],
+      setName: "Dharok's set",
+      threshold: 4,
+    };
+    const status = checkTile(cond, stats({ itemCounts: { "dharok's helm": 1, "dharok's platebody": 1 } }));
+    expect(formatTileProgress(cond, status)).toBe('2/4 items');
   });
 
   it('returns null for condition types outside XP/loot scope (avoid clutter)', () => {
