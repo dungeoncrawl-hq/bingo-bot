@@ -6,6 +6,7 @@ import DashboardPage from './pages/DashboardPage';
 import NewChallengePage from './pages/NewChallengePage';
 import EditChallengePage from './pages/EditChallengePage';
 import BoardPage from './pages/BoardPage';
+import SetupGuidePage from './pages/SetupGuidePage';
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
           <Route path="/new" element={<NewChallengePage />} />
           <Route path="/c/:slug" element={<BoardPage />} />
           <Route path="/c/:slug/edit" element={<EditChallengePage />} />
+          <Route path="/c/:slug/setup" element={<SetupGuidePage />} />
         </Routes>
       </div>
     </BrowserRouter>

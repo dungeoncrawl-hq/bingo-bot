@@ -6,7 +6,8 @@ import { dirname, resolve } from 'node:path'
 import { processDinkWebhook } from './src/server/dinkWebhook'
 import { parseDinkPayload, readRawBody } from './src/server/dinkPayload'
 import { selectRows } from './src/server/supabaseAdmin'
-import { syncAllParticipants } from './src/server/participantSync'
+import { syncAllParticipants, syncOneParticipant } from './src/server/participantSync'
+import { checkChallengeProgress } from './src/server/challengeProgress'
 import type { Challenge } from './src/db/types'
 
 // vite.config.ts runs in a plain Node context -- unlike client code, it
@@ -68,6 +69,47 @@ function devApi(): Plugin {
           res.statusCode = 200
           res.setHeader('Content-Type', 'application/json')
           res.end(JSON.stringify(result))
+        } catch (err) {
+          res.statusCode = 500
+          res.end(JSON.stringify({ error: err instanceof Error ? err.message : 'Sync failed' }))
+        }
+      })
+
+      // Mirrors api/sync-participant.ts -- join-time baseline sync.
+      server.middlewares.use('/api/sync-participant', async (req, res) => {
+        if (req.method !== 'POST') {
+          res.statusCode = 405
+          res.end(JSON.stringify({ error: 'Method not allowed' }))
+          return
+        }
+        try {
+          const raw = await readRawBody(req)
+          const parsed = raw.length > 0 ? JSON.parse(raw.toString('utf8')) : {}
+          const participantId = parsed?.participantId
+          if (typeof participantId !== 'string') {
+            res.statusCode = 400
+            res.end(JSON.stringify({ error: 'Missing participantId' }))
+            return
+          }
+          const [participant] = await selectRows<{ id: string; challenge_id: string; rsn: string }>(
+            'challenge_participants',
+            `id=eq.${encodeURIComponent(participantId)}&select=id,challenge_id,rsn`,
+          )
+          if (!participant) {
+            res.statusCode = 404
+            res.end(JSON.stringify({ error: 'Unknown participant' }))
+            return
+          }
+          res.setHeader('Content-Type', 'application/json')
+          try {
+            await syncOneParticipant(participant.challenge_id, participant.id, participant.rsn)
+            await checkChallengeProgress(participant.id).catch(() => {})
+            res.statusCode = 200
+            res.end(JSON.stringify({ ok: true }))
+          } catch {
+            res.statusCode = 200
+            res.end(JSON.stringify({ ok: false, note: 'hiscores fetch failed' }))
+          }
         } catch (err) {
           res.statusCode = 500
           res.end(JSON.stringify({ error: err instanceof Error ? err.message : 'Sync failed' }))

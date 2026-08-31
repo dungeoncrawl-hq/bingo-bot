@@ -63,9 +63,11 @@ export default function BoardPage() {
     if (!session || !rsn.trim() || !challenge || challenge === 'not-found') return;
     setJoining(true);
     setJoinError('');
-    const { error } = await getSupabase()
+    const { data, error } = await getSupabase()
       .from('challenge_participants')
-      .insert({ challenge_id: challenge.id, profile_id: session.user.id, rsn: rsn.trim() });
+      .insert({ challenge_id: challenge.id, profile_id: session.user.id, rsn: rsn.trim() })
+      .select('id')
+      .single();
     setJoining(false);
     if (error) {
       setJoinError(error.message);
@@ -73,6 +75,17 @@ export default function BoardPage() {
     }
     setRsn('');
     await load();
+
+    // Best-effort baseline hiscores snapshot the moment they join, so
+    // XP/skill-level/clue tiles have an accurate starting point instead of
+    // only catching up on their first Dink LOGOUT event or the next daily
+    // cron sweep -- without this, any progress made in that gap is
+    // permanently uncounted, not just delayed.
+    fetch('/api/sync-participant', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ participantId: data.id }),
+    }).catch(() => {});
   }
 
   if (challenge === null) return null;
@@ -151,10 +164,21 @@ export default function BoardPage() {
               <Link to="/login" className="underline">
                 Sign in
               </Link>{' '}
-              to join this challenge.
+              to join this challenge.{' '}
+              <Link to={`/c/${challenge.slug}/setup`} className="underline">
+                See what's involved
+              </Link>
+              .
             </p>
           )}
-          {session && myParticipant && <p className="text-sm text-neutral-400">You're in as {myParticipant.rsn}.</p>}
+          {session && myParticipant && (
+            <p className="text-sm text-neutral-400">
+              You're in as {myParticipant.rsn}.{' '}
+              <Link to={`/c/${challenge.slug}/setup`} className="underline">
+                Set up Dink &rarr;
+              </Link>
+            </p>
+          )}
           {session && !myParticipant && (
             <form onSubmit={handleJoin} className="flex gap-2">
               <input
