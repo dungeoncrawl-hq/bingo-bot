@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Navigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { getSupabase } from '../db/supabaseClient';
 import type { Challenge, Tile, TileLayout } from '../db/types';
@@ -79,7 +79,9 @@ export default function EditChallengePage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">{challenge.name}</h1>
-          <p className="text-sm text-neutral-500">/c/{challenge.slug}</p>
+          <Link to={`/c/${challenge.slug}`} className="text-sm text-neutral-500 underline hover:text-neutral-300">
+            /c/{challenge.slug}
+          </Link>
         </div>
         <button onClick={togglePublish} className="rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-300">
           {challenge.status === 'draft' ? 'Publish' : 'Unpublish'}
