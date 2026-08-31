@@ -90,9 +90,14 @@ create table if not exists challenge_participants (
   profile_id uuid not null references profiles(id) on delete cascade,
   rsn text not null,
   joined_at timestamptz not null default now(),
-  unique (challenge_id, profile_id),
-  unique (challenge_id, lower(rsn))
+  unique (challenge_id, profile_id)
 );
+
+-- Table-level UNIQUE only accepts plain columns, not expressions like
+-- lower(rsn) -- an expression index is the correct way to enforce
+-- case-insensitive uniqueness in Postgres.
+create unique index if not exists challenge_participants_challenge_rsn_key
+  on challenge_participants (challenge_id, lower(rsn));
 
 alter table challenge_participants enable row level security;
 drop policy if exists "public read" on challenge_participants;
