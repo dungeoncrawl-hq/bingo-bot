@@ -149,7 +149,7 @@ function formFromCondition(cond: TileCondition) {
 
 interface Props {
   existing: Tile | null;
-  onSave: (fields: { label: string; icon: string | null; condition: TileCondition }) => Promise<void>;
+  onSave: (fields: { label: string; icon: string | null; condition: TileCondition; points: number }) => Promise<void>;
   onDelete?: () => Promise<void>;
   onClose: () => void;
 }
@@ -177,6 +177,7 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
   );
   const [icon, setIcon] = useState(existing?.icon ?? defaultIconFor(type, skill) ?? '');
   const [iconIsDefault, setIconIsDefault] = useState(!existing || existing.icon === defaultIconFor(type, skill));
+  const [points, setPoints] = useState(existing?.points ?? 1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -212,6 +213,7 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
         label: label.trim(),
         icon: icon.trim() || null,
         condition: conditionFromForm(type, threshold, activity, skill, itemNames, setName),
+        points: points || 1,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.');
@@ -345,6 +347,16 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
             />
           </div>
         )}
+        <div>
+          <label className="block text-sm text-stone-400">Points (leaderboard value)</label>
+          <input
+            type="number"
+            min={1}
+            value={points}
+            onChange={(e) => setPoints(Number(e.target.value))}
+            className={inputClass}
+          />
+        </div>
         {error && <p className="text-sm text-red-400">{error}</p>}
         <div className="flex items-center justify-between gap-2 pt-2">
           <div className="flex gap-2">

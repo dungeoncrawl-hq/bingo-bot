@@ -34,24 +34,36 @@ ordered -- just captured so they don't get lost.
     trigger happens. Needs further design (what triggers it? does it show
     as a blank slot, a "?" placeholder, or not appear in the grid at
     all?).
+11. Improve the logic around the "Obtain a set of items" (`itemCount`)
+    condition -- currently just a flat comma-separated item-name list
+    matched case-insensitively against loot; needs a closer look (exact
+    scope TBD).
 
 ## Host tooling
-11. "Randomize a board" starting point -- host picks random tiles/
+12. "Randomize a board" starting point -- host picks random tiles/
     conditions to seed a new board, then edits/tweaks from there instead
     of starting from a fully blank grid.
-12. A library of pre-made boards hosts can pick from to start a challenge.
-13. "Copy a past challenge" -- start a new challenge that mirrors an
+13. A library of pre-made boards hosts can pick from to start a challenge.
+14. "Copy a past challenge" -- start a new challenge that mirrors an
     existing/past board's tiles instead of rebuilding it from scratch.
+15. Restrict which icons are selectable based on the tile's condition,
+    instead of the full picker always being open. E.g. a loot-value
+    condition should always be the 10k coin stack; a total-XP condition
+    should always be the generic skill icon; a specific-skill condition
+    (e.g. Attack) should always be that skill's icon. Where more than one
+    icon could reasonably fit, offer a small curated set instead of the
+    full picker. Goal: fewer decisions for the host, and a standardized,
+    recognizable look across boards for players.
 
 ## Notifications
-14. Enhance Discord notifications for tile/line/board completions --
+16. Enhance Discord notifications for tile/line/board completions --
     currently plain-text only (`src/server/discordRelay.ts`,
     `src/server/challengeProgress.ts`); richer embeds, per-tile custom
     messages, first-completer callouts, etc. (`rs`'s `bingoDiscord.ts` has
     a fuller version of this worth referencing).
 
 ## Tile detail view
-15. Clicking a tile should open a detail view: the full condition
+17. Clicking a tile should open a detail view: the full condition
     description (`describeTileCondition`, already exists), and every
     participant's progress bar for that specific tile, sorted from most
     to least complete -- today the board only ever shows the *viewer's

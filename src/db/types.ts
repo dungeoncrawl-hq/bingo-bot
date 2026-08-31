@@ -32,6 +32,7 @@ export interface Tile {
   icon: string | null;
   layout: TileLayout;
   condition: TileCondition;
+  points: number;
   created_at: string;
 }
 

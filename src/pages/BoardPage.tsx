@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { getSupabase } from '../db/supabaseClient';
 import type { Challenge, Tile } from '../db/types';
@@ -14,6 +14,7 @@ import {
 } from '../lib/tileConditions';
 import { computeParticipantStats, type RawParticipantData } from '../lib/participantStats';
 import { computeHiscoresRecap, type SnapshotRow } from '../lib/hiscoresRecap';
+import { computeLeaderboard } from '../lib/leaderboard';
 
 const GRID_SIZE = 5;
 
@@ -32,6 +33,7 @@ interface CompletionRow {
 export default function BoardPage() {
   const { slug } = useParams<{ slug: string }>();
   const { session } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [challenge, setChallenge] = useState<Challenge | null | 'not-found'>(null);
   const [tiles, setTiles] = useState<Tile[]>([]);
   const [participants, setParticipants] = useState<ParticipantRow[]>([]);
@@ -43,7 +45,14 @@ export default function BoardPage() {
   const [rsnDraft, setRsnDraft] = useState('');
   const [savingRsn, setSavingRsn] = useState(false);
   const [rsnError, setRsnError] = useState('');
-  const [myTileStatuses, setMyTileStatuses] = useState<Record<string, TileStatus>>({});
+  const [viewedTileStatuses, setViewedTileStatuses] = useState<Record<string, TileStatus>>({});
+
+  const myParticipant = session ? participants.find((p) => p.profile_id === session.user.id) : undefined;
+  // Which participant's board is currently displayed -- explicit via ?p=,
+  // defaulting to the signed-in viewer's own board if they've joined.
+  // Anyone (signed in or not) can view anyone's board this way, since the
+  // underlying raw event tables are all public-read RLS.
+  const viewedParticipantId = searchParams.get('p') ?? myParticipant?.id ?? null;
 
   const load = useCallback(async () => {
     if (!slug) return;
@@ -59,54 +68,55 @@ export default function BoardPage() {
       supabase.from('challenge_participants').select('id, profile_id, rsn').eq('challenge_id', challengeData.id),
       supabase.from('tile_completions').select('participant_id, kind, ref').eq('challenge_id', challengeData.id),
     ]);
-    const tilesList = (tilesData as Tile[]) ?? [];
-    const participantsList = (participantsData as ParticipantRow[]) ?? [];
-    setTiles(tilesList);
-    setParticipants(participantsList);
+    setTiles((tilesData as Tile[]) ?? []);
+    setParticipants((participantsData as ParticipantRow[]) ?? []);
     setCompletions((completionsData as CompletionRow[]) ?? []);
-
-    // Live progress bars (not just done/not-done) for the signed-in
-    // viewer's own tiles -- computed client-side by re-running the same
-    // pure functions the server uses (challengeProgress.ts), since the
-    // intermediate progress numbers are never persisted, only the final
-    // done/not-done result. Raw event tables are all public-read RLS
-    // (Milestones 3/4), so this needs no elevated access.
-    const me = session ? participantsList.find((p) => p.profile_id === session.user.id) : undefined;
-    if (!me) {
-      setMyTileStatuses({});
-      return;
-    }
-    const pid = me.id;
-    const [bossKills, slayerTasks, lootDrops, deaths, collectionLogEntries, petObtains, snapshots] = await Promise.all([
-      supabase.from('boss_kills').select('boss, kc, created_at').eq('participant_id', pid),
-      supabase.from('slayer_tasks').select('created_at').eq('participant_id', pid),
-      supabase.from('loot_drops').select('items, total_value, created_at').eq('participant_id', pid),
-      supabase.from('deaths').select('created_at').eq('participant_id', pid),
-      supabase.from('collection_log_entries').select('created_at').eq('participant_id', pid),
-      supabase.from('pet_obtains').select('updated_at').eq('participant_id', pid),
-      supabase.from('participant_snapshots').select('recorded_on, total_xp, skills, activities').eq('participant_id', pid),
-    ]);
-    const raw: RawParticipantData = {
-      bossKills: (bossKills.data as RawParticipantData['bossKills']) ?? [],
-      slayerTasks: (slayerTasks.data as RawParticipantData['slayerTasks']) ?? [],
-      lootDrops: (lootDrops.data as RawParticipantData['lootDrops']) ?? [],
-      deaths: (deaths.data as RawParticipantData['deaths']) ?? [],
-      collectionLogEntries: (collectionLogEntries.data as RawParticipantData['collectionLogEntries']) ?? [],
-      petObtains: (petObtains.data as RawParticipantData['petObtains']) ?? [],
-    };
-    const window = { start: challengeData.start_date, end: challengeData.end_date };
-    const hiscoresRecap = computeHiscoresRecap((snapshots.data as SnapshotRow[]) ?? [], window);
-    const stats = computeParticipantStats(raw, window, hiscoresRecap);
-    const statuses: Record<string, TileStatus> = {};
-    for (const tile of tilesList) {
-      statuses[tile.id] = checkTile(tile.condition, stats);
-    }
-    setMyTileStatuses(statuses);
-  }, [slug, session]);
+  }, [slug]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // Live progress bars (not just done/not-done) for whichever participant's
+  // board is currently being viewed -- computed client-side by re-running
+  // the same pure functions the server uses (challengeProgress.ts), since
+  // the intermediate progress numbers are never persisted, only the final
+  // done/not-done result.
+  useEffect(() => {
+    if (!viewedParticipantId || challenge === null || challenge === 'not-found') {
+      setViewedTileStatuses({});
+      return;
+    }
+    const supabase = getSupabase();
+    const pid = viewedParticipantId;
+    const window = { start: challenge.start_date, end: challenge.end_date };
+    (async () => {
+      const [bossKills, slayerTasks, lootDrops, deaths, collectionLogEntries, petObtains, snapshots] = await Promise.all([
+        supabase.from('boss_kills').select('boss, kc, created_at').eq('participant_id', pid),
+        supabase.from('slayer_tasks').select('created_at').eq('participant_id', pid),
+        supabase.from('loot_drops').select('items, total_value, created_at').eq('participant_id', pid),
+        supabase.from('deaths').select('created_at').eq('participant_id', pid),
+        supabase.from('collection_log_entries').select('created_at').eq('participant_id', pid),
+        supabase.from('pet_obtains').select('updated_at').eq('participant_id', pid),
+        supabase.from('participant_snapshots').select('recorded_on, total_xp, skills, activities').eq('participant_id', pid),
+      ]);
+      const raw: RawParticipantData = {
+        bossKills: (bossKills.data as RawParticipantData['bossKills']) ?? [],
+        slayerTasks: (slayerTasks.data as RawParticipantData['slayerTasks']) ?? [],
+        lootDrops: (lootDrops.data as RawParticipantData['lootDrops']) ?? [],
+        deaths: (deaths.data as RawParticipantData['deaths']) ?? [],
+        collectionLogEntries: (collectionLogEntries.data as RawParticipantData['collectionLogEntries']) ?? [],
+        petObtains: (petObtains.data as RawParticipantData['petObtains']) ?? [],
+      };
+      const hiscoresRecap = computeHiscoresRecap((snapshots.data as SnapshotRow[]) ?? [], window);
+      const stats = computeParticipantStats(raw, window, hiscoresRecap);
+      const statuses: Record<string, TileStatus> = {};
+      for (const tile of tiles) {
+        statuses[tile.id] = checkTile(tile.condition, stats);
+      }
+      setViewedTileStatuses(statuses);
+    })();
+  }, [viewedParticipantId, challenge, tiles]);
 
   async function handleJoin(e: FormEvent) {
     e.preventDefault();
@@ -169,18 +179,20 @@ export default function BoardPage() {
   }
 
   const tileAt = (row: number, col: number) => tiles.find((t) => t.layout.row === row && t.layout.col === col) ?? null;
-  const myParticipant = session ? participants.find((p) => p.profile_id === session.user.id) : undefined;
-  const myCompletedTileIds = new Set(
-    completions.filter((c) => c.kind === 'tile' && c.participant_id === myParticipant?.id).map((c) => c.ref),
+  const viewedParticipant = participants.find((p) => p.id === viewedParticipantId);
+  const viewedCompletedTileIds = new Set(
+    completions.filter((c) => c.kind === 'tile' && c.participant_id === viewedParticipantId).map((c) => c.ref),
   );
-
-  function completedCount(participantId: string): number {
-    return completions.filter((c) => c.kind === 'tile' && c.participant_id === participantId).length;
-  }
 
   function hasCompletedBoard(participantId: string): boolean {
     return completions.some((c) => c.kind === 'board' && c.participant_id === participantId);
   }
+
+  const leaderboard = computeLeaderboard(
+    tiles,
+    completions,
+    participants.map((p) => p.id),
+  );
 
   return (
     <div className="mx-auto max-w-2xl py-12">
@@ -188,15 +200,15 @@ export default function BoardPage() {
       <p className="text-sm text-stone-500">
         {challenge.start_date} – {challenge.end_date}
       </p>
-      {myParticipant && <p className="mt-2 text-sm font-medium text-stone-400">{myParticipant.rsn}'s board</p>}
+      {viewedParticipant && <p className="mt-2 text-sm font-medium text-stone-400">{viewedParticipant.rsn}'s board</p>}
 
       <div className="mt-8 grid grid-cols-5 gap-2">
         {Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, i) => {
           const row = Math.floor(i / GRID_SIZE);
           const col = i % GRID_SIZE;
           const tile = tileAt(row, col);
-          const done = tile != null && myCompletedTileIds.has(tile.id);
-          const status = tile ? myTileStatuses[tile.id] : undefined;
+          const done = tile != null && viewedCompletedTileIds.has(tile.id);
+          const status = tile ? viewedTileStatuses[tile.id] : undefined;
           const percent = tile && status && !done ? progressPercent(tile.condition, status) : null;
           // formatTileProgress (current/goal, e.g. "620K / 1.5M XP") only
           // covers the condition types where a running total is large
@@ -239,14 +251,28 @@ export default function BoardPage() {
       </div>
 
       <div className="mt-10">
-        <h2 className="text-lg font-semibold">Players</h2>
-        <ul className="mt-3 space-y-1 text-sm text-stone-300">
-          {participants.map((p) => (
-            <li key={p.id}>
-              {p.rsn} — {completedCount(p.id)}/{tiles.length} tiles
-              {hasCompletedBoard(p.id) && <span className="ml-2 text-yellow-400">🏆 Complete!</span>}
-            </li>
-          ))}
+        <h2 className="text-lg font-semibold">Leaderboard</h2>
+        <ul className="mt-3 space-y-1 text-sm">
+          {leaderboard.map((entry, i) => {
+            const p = participants.find((pp) => pp.id === entry.participantId);
+            if (!p) return null;
+            const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : null;
+            const isViewed = entry.participantId === viewedParticipantId;
+            const isYou = entry.participantId === myParticipant?.id;
+            return (
+              <li key={p.id} className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSearchParams({ p: p.id })}
+                  className={`text-left hover:underline ${isViewed ? 'font-semibold text-amber-400' : 'text-stone-300'}`}
+                >
+                  {`#${i + 1}${medal ? ` ${medal}` : ''} ${p.rsn} — ${entry.points} pts (${entry.tilesCompleted}/${tiles.length} tiles)`}
+                </button>
+                {isYou && <span className="text-xs text-stone-500">(you)</span>}
+                {hasCompletedBoard(p.id) && <span className="text-yellow-400">🏆 Complete!</span>}
+              </li>
+            );
+          })}
           {participants.length === 0 && <li className="text-stone-500">No one's joined yet.</li>}
         </ul>
 

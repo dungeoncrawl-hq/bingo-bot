@@ -66,8 +66,17 @@ create table if not exists tiles (
   icon text,
   layout jsonb not null default '{}',
   condition jsonb not null,
+  -- Point value toward a challenge's leaderboard (Milestone: leaderboard).
+  -- Defaults to 1 so an unweighted board (every tile worth the same)
+  -- behaves exactly like a plain tile-completion count.
+  points integer not null default 1,
   created_at timestamptz not null default now()
 );
+
+-- `create table if not exists` above is a no-op against an already-existing
+-- production tiles table, so this ALTER is what actually lands the column
+-- there -- safe to re-run.
+alter table tiles add column if not exists points integer not null default 1;
 
 alter table tiles enable row level security;
 drop policy if exists "public read" on tiles;
