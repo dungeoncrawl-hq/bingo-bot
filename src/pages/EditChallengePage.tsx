@@ -9,11 +9,18 @@ import { formatTileGoal, type TileCondition } from '../lib/tileConditions';
 
 const GRID_SIZE = 5;
 
+interface ParticipantRow {
+  id: string;
+  rsn: string;
+  profiles: { display_name: string } | null;
+}
+
 export default function EditChallengePage() {
   const { slug } = useParams<{ slug: string }>();
   const { session, loading: authLoading } = useAuth();
   const [challenge, setChallenge] = useState<Challenge | null | 'not-found'>(null);
   const [tiles, setTiles] = useState<Tile[]>([]);
+  const [participants, setParticipants] = useState<ParticipantRow[]>([]);
   const [editingCell, setEditingCell] = useState<TileLayout | null>(null);
   const [discordWebhookUrl, setDiscordWebhookUrl] = useState('');
   const [savingWebhook, setSavingWebhook] = useState(false);
@@ -28,8 +35,15 @@ export default function EditChallengePage() {
       return;
     }
     setChallenge(challengeData as Challenge);
-    const { data: tilesData } = await supabase.from('tiles').select('*').eq('challenge_id', challengeData.id);
+    const [{ data: tilesData }, { data: participantsData }] = await Promise.all([
+      supabase.from('tiles').select('*').eq('challenge_id', challengeData.id),
+      supabase
+        .from('challenge_participants')
+        .select('id, rsn, profiles(display_name)')
+        .eq('challenge_id', challengeData.id),
+    ]);
     setTiles((tilesData as Tile[]) ?? []);
+    setParticipants((participantsData as unknown as ParticipantRow[]) ?? []);
   }, [slug]);
 
   useEffect(() => {
@@ -70,6 +84,15 @@ export default function EditChallengePage() {
     if (!challenge || challenge === 'not-found') return;
     const nextStatus = challenge.status === 'draft' ? 'active' : 'draft';
     await getSupabase().from('challenges').update({ status: nextStatus }).eq('id', challenge.id);
+    await load();
+  }
+
+  async function handleRemoveParticipant(participant: ParticipantRow) {
+    const name = participant.profiles?.display_name ?? participant.rsn;
+    if (!window.confirm(`Remove ${name} (${participant.rsn})? Their progress history on this board will be deleted.`)) {
+      return;
+    }
+    await getSupabase().from('challenge_participants').delete().eq('id', participant.id);
     await load();
   }
 
@@ -137,6 +160,27 @@ export default function EditChallengePage() {
             </button>
           );
         })}
+      </div>
+
+      <div className="mt-10 max-w-md">
+        <h2 className="text-lg font-semibold">Players</h2>
+        <ul className="mt-3 space-y-2 text-sm text-neutral-300">
+          {participants.map((p) => (
+            <li key={p.id} className="flex items-center justify-between gap-2">
+              <span>
+                {p.profiles?.display_name ?? 'Unknown'} — {p.rsn}
+              </span>
+              <button
+                type="button"
+                onClick={() => handleRemoveParticipant(p)}
+                className="shrink-0 text-xs text-red-400 underline"
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+          {participants.length === 0 && <li className="text-neutral-500">No one's joined yet.</li>}
+        </ul>
       </div>
 
       <div className="mt-10 max-w-md">

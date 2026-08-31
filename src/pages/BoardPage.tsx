@@ -31,6 +31,10 @@ export default function BoardPage() {
   const [rsn, setRsn] = useState('');
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState('');
+  const [editingRsn, setEditingRsn] = useState(false);
+  const [rsnDraft, setRsnDraft] = useState('');
+  const [savingRsn, setSavingRsn] = useState(false);
+  const [rsnError, setRsnError] = useState('');
 
   const load = useCallback(async () => {
     if (!slug) return;
@@ -86,6 +90,31 @@ export default function BoardPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ participantId: data.id }),
     }).catch(() => {});
+  }
+
+  async function handleRenameRsn(e: FormEvent) {
+    e.preventDefault();
+    if (!myParticipant || !rsnDraft.trim()) return;
+    setSavingRsn(true);
+    setRsnError('');
+    const { error } = await getSupabase()
+      .from('challenge_participants')
+      .update({ rsn: rsnDraft.trim() })
+      .eq('id', myParticipant.id);
+    setSavingRsn(false);
+    if (error) {
+      setRsnError(error.message);
+      return;
+    }
+    setEditingRsn(false);
+    await load();
+  }
+
+  async function handleLeave() {
+    if (!myParticipant) return;
+    if (!window.confirm('Leave this challenge? Your progress history on this board will be deleted.')) return;
+    await getSupabase().from('challenge_participants').delete().eq('id', myParticipant.id);
+    await load();
   }
 
   if (challenge === null) return null;
@@ -171,14 +200,56 @@ export default function BoardPage() {
               .
             </p>
           )}
-          {session && myParticipant && (
+          {session && myParticipant && !editingRsn && (
             <p className="text-sm text-neutral-400">
               You're in as {myParticipant.rsn}.{' '}
+              <button
+                type="button"
+                onClick={() => {
+                  setRsnDraft(myParticipant.rsn);
+                  setEditingRsn(true);
+                  setRsnError('');
+                }}
+                className="underline"
+              >
+                Edit
+              </button>{' '}
+              ·{' '}
+              <button type="button" onClick={handleLeave} className="underline text-red-400">
+                Leave
+              </button>{' '}
+              ·{' '}
               <Link to={`/c/${challenge.slug}/setup`} className="underline">
                 Set up Dink &rarr;
               </Link>
             </p>
           )}
+          {session && myParticipant && editingRsn && (
+            <form onSubmit={handleRenameRsn} className="flex gap-2">
+              <input
+                required
+                autoFocus
+                value={rsnDraft}
+                onChange={(e) => setRsnDraft(e.target.value)}
+                className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm focus:border-neutral-400 focus:outline-none"
+              />
+              <button
+                type="submit"
+                disabled={savingRsn}
+                className="rounded-lg bg-neutral-100 px-4 py-2 text-sm font-semibold text-neutral-950 disabled:opacity-40"
+              >
+                {savingRsn ? 'Saving…' : 'Save'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingRsn(false)}
+                className="rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-300"
+              >
+                Cancel
+              </button>
+            </form>
+          )}
+          {rsnError && <p className="mt-2 text-sm text-red-400">{rsnError}</p>}
           {session && !myParticipant && (
             <form onSubmit={handleJoin} className="flex gap-2">
               <input
