@@ -1,0 +1,123 @@
+import { useCallback, useEffect, useState } from 'react';
+import { Navigate, useParams } from 'react-router-dom';
+import { useAuth } from '../auth/useAuth';
+import { getSupabase } from '../db/supabaseClient';
+import type { Challenge, Tile, TileLayout } from '../db/types';
+import TileEditorForm from '../components/TileEditorForm';
+import type { TileCondition } from '../lib/tileConditions';
+
+const GRID_SIZE = 5;
+
+export default function EditChallengePage() {
+  const { slug } = useParams<{ slug: string }>();
+  const { session, loading: authLoading } = useAuth();
+  const [challenge, setChallenge] = useState<Challenge | null | 'not-found'>(null);
+  const [tiles, setTiles] = useState<Tile[]>([]);
+  const [editingCell, setEditingCell] = useState<TileLayout | null>(null);
+
+  const load = useCallback(async () => {
+    if (!slug) return;
+    const supabase = getSupabase();
+    const { data: challengeData } = await supabase.from('challenges').select('*').eq('slug', slug).maybeSingle();
+    if (!challengeData) {
+      setChallenge('not-found');
+      return;
+    }
+    setChallenge(challengeData as Challenge);
+    const { data: tilesData } = await supabase.from('tiles').select('*').eq('challenge_id', challengeData.id);
+    setTiles((tilesData as Tile[]) ?? []);
+  }, [slug]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const tileAt = (row: number, col: number) => tiles.find((t) => t.layout.row === row && t.layout.col === col) ?? null;
+
+  async function handleSave(fields: { label: string; icon: string | null; condition: TileCondition }) {
+    if (!editingCell || !challenge || challenge === 'not-found') return;
+    const supabase = getSupabase();
+    const existing = tileAt(editingCell.row, editingCell.col);
+    if (existing) {
+      await supabase.from('tiles').update(fields).eq('id', existing.id);
+    } else {
+      await supabase.from('tiles').insert({ ...fields, challenge_id: challenge.id, layout: editingCell });
+    }
+    setEditingCell(null);
+    await load();
+  }
+
+  async function handleDelete() {
+    if (!editingCell) return;
+    const existing = tileAt(editingCell.row, editingCell.col);
+    if (!existing) return;
+    await getSupabase().from('tiles').delete().eq('id', existing.id);
+    setEditingCell(null);
+    await load();
+  }
+
+  async function togglePublish() {
+    if (!challenge || challenge === 'not-found') return;
+    const nextStatus = challenge.status === 'draft' ? 'active' : 'draft';
+    await getSupabase().from('challenges').update({ status: nextStatus }).eq('id', challenge.id);
+    await load();
+  }
+
+  if (authLoading || challenge === null) return null;
+  if (!session) return <Navigate to="/login" replace />;
+  if (challenge === 'not-found') {
+    return <p className="mx-auto max-w-lg py-24 text-center text-neutral-400">Challenge not found.</p>;
+  }
+  if (challenge.host_id !== session.user.id) {
+    return <p className="mx-auto max-w-lg py-24 text-center text-neutral-400">This isn't your challenge to edit.</p>;
+  }
+
+  const editingTile = editingCell ? tileAt(editingCell.row, editingCell.col) : null;
+
+  return (
+    <div className="mx-auto max-w-2xl py-12">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">{challenge.name}</h1>
+          <p className="text-sm text-neutral-500">/c/{challenge.slug}</p>
+        </div>
+        <button onClick={togglePublish} className="rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-300">
+          {challenge.status === 'draft' ? 'Publish' : 'Unpublish'}
+        </button>
+      </div>
+
+      <div className="mt-8 grid grid-cols-5 gap-2">
+        {Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, i) => {
+          const row = Math.floor(i / GRID_SIZE);
+          const col = i % GRID_SIZE;
+          const tile = tileAt(row, col);
+          return (
+            <button
+              key={i}
+              onClick={() => setEditingCell({ row, col })}
+              className="flex aspect-square flex-col items-center justify-center rounded-lg border border-neutral-800 p-2 text-center hover:border-neutral-600"
+            >
+              {tile ? (
+                <>
+                  {tile.icon && <img src={tile.icon} alt="" className="h-6 w-6" />}
+                  <span className="mt-1 line-clamp-2 text-[11px]">{tile.label}</span>
+                </>
+              ) : (
+                <span className="text-xs text-neutral-600">+ Add tile</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {editingCell && (
+        <TileEditorForm
+          existing={editingTile}
+          onSave={handleSave}
+          onDelete={editingTile ? handleDelete : undefined}
+          onClose={() => setEditingCell(null)}
+        />
+      )}
+    </div>
+  );
+}
