@@ -253,3 +253,26 @@ create table if not exists tile_completions (
 alter table tile_completions enable row level security;
 drop policy if exists "public read" on tile_completions;
 create policy "public read" on tile_completions for select using (true);
+
+-- Milestone 4: periodic OSRS hiscores snapshots, for the tile condition
+-- types Dink can't drive directly (xpGained, skillXpGained,
+-- skillLevelGained, and every clue-scroll tier -- Dink has no continuous
+-- XP tracker or clue-completion notifier). Multi-tenant equivalent of
+-- rs's account_snapshots. Same idempotency as every table above: a
+-- same-day resync overwrites that day's row via the unique constraint,
+-- and there's no client write policy -- only the service-role sync route
+-- (LOGOUT-triggered or the daily cron) can ever write here.
+create table if not exists participant_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  challenge_id uuid not null references challenges(id) on delete cascade,
+  participant_id uuid not null references challenge_participants(id) on delete cascade,
+  recorded_on date not null,
+  total_level integer not null,
+  total_xp bigint not null,
+  skills jsonb not null,
+  activities jsonb not null,
+  unique (participant_id, recorded_on)
+);
+alter table participant_snapshots enable row level security;
+drop policy if exists "public read" on participant_snapshots;
+create policy "public read" on participant_snapshots for select using (true);

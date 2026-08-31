@@ -10,6 +10,8 @@ import { relayToDiscord } from './discordRelay';
 import { checkTile, gridLines } from '../lib/tileConditions';
 import { computeParticipantStats } from '../lib/participantStats';
 import type { RawParticipantData } from '../lib/participantStats';
+import { computeHiscoresRecap } from '../lib/hiscoresRecap';
+import type { SnapshotRow } from '../lib/hiscoresRecap';
 import type { Challenge, Tile } from '../db/types';
 
 interface ParticipantRow {
@@ -42,21 +44,25 @@ export async function checkChallengeProgress(participantId: string): Promise<voi
   if (tiles.length === 0) return;
 
   const pid = encodeURIComponent(participantId);
-  const [bossKills, slayerTasks, lootDrops, deaths, collectionLogEntries, petObtains, existingCompletions] = await Promise.all([
-    selectRows<{ boss: string; kc: number; created_at: string }>('boss_kills', `participant_id=eq.${pid}&select=boss,kc,created_at`),
-    selectRows<{ created_at: string }>('slayer_tasks', `participant_id=eq.${pid}&select=created_at`),
-    selectRows<{ items: { name: string; quantity: number }[]; total_value: number; created_at: string }>(
-      'loot_drops',
-      `participant_id=eq.${pid}&select=items,total_value,created_at`,
-    ),
-    selectRows<{ created_at: string }>('deaths', `participant_id=eq.${pid}&select=created_at`),
-    selectRows<{ created_at: string }>('collection_log_entries', `participant_id=eq.${pid}&select=created_at`),
-    selectRows<{ updated_at: string }>('pet_obtains', `participant_id=eq.${pid}&select=updated_at`),
-    selectRows<CompletionRow>('tile_completions', `participant_id=eq.${pid}&select=kind,ref`),
-  ]);
+  const [bossKills, slayerTasks, lootDrops, deaths, collectionLogEntries, petObtains, snapshots, existingCompletions] =
+    await Promise.all([
+      selectRows<{ boss: string; kc: number; created_at: string }>('boss_kills', `participant_id=eq.${pid}&select=boss,kc,created_at`),
+      selectRows<{ created_at: string }>('slayer_tasks', `participant_id=eq.${pid}&select=created_at`),
+      selectRows<{ items: { name: string; quantity: number }[]; total_value: number; created_at: string }>(
+        'loot_drops',
+        `participant_id=eq.${pid}&select=items,total_value,created_at`,
+      ),
+      selectRows<{ created_at: string }>('deaths', `participant_id=eq.${pid}&select=created_at`),
+      selectRows<{ created_at: string }>('collection_log_entries', `participant_id=eq.${pid}&select=created_at`),
+      selectRows<{ updated_at: string }>('pet_obtains', `participant_id=eq.${pid}&select=updated_at`),
+      selectRows<SnapshotRow>('participant_snapshots', `participant_id=eq.${pid}&select=recorded_on,total_xp,skills,activities`),
+      selectRows<CompletionRow>('tile_completions', `participant_id=eq.${pid}&select=kind,ref`),
+    ]);
 
   const raw: RawParticipantData = { bossKills, slayerTasks, lootDrops, deaths, collectionLogEntries, petObtains };
-  const stats = computeParticipantStats(raw, { start: challenge.start_date, end: challenge.end_date });
+  const window = { start: challenge.start_date, end: challenge.end_date };
+  const hiscoresRecap = computeHiscoresRecap(snapshots, window);
+  const stats = computeParticipantStats(raw, window, hiscoresRecap);
 
   const doneTileIds = new Set(tiles.filter((t) => checkTile(t.condition, stats).done).map((t) => t.id));
   const alreadyTileIds = new Set(existingCompletions.filter((c) => c.kind === 'tile').map((c) => c.ref));

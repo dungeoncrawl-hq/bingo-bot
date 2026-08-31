@@ -4,6 +4,7 @@
 // challenge and the participant the event's playerName matches within it.
 import { selectRows, upsertRow, insertRowUnlessRecentDuplicate } from './supabaseAdmin';
 import { checkChallengeProgress } from './challengeProgress';
+import { syncOneParticipant } from './participantSync';
 import type { Challenge } from '../db/types';
 
 export interface WebhookResult {
@@ -189,9 +190,11 @@ export async function processDinkWebhook(challenge: Challenge, payload: unknown)
         result = await handlePet(challenge.id, participant.id, data);
         break;
       case 'LOGOUT':
-        // Milestone 4's hook point -- will trigger a hiscores snapshot
-        // refresh for this participant once that system exists.
-        result = { status: 200, body: { ok: true, note: 'not yet used' } };
+        // Refresh this participant's hiscores snapshot the moment their
+        // session ends, rather than waiting for the daily cron -- same
+        // rationale as rs's LOGOUT-triggered syncOneAccount.
+        await syncOneParticipant(challenge.id, participant.id, playerName ?? participant.rsn);
+        result = { status: 200, body: { ok: true } };
         break;
       case 'LEVEL':
         // Consciously deferred, not forgotten -- xp/skill-level tile

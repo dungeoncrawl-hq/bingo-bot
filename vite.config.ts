@@ -6,6 +6,7 @@ import { dirname, resolve } from 'node:path'
 import { processDinkWebhook } from './src/server/dinkWebhook'
 import { parseDinkPayload, readRawBody } from './src/server/dinkPayload'
 import { selectRows } from './src/server/supabaseAdmin'
+import { syncAllParticipants } from './src/server/participantSync'
 import type { Challenge } from './src/db/types'
 
 // vite.config.ts runs in a plain Node context -- unlike client code, it
@@ -51,6 +52,25 @@ function devApi(): Plugin {
         } catch (err) {
           res.statusCode = 500
           res.end(JSON.stringify({ error: err instanceof Error ? err.message : 'Webhook processing failed' }))
+        }
+      })
+
+      // Mirrors api/sync-snapshots.ts for local testing of the daily cron.
+      server.middlewares.use('/api/sync-snapshots', async (req, res) => {
+        const secret = process.env.CRON_SECRET
+        if (!secret || req.headers['authorization'] !== `Bearer ${secret}`) {
+          res.statusCode = 401
+          res.end(JSON.stringify({ error: 'Unauthorized' }))
+          return
+        }
+        try {
+          const result = await syncAllParticipants()
+          res.statusCode = 200
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify(result))
+        } catch (err) {
+          res.statusCode = 500
+          res.end(JSON.stringify({ error: err instanceof Error ? err.message : 'Sync failed' }))
         }
       })
     },
