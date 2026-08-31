@@ -9,8 +9,8 @@
 // rs's Eastern-timezone-aware dateInEastern, which was specific to that
 // one friend group. Revisit if hosts in other timezones report boundary
 // tiles completing a day early/late.
-import type { ParticipantStats } from './tileConditions';
-import type { HiscoresRecap } from './hiscoresRecap';
+import type { ParticipantStats } from './tileConditions.js';
+import type { HiscoresRecap } from './hiscoresRecap.js';
 
 export interface RawParticipantData {
   bossKills: { boss: string; kc: number; created_at: string }[];

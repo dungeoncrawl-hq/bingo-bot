@@ -1,4 +1,4 @@
-import type { TileCondition } from '../lib/tileConditions';
+import type { TileCondition } from '../lib/tileConditions.js';
 
 export interface Profile {
   id: string;

@@ -1,7 +1,7 @@
 // Default icon URLs per TileCondition type, so a host doesn't have to hunt
 // down a wiki image URL for every tile by hand. Ported from
 // rs/src/lib/skillIcons.ts (same OSRS Wiki image host/convention).
-import type { TileCondition } from './tileConditions';
+import type { TileCondition } from './tileConditions.js';
 
 // The OSRS Wiki hosts a small, stable icon asset at this URL pattern for
 // every skill (verified against all 24 in SKILL_ORDER).

@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { selectRows } from '../src/server/supabaseAdmin';
-import { syncOneParticipant } from '../src/server/participantSync';
-import { checkChallengeProgress } from '../src/server/challengeProgress';
+import { selectRows } from '../src/server/supabaseAdmin.js';
+import { syncOneParticipant } from '../src/server/participantSync.js';
+import { checkChallengeProgress } from '../src/server/challengeProgress.js';
 
 interface ParticipantRow {
   id: string;

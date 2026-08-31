@@ -2,10 +2,10 @@
 // rs/src/server/dinkWebhook.ts. The challenge is already resolved (by
 // dink_secret) before this runs; everything here is scoped to that one
 // challenge and the participant the event's playerName matches within it.
-import { selectRows, upsertRow, insertRowUnlessRecentDuplicate } from './supabaseAdmin';
-import { checkChallengeProgress } from './challengeProgress';
-import { syncOneParticipant } from './participantSync';
-import type { Challenge } from '../db/types';
+import { selectRows, upsertRow, insertRowUnlessRecentDuplicate } from './supabaseAdmin.js';
+import { checkChallengeProgress } from './challengeProgress.js';
+import { syncOneParticipant } from './participantSync.js';
+import type { Challenge } from '../db/types.js';
 
 export interface WebhookResult {
   status: number;

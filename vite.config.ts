@@ -3,12 +3,12 @@ import react from '@vitejs/plugin-react'
 import { config as loadDotenv } from 'dotenv'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
-import { processDinkWebhook } from './src/server/dinkWebhook'
-import { parseDinkPayload, readRawBody } from './src/server/dinkPayload'
-import { selectRows } from './src/server/supabaseAdmin'
-import { syncAllParticipants, syncOneParticipant } from './src/server/participantSync'
-import { checkChallengeProgress } from './src/server/challengeProgress'
-import type { Challenge } from './src/db/types'
+import { processDinkWebhook } from './src/server/dinkWebhook.js'
+import { parseDinkPayload, readRawBody } from './src/server/dinkPayload.js'
+import { selectRows } from './src/server/supabaseAdmin.js'
+import { syncAllParticipants, syncOneParticipant } from './src/server/participantSync.js'
+import { checkChallengeProgress } from './src/server/challengeProgress.js'
+import type { Challenge } from './src/db/types.js'
 
 // vite.config.ts runs in a plain Node context -- unlike client code, it
 // doesn't get .env.local values injected automatically, so the webhook's

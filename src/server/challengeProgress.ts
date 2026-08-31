@@ -5,14 +5,14 @@
 // tileConditions.ts, diffs against existing tile_completions, and inserts
 // any newly-completed tile/line/board rows (race-safe -- see
 // insertRowReturning's comment in supabaseAdmin.ts).
-import { selectRows, insertRowReturning } from './supabaseAdmin';
-import { relayToDiscord } from './discordRelay';
-import { checkTile, gridLines } from '../lib/tileConditions';
-import { computeParticipantStats } from '../lib/participantStats';
-import type { RawParticipantData } from '../lib/participantStats';
-import { computeHiscoresRecap } from '../lib/hiscoresRecap';
-import type { SnapshotRow } from '../lib/hiscoresRecap';
-import type { Challenge, Tile } from '../db/types';
+import { selectRows, insertRowReturning } from './supabaseAdmin.js';
+import { relayToDiscord } from './discordRelay.js';
+import { checkTile, gridLines } from '../lib/tileConditions.js';
+import { computeParticipantStats } from '../lib/participantStats.js';
+import type { RawParticipantData } from '../lib/participantStats.js';
+import { computeHiscoresRecap } from '../lib/hiscoresRecap.js';
+import type { SnapshotRow } from '../lib/hiscoresRecap.js';
+import type { Challenge, Tile } from '../db/types.js';
 
 interface ParticipantRow {
   id: string;

@@ -3,9 +3,9 @@
 // from dinkWebhook.ts's LOGOUT handler; syncAllParticipants is the daily
 // cron safety net for participants who never trigger a LOGOUT event
 // (client crash, RuneLite never relaunched, etc.).
-import { fetchHiscores } from './hiscores';
-import { selectRows, upsertRow } from './supabaseAdmin';
-import { checkChallengeProgress } from './challengeProgress';
+import { fetchHiscores } from './hiscores.js';
+import { selectRows, upsertRow } from './supabaseAdmin.js';
+import { checkChallengeProgress } from './challengeProgress.js';
 
 function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);

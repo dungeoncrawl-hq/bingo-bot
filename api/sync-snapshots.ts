@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { syncAllParticipants } from '../src/server/participantSync';
+import { syncAllParticipants } from '../src/server/participantSync.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const secret = process.env.CRON_SECRET;

@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { processDinkWebhook } from '../../src/server/dinkWebhook';
-import { parseDinkPayload, readRawBody } from '../../src/server/dinkPayload';
-import { selectRows } from '../../src/server/supabaseAdmin';
-import type { Challenge } from '../../src/db/types';
+import { processDinkWebhook } from '../../src/server/dinkWebhook.js';
+import { parseDinkPayload, readRawBody } from '../../src/server/dinkPayload.js';
+import { selectRows } from '../../src/server/supabaseAdmin.js';
+import type { Challenge } from '../../src/db/types.js';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {

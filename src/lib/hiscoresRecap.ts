@@ -4,7 +4,7 @@
 // clue-completion notifier). Ported from rs's weeklyRecap.ts before/after
 // snapshot-selection algorithm (verified this session against rs's actual
 // source, not just its comments).
-import { SKILL_ORDER } from './tileIcons';
+import { SKILL_ORDER } from './tileIcons.js';
 
 export interface SnapshotRow {
   recorded_on: string; // "YYYY-MM-DD"
