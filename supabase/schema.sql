@@ -142,3 +142,114 @@ create trigger on_auth_user_created
 insert into public.profiles (id, display_name)
 select id, split_part(email, '@', 1) from auth.users
 on conflict (id) do nothing;
+
+-- Milestone 3: Dink webhook raw event tables + tile completions. Unlike
+-- every table above, none of these get a client write policy -- not even
+-- for the authenticated host. The only writer is the Dink webhook route,
+-- which uses the Supabase service role key (bypasses RLS entirely) after
+-- independently validating the per-challenge dink_secret. Public read only.
+
+create table if not exists boss_kills (
+  id uuid primary key default gen_random_uuid(),
+  challenge_id uuid not null references challenges(id) on delete cascade,
+  participant_id uuid not null references challenge_participants(id) on delete cascade,
+  boss text not null,
+  kc integer not null,
+  is_personal_best boolean not null default false,
+  best_time text,
+  created_at timestamptz not null default now(),
+  unique (participant_id, boss, kc)
+);
+alter table boss_kills enable row level security;
+drop policy if exists "public read" on boss_kills;
+create policy "public read" on boss_kills for select using (true);
+
+create table if not exists slayer_tasks (
+  id uuid primary key default gen_random_uuid(),
+  challenge_id uuid not null references challenges(id) on delete cascade,
+  participant_id uuid not null references challenge_participants(id) on delete cascade,
+  monster text not null,
+  kill_count integer,
+  points integer not null,
+  tasks_completed integer not null,
+  created_at timestamptz not null default now(),
+  unique (participant_id, tasks_completed)
+);
+alter table slayer_tasks enable row level security;
+drop policy if exists "public read" on slayer_tasks;
+create policy "public read" on slayer_tasks for select using (true);
+
+-- No unique constraint -- dedup handled in app code (insertRowUnlessRecentDuplicate
+-- in src/server/supabaseAdmin.ts), since a genuine duplicate drop (same
+-- items/value/source within the same second) is vanishingly unlikely and
+-- Dink is known to double-fire ~1.7s apart for the same event.
+create table if not exists loot_drops (
+  id uuid primary key default gen_random_uuid(),
+  challenge_id uuid not null references challenges(id) on delete cascade,
+  participant_id uuid not null references challenge_participants(id) on delete cascade,
+  source text not null,
+  items jsonb not null,
+  total_value bigint not null,
+  kill_count integer,
+  created_at timestamptz not null default now()
+);
+alter table loot_drops enable row level security;
+drop policy if exists "public read" on loot_drops;
+create policy "public read" on loot_drops for select using (true);
+
+create table if not exists deaths (
+  id uuid primary key default gen_random_uuid(),
+  challenge_id uuid not null references challenges(id) on delete cascade,
+  participant_id uuid not null references challenge_participants(id) on delete cascade,
+  value_lost bigint not null,
+  is_pvp boolean not null default false,
+  killer_name text,
+  lost_items jsonb not null,
+  created_at timestamptz not null default now()
+);
+alter table deaths enable row level security;
+drop policy if exists "public read" on deaths;
+create policy "public read" on deaths for select using (true);
+
+create table if not exists collection_log_entries (
+  id uuid primary key default gen_random_uuid(),
+  challenge_id uuid not null references challenges(id) on delete cascade,
+  participant_id uuid not null references challenge_participants(id) on delete cascade,
+  item_name text not null,
+  item_id integer,
+  completed_entries integer,
+  total_entries integer,
+  created_at timestamptz not null default now(),
+  unique (participant_id, item_name)
+);
+alter table collection_log_entries enable row level security;
+drop policy if exists "public read" on collection_log_entries;
+create policy "public read" on collection_log_entries for select using (true);
+
+create table if not exists pet_obtains (
+  id uuid primary key default gen_random_uuid(),
+  challenge_id uuid not null references challenges(id) on delete cascade,
+  participant_id uuid not null references challenge_participants(id) on delete cascade,
+  boss_name text not null,
+  updated_at timestamptz not null default now(),
+  unique (participant_id, boss_name)
+);
+alter table pet_obtains enable row level security;
+drop policy if exists "public read" on pet_obtains;
+create policy "public read" on pet_obtains for select using (true);
+
+-- Multi-tenant equivalent of rs's bingo_completions. kind/ref mirrors rs
+-- exactly: ref is the tile id for kind='tile', the line's index into
+-- gridLines() (as text) for kind='line', and 'board' for kind='board'.
+create table if not exists tile_completions (
+  id uuid primary key default gen_random_uuid(),
+  challenge_id uuid not null references challenges(id) on delete cascade,
+  participant_id uuid not null references challenge_participants(id) on delete cascade,
+  kind text not null check (kind in ('tile', 'line', 'board')),
+  ref text not null,
+  completed_at timestamptz not null default now(),
+  unique (participant_id, challenge_id, kind, ref)
+);
+alter table tile_completions enable row level security;
+drop policy if exists "public read" on tile_completions;
+create policy "public read" on tile_completions for select using (true);

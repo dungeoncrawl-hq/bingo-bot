@@ -15,12 +15,19 @@ interface ParticipantRow {
   profiles: { display_name: string } | null;
 }
 
+interface CompletionRow {
+  participant_id: string;
+  kind: 'tile' | 'line' | 'board';
+  ref: string;
+}
+
 export default function BoardPage() {
   const { slug } = useParams<{ slug: string }>();
   const { session } = useAuth();
   const [challenge, setChallenge] = useState<Challenge | null | 'not-found'>(null);
   const [tiles, setTiles] = useState<Tile[]>([]);
   const [participants, setParticipants] = useState<ParticipantRow[]>([]);
+  const [completions, setCompletions] = useState<CompletionRow[]>([]);
   const [rsn, setRsn] = useState('');
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState('');
@@ -34,15 +41,17 @@ export default function BoardPage() {
       return;
     }
     setChallenge(challengeData as Challenge);
-    const [{ data: tilesData }, { data: participantsData }] = await Promise.all([
+    const [{ data: tilesData }, { data: participantsData }, { data: completionsData }] = await Promise.all([
       supabase.from('tiles').select('*').eq('challenge_id', challengeData.id),
       supabase
         .from('challenge_participants')
         .select('id, profile_id, rsn, profiles(display_name)')
         .eq('challenge_id', challengeData.id),
+      supabase.from('tile_completions').select('participant_id, kind, ref').eq('challenge_id', challengeData.id),
     ]);
     setTiles((tilesData as Tile[]) ?? []);
     setParticipants((participantsData as unknown as ParticipantRow[]) ?? []);
+    setCompletions((completionsData as CompletionRow[]) ?? []);
   }, [slug]);
 
   useEffect(() => {
@@ -73,6 +82,17 @@ export default function BoardPage() {
 
   const tileAt = (row: number, col: number) => tiles.find((t) => t.layout.row === row && t.layout.col === col) ?? null;
   const myParticipant = session ? participants.find((p) => p.profile_id === session.user.id) : undefined;
+  const myCompletedTileIds = new Set(
+    completions.filter((c) => c.kind === 'tile' && c.participant_id === myParticipant?.id).map((c) => c.ref),
+  );
+
+  function completedCount(participantId: string): number {
+    return completions.filter((c) => c.kind === 'tile' && c.participant_id === participantId).length;
+  }
+
+  function hasCompletedBoard(participantId: string): boolean {
+    return completions.some((c) => c.kind === 'board' && c.participant_id === participantId);
+  }
 
   return (
     <div className="mx-auto max-w-2xl py-12">
@@ -80,22 +100,27 @@ export default function BoardPage() {
       <p className="text-sm text-neutral-500">
         {challenge.start_date} – {challenge.end_date}
       </p>
+      {myParticipant && <p className="mt-2 text-xs text-neutral-500">Showing your own progress below.</p>}
 
       <div className="mt-8 grid grid-cols-5 gap-2">
         {Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, i) => {
           const row = Math.floor(i / GRID_SIZE);
           const col = i % GRID_SIZE;
           const tile = tileAt(row, col);
+          const done = tile != null && myCompletedTileIds.has(tile.id);
           return (
             <div
               key={i}
               title={tile ? describeTileCondition(tile.condition) : undefined}
-              className="flex aspect-square flex-col items-center justify-center rounded-lg border border-neutral-800 p-2 text-center"
+              className={`flex aspect-square flex-col items-center justify-center rounded-lg border p-2 text-center ${
+                done ? 'border-green-500 bg-green-950/40' : 'border-neutral-800'
+              }`}
             >
               {tile ? (
                 <>
                   {tile.icon && <img src={tile.icon} alt="" className="h-6 w-6" />}
                   <span className="mt-1 line-clamp-2 text-[11px]">{tile.label}</span>
+                  {done && <span className="mt-1 text-[10px] text-green-400">✓ done</span>}
                 </>
               ) : (
                 <span className="text-xs text-neutral-700">—</span>
@@ -110,7 +135,8 @@ export default function BoardPage() {
         <ul className="mt-3 space-y-1 text-sm text-neutral-300">
           {participants.map((p) => (
             <li key={p.id}>
-              {p.profiles?.display_name ?? 'Unknown'} — {p.rsn}
+              {p.profiles?.display_name ?? 'Unknown'} — {p.rsn} — {completedCount(p.id)}/{tiles.length} tiles
+              {hasCompletedBoard(p.id) && <span className="ml-2 text-yellow-400">🏆 Complete!</span>}
             </li>
           ))}
           {participants.length === 0 && <li className="text-neutral-500">No one's joined yet.</li>}

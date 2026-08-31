@@ -1,0 +1,221 @@
+// Per-challenge Dink webhook processing -- multi-tenant equivalent of
+// rs/src/server/dinkWebhook.ts. The challenge is already resolved (by
+// dink_secret) before this runs; everything here is scoped to that one
+// challenge and the participant the event's playerName matches within it.
+import { selectRows, upsertRow, insertRowUnlessRecentDuplicate } from './supabaseAdmin';
+import { checkChallengeProgress } from './challengeProgress';
+import type { Challenge } from '../db/types';
+
+export interface WebhookResult {
+  status: number;
+  body: Record<string, unknown>;
+}
+
+interface ParticipantSlim {
+  id: string;
+  rsn: string;
+}
+
+async function matchParticipant(challengeId: string, playerName: string | undefined): Promise<ParticipantSlim | null> {
+  if (!playerName) return null;
+  const name = playerName.trim().toLowerCase();
+  const rows = await selectRows<ParticipantSlim>(
+    'challenge_participants',
+    `challenge_id=eq.${encodeURIComponent(challengeId)}&select=id,rsn`,
+  );
+  return rows.find((r) => r.rsn.toLowerCase() === name) ?? null;
+}
+
+async function handleKillCount(challengeId: string, participantId: string, extra: Record<string, unknown>): Promise<WebhookResult> {
+  const boss = String(extra.boss ?? '').trim();
+  const kc = Number(extra.count);
+  if (!boss || !Number.isFinite(kc)) return { status: 400, body: { error: 'Missing boss/count' } };
+
+  const isPersonalBest = extra.isPersonalBest === true;
+  const bestTime = isPersonalBest && typeof extra.time === 'string' ? extra.time : null;
+
+  await upsertRow(
+    'boss_kills',
+    { challenge_id: challengeId, participant_id: participantId, boss, kc, is_personal_best: isPersonalBest, best_time: bestTime },
+    'participant_id,boss,kc',
+  );
+  return { status: 200, body: { ok: true } };
+}
+
+async function handleSlayer(challengeId: string, participantId: string, extra: Record<string, unknown>): Promise<WebhookResult> {
+  const monster = String(extra.slayerTask ?? extra.monster ?? '').trim();
+  const tasksCompleted = Number(extra.slayerCompleted);
+  const points = Number(extra.slayerPoints ?? 0);
+  const killCount = extra.killCount != null ? Number(extra.killCount) : null;
+  if (!monster || !Number.isFinite(tasksCompleted)) {
+    return { status: 400, body: { error: 'Missing slayerTask/slayerCompleted' } };
+  }
+
+  await upsertRow(
+    'slayer_tasks',
+    {
+      challenge_id: challengeId,
+      participant_id: participantId,
+      monster,
+      points,
+      tasks_completed: tasksCompleted,
+      kill_count: killCount,
+    },
+    'participant_id,tasks_completed',
+  );
+  return { status: 200, body: { ok: true } };
+}
+
+interface RawLootItem {
+  name?: unknown;
+  quantity?: unknown;
+  priceEach?: unknown;
+}
+
+async function handleLoot(challengeId: string, participantId: string, extra: Record<string, unknown>): Promise<WebhookResult> {
+  const rawItems = Array.isArray(extra.items) ? (extra.items as RawLootItem[]) : [];
+  if (rawItems.length === 0) return { status: 400, body: { error: 'Missing items' } };
+
+  const items = rawItems.map((it) => ({
+    name: String(it.name ?? 'Unknown'),
+    quantity: Number(it.quantity ?? 1),
+    priceEach: Number(it.priceEach ?? 0),
+  }));
+  const totalValue = items.reduce((sum, it) => sum + it.quantity * it.priceEach, 0);
+  const source = String(extra.source ?? 'Unknown').trim();
+  const killCount = extra.killCount != null ? Number(extra.killCount) : null;
+
+  await insertRowUnlessRecentDuplicate(
+    'loot_drops',
+    { challenge_id: challengeId, participant_id: participantId, source, items, total_value: totalValue, kill_count: killCount },
+    ['participant_id', 'source', 'total_value'],
+  );
+  return { status: 200, body: { ok: true } };
+}
+
+async function handleDeath(challengeId: string, participantId: string, extra: Record<string, unknown>): Promise<WebhookResult> {
+  const valueLost = Number(extra.valueLost ?? 0);
+  const isPvp = extra.isPvp === true;
+  const killerName = typeof extra.killerName === 'string' ? extra.killerName : null;
+  const lostItems = Array.isArray(extra.lostItems) ? extra.lostItems : [];
+
+  await insertRowUnlessRecentDuplicate(
+    'deaths',
+    {
+      challenge_id: challengeId,
+      participant_id: participantId,
+      value_lost: valueLost,
+      is_pvp: isPvp,
+      killer_name: killerName,
+      lost_items: lostItems,
+    },
+    ['participant_id', 'value_lost', 'killer_name'],
+  );
+  return { status: 200, body: { ok: true } };
+}
+
+async function handleCollectionLog(challengeId: string, participantId: string, extra: Record<string, unknown>): Promise<WebhookResult> {
+  const itemName = String(extra.itemName ?? '').trim();
+  if (!itemName) return { status: 400, body: { error: 'Missing itemName' } };
+  const itemId = extra.itemId != null ? Number(extra.itemId) : null;
+  const completedEntries = extra.completedEntries != null ? Number(extra.completedEntries) : null;
+  const totalEntries = extra.totalEntries != null ? Number(extra.totalEntries) : null;
+
+  await upsertRow(
+    'collection_log_entries',
+    {
+      challenge_id: challengeId,
+      participant_id: participantId,
+      item_name: itemName,
+      item_id: itemId,
+      completed_entries: completedEntries,
+      total_entries: totalEntries,
+    },
+    'participant_id,item_name',
+  );
+  return { status: 200, body: { ok: true } };
+}
+
+// Unlike rs, no live-hiscores disambiguation for pets shared between
+// reskinned boss pairs -- petsObtained is a pure count/threshold in
+// tileConditions.ts, so which specific boss doesn't affect scoring, only
+// display. The boss name Dink reports is stored as-is.
+async function handlePet(challengeId: string, participantId: string, extra: Record<string, unknown>): Promise<WebhookResult> {
+  if (extra.duplicate === true) {
+    return { status: 200, body: { ok: true, skipped: 'duplicate pet' } };
+  }
+  const bossName = String(extra.petName ?? extra.boss ?? 'Unknown').trim();
+
+  await upsertRow(
+    'pet_obtains',
+    { challenge_id: challengeId, participant_id: participantId, boss_name: bossName, updated_at: new Date().toISOString() },
+    'participant_id,boss_name',
+    'merge-duplicates',
+  );
+  return { status: 200, body: { ok: true } };
+}
+
+export async function processDinkWebhook(challenge: Challenge, payload: unknown): Promise<WebhookResult> {
+  if (typeof payload !== 'object' || payload === null) {
+    return { status: 400, body: { error: 'Invalid payload' } };
+  }
+  const { type, playerName, extra } = payload as { type?: string; playerName?: string; extra?: Record<string, unknown> };
+  const data = extra ?? {};
+
+  try {
+    const participant = await matchParticipant(challenge.id, playerName);
+    if (!participant) {
+      return { status: 400, body: { error: `Unrecognized playerName "${playerName}"` } };
+    }
+
+    let result: WebhookResult;
+    switch (type) {
+      case 'KILL_COUNT':
+        result = await handleKillCount(challenge.id, participant.id, data);
+        break;
+      case 'SLAYER':
+        result = await handleSlayer(challenge.id, participant.id, data);
+        break;
+      case 'LOOT':
+        result = await handleLoot(challenge.id, participant.id, data);
+        break;
+      case 'DEATH':
+        result = await handleDeath(challenge.id, participant.id, data);
+        break;
+      case 'COLLECTION':
+        result = await handleCollectionLog(challenge.id, participant.id, data);
+        break;
+      case 'PET':
+        result = await handlePet(challenge.id, participant.id, data);
+        break;
+      case 'LOGOUT':
+        // Milestone 4's hook point -- will trigger a hiscores snapshot
+        // refresh for this participant once that system exists.
+        result = { status: 200, body: { ok: true, note: 'not yet used' } };
+        break;
+      case 'LEVEL':
+        // Consciously deferred, not forgotten -- xp/skill-level tile
+        // conditions need hiscores polling, which LEVEL alone can't
+        // provide (see Milestone 4).
+        result = { status: 200, body: { ok: true, note: 'xp tracking not yet implemented' } };
+        break;
+      default:
+        return { status: 400, body: { error: `Unsupported type "${type}"` } };
+    }
+
+    // Best-effort: a progress-check/Discord-post failure must never turn a
+    // successful Dink write into a failed webhook response (which would
+    // make Dink retry a call that already succeeded).
+    if (result.status === 200) {
+      try {
+        await checkChallengeProgress(participant.id);
+      } catch (err) {
+        console.error('Challenge progress check failed:', err);
+      }
+    }
+
+    return result;
+  } catch (err) {
+    return { status: 500, body: { error: err instanceof Error ? err.message : 'Webhook processing failed' } };
+  }
+}
