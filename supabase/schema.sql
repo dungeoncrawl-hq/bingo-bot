@@ -113,3 +113,32 @@ create policy "self or host writes" on challenge_participants for all
     profile_id = auth.uid()
     or exists (select 1 from challenges c where c.id = challenge_participants.challenge_id and c.host_id = auth.uid())
   );
+
+-- Auto-creates a profiles row the moment someone verifies a magic-link
+-- sign-in (auth.users insert) -- a DB trigger rather than client-side
+-- profile creation so the row always exists regardless of whether
+-- whatever client code was running at that moment succeeded. Magic-link
+-- auth only collects an email, so display_name defaults to the email's
+-- local part; profile editing is a later milestone.
+create or replace function public.handle_new_user()
+returns trigger as $$
+begin
+  insert into public.profiles (id, display_name)
+  values (new.id, split_part(new.email, '@', 1))
+  on conflict (id) do nothing;
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_new_user();
+
+-- One-time backfill for any auth.users row that predates the trigger above
+-- (e.g. someone who signed in while this schema.sql was still being
+-- iterated on) -- harmless/idempotent to leave in permanently, since
+-- on conflict do nothing means it's a no-op once everyone's caught up.
+insert into public.profiles (id, display_name)
+select id, split_part(email, '@', 1) from auth.users
+on conflict (id) do nothing;
