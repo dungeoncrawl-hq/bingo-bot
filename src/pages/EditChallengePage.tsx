@@ -113,10 +113,10 @@ export default function EditChallengePage() {
   if (authLoading || challenge === null) return null;
   if (!session) return <Navigate to="/login" replace />;
   if (challenge === 'not-found') {
-    return <p className="mx-auto max-w-lg py-24 text-center text-neutral-400">Challenge not found.</p>;
+    return <p className="mx-auto max-w-lg py-24 text-center text-stone-400">Challenge not found.</p>;
   }
   if (challenge.host_id !== session.user.id) {
-    return <p className="mx-auto max-w-lg py-24 text-center text-neutral-400">This isn't your challenge to edit.</p>;
+    return <p className="mx-auto max-w-lg py-24 text-center text-stone-400">This isn't your challenge to edit.</p>;
   }
 
   const editingTile = editingCell ? tileAt(editingCell.row, editingCell.col) : null;
@@ -126,11 +126,11 @@ export default function EditChallengePage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">{challenge.name}</h1>
-          <Link to={`/c/${challenge.slug}`} className="text-sm text-neutral-500 underline hover:text-neutral-300">
+          <Link to={`/c/${challenge.slug}`} className="text-sm text-stone-500 underline hover:text-stone-300">
             /c/{challenge.slug}
           </Link>
         </div>
-        <button onClick={togglePublish} className="rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-300">
+        <button onClick={togglePublish} className="rounded-lg border border-stone-700 px-4 py-2 text-sm text-stone-300">
           {challenge.status === 'draft' ? 'Publish' : 'Unpublish'}
         </button>
       </div>
@@ -144,18 +144,20 @@ export default function EditChallengePage() {
             <button
               key={i}
               onClick={() => setEditingCell({ row, col })}
-              className="flex aspect-square flex-col items-center justify-center rounded-lg border border-neutral-800 p-2 text-center hover:border-neutral-600"
+              className={`flex aspect-square flex-col items-center justify-center rounded-lg border p-2 text-center shadow-inner transition-colors hover:border-amber-500 ${
+                tile ? 'border-stone-700 bg-stone-900' : 'border-stone-800/60 bg-stone-950/50'
+              }`}
             >
               {tile ? (
                 <>
                   {tile.icon && <img src={tile.icon} alt="" className="h-6 w-6" />}
                   <span className="mt-1 line-clamp-2 text-[11px]">{tile.label}</span>
                   {formatTileGoal(tile.condition) && (
-                    <span className="text-[9px] text-neutral-500">{formatTileGoal(tile.condition)}</span>
+                    <span className="text-[9px] text-stone-500">{formatTileGoal(tile.condition)}</span>
                   )}
                 </>
               ) : (
-                <span className="text-xs text-neutral-600">+ Add tile</span>
+                <span className="text-xs text-stone-600">+ Add tile</span>
               )}
             </button>
           );
@@ -164,7 +166,7 @@ export default function EditChallengePage() {
 
       <div className="mt-10 max-w-md">
         <h2 className="text-lg font-semibold">Players</h2>
-        <ul className="mt-3 space-y-2 text-sm text-neutral-300">
+        <ul className="mt-3 space-y-2 text-sm text-stone-300">
           {participants.map((p) => (
             <li key={p.id} className="flex items-center justify-between gap-2">
               <span>
@@ -179,13 +181,13 @@ export default function EditChallengePage() {
               </button>
             </li>
           ))}
-          {participants.length === 0 && <li className="text-neutral-500">No one's joined yet.</li>}
+          {participants.length === 0 && <li className="text-stone-500">No one's joined yet.</li>}
         </ul>
       </div>
 
       <div className="mt-10 max-w-md">
         <h2 className="text-lg font-semibold">Discord notifications</h2>
-        <p className="mt-1 text-sm text-neutral-500">
+        <p className="mt-1 text-sm text-stone-500">
           Paste a Discord webhook URL to post here whenever a player completes a tile, line, or the whole board.
           (Server Settings → Integrations → Webhooks → New Webhook → Copy Webhook URL.)
         </p>
@@ -195,12 +197,12 @@ export default function EditChallengePage() {
             placeholder="https://discord.com/api/webhooks/..."
             value={discordWebhookUrl}
             onChange={(e) => setDiscordWebhookUrl(e.target.value)}
-            className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm focus:border-neutral-400 focus:outline-none"
+            className="flex-1 rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
           />
           <button
             type="submit"
             disabled={savingWebhook}
-            className="rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-300 disabled:opacity-40"
+            className="rounded-lg border border-stone-700 px-4 py-2 text-sm text-stone-300 disabled:opacity-40"
           >
             {savingWebhook ? 'Saving…' : webhookSaved ? 'Saved ✓' : 'Save'}
           </button>

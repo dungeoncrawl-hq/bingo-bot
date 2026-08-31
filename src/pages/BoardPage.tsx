@@ -119,7 +119,7 @@ export default function BoardPage() {
 
   if (challenge === null) return null;
   if (challenge === 'not-found') {
-    return <p className="mx-auto max-w-lg py-24 text-center text-neutral-400">Challenge not found.</p>;
+    return <p className="mx-auto max-w-lg py-24 text-center text-stone-400">Challenge not found.</p>;
   }
 
   const tileAt = (row: number, col: number) => tiles.find((t) => t.layout.row === row && t.layout.col === col) ?? null;
@@ -139,10 +139,10 @@ export default function BoardPage() {
   return (
     <div className="mx-auto max-w-2xl py-12">
       <h1 className="text-2xl font-semibold">{challenge.name}</h1>
-      <p className="text-sm text-neutral-500">
+      <p className="text-sm text-stone-500">
         {challenge.start_date} – {challenge.end_date}
       </p>
-      {myParticipant && <p className="mt-2 text-xs text-neutral-500">Showing your own progress below.</p>}
+      {myParticipant && <p className="mt-2 text-xs text-stone-500">Showing your own progress below.</p>}
 
       <div className="mt-8 grid grid-cols-5 gap-2">
         {Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, i) => {
@@ -154,8 +154,12 @@ export default function BoardPage() {
             <div
               key={i}
               title={tile ? describeTileCondition(tile.condition) : undefined}
-              className={`flex aspect-square flex-col items-center justify-center rounded-lg border p-2 text-center ${
-                done ? 'border-green-500 bg-green-950/40' : 'border-neutral-800'
+              className={`flex aspect-square flex-col items-center justify-center rounded-lg border p-2 text-center shadow-inner ${
+                done
+                  ? 'border-green-500 bg-green-950/40'
+                  : tile
+                    ? 'border-stone-700 bg-stone-900'
+                    : 'border-stone-800/60 bg-stone-950/50'
               }`}
             >
               {tile ? (
@@ -163,12 +167,12 @@ export default function BoardPage() {
                   {tile.icon && <img src={tile.icon} alt="" className="h-6 w-6" />}
                   <span className="mt-1 line-clamp-2 text-[11px]">{tile.label}</span>
                   {formatTileGoal(tile.condition) && (
-                    <span className="text-[9px] text-neutral-500">{formatTileGoal(tile.condition)}</span>
+                    <span className="text-[9px] text-stone-500">{formatTileGoal(tile.condition)}</span>
                   )}
                   {done && <span className="mt-1 text-[10px] text-green-400">✓ done</span>}
                 </>
               ) : (
-                <span className="text-xs text-neutral-700">—</span>
+                <span className="text-xs text-stone-700">—</span>
               )}
             </div>
           );
@@ -177,19 +181,19 @@ export default function BoardPage() {
 
       <div className="mt-10">
         <h2 className="text-lg font-semibold">Players</h2>
-        <ul className="mt-3 space-y-1 text-sm text-neutral-300">
+        <ul className="mt-3 space-y-1 text-sm text-stone-300">
           {participants.map((p) => (
             <li key={p.id}>
               {p.profiles?.display_name ?? 'Unknown'} — {p.rsn} — {completedCount(p.id)}/{tiles.length} tiles
               {hasCompletedBoard(p.id) && <span className="ml-2 text-yellow-400">🏆 Complete!</span>}
             </li>
           ))}
-          {participants.length === 0 && <li className="text-neutral-500">No one's joined yet.</li>}
+          {participants.length === 0 && <li className="text-stone-500">No one's joined yet.</li>}
         </ul>
 
         <div className="mt-6">
           {!session && (
-            <p className="text-sm text-neutral-400">
+            <p className="text-sm text-stone-400">
               <Link to="/login" className="underline">
                 Sign in
               </Link>{' '}
@@ -201,7 +205,7 @@ export default function BoardPage() {
             </p>
           )}
           {session && myParticipant && !editingRsn && (
-            <p className="text-sm text-neutral-400">
+            <p className="text-sm text-stone-400">
               You're in as {myParticipant.rsn}.{' '}
               <button
                 type="button"
@@ -231,19 +235,19 @@ export default function BoardPage() {
                 autoFocus
                 value={rsnDraft}
                 onChange={(e) => setRsnDraft(e.target.value)}
-                className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm focus:border-neutral-400 focus:outline-none"
+                className="flex-1 rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
               />
               <button
                 type="submit"
                 disabled={savingRsn}
-                className="rounded-lg bg-neutral-100 px-4 py-2 text-sm font-semibold text-neutral-950 disabled:opacity-40"
+                className="rounded-lg bg-amber-500 hover:bg-amber-400 transition-colors px-4 py-2 text-sm font-semibold text-stone-950 disabled:opacity-40"
               >
                 {savingRsn ? 'Saving…' : 'Save'}
               </button>
               <button
                 type="button"
                 onClick={() => setEditingRsn(false)}
-                className="rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-300"
+                className="rounded-lg border border-stone-700 px-4 py-2 text-sm text-stone-300"
               >
                 Cancel
               </button>
@@ -257,12 +261,12 @@ export default function BoardPage() {
                 value={rsn}
                 onChange={(e) => setRsn(e.target.value)}
                 placeholder="Your OSRS username"
-                className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm focus:border-neutral-400 focus:outline-none"
+                className="flex-1 rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
               />
               <button
                 type="submit"
                 disabled={joining}
-                className="rounded-lg bg-neutral-100 px-4 py-2 text-sm font-semibold text-neutral-950 disabled:opacity-40"
+                className="rounded-lg bg-amber-500 hover:bg-amber-400 transition-colors px-4 py-2 text-sm font-semibold text-stone-950 disabled:opacity-40"
               >
                 {joining ? 'Joining…' : 'Join'}
               </button>

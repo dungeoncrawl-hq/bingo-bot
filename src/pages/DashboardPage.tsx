@@ -27,27 +27,27 @@ export default function DashboardPage() {
     <div className="mx-auto max-w-3xl py-12">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">My challenges</h1>
-        <Link to="/new" className="rounded-lg bg-neutral-100 px-4 py-2 text-sm font-semibold text-neutral-950">
+        <Link to="/new" className="rounded-lg bg-amber-500 hover:bg-amber-400 transition-colors px-4 py-2 text-sm font-semibold text-stone-950">
           New challenge
         </Link>
       </div>
       <div className="mt-6 space-y-3">
-        {challenges === null && <p className="text-neutral-500">Loading…</p>}
-        {challenges?.length === 0 && <p className="text-neutral-500">No challenges yet.</p>}
+        {challenges === null && <p className="text-stone-500">Loading…</p>}
+        {challenges?.length === 0 && <p className="text-stone-500">No challenges yet.</p>}
         {challenges?.map((c) => (
-          <div key={c.id} className="rounded-lg border border-neutral-800 px-4 py-3">
+          <div key={c.id} className="rounded-lg border border-stone-800 px-4 py-3">
             <div className="flex items-center justify-between">
               <span className="font-medium">{c.name}</span>
-              <span className="text-xs uppercase text-neutral-500">{c.status}</span>
+              <span className="text-xs uppercase text-stone-500">{c.status}</span>
             </div>
-            <p className="text-sm text-neutral-500">
+            <p className="text-sm text-stone-500">
               {c.start_date} – {c.end_date}
             </p>
             <div className="mt-2 flex gap-4 text-sm">
-              <Link to={`/c/${c.slug}/edit`} className="underline hover:text-neutral-300">
+              <Link to={`/c/${c.slug}/edit`} className="underline hover:text-stone-300">
                 Edit
               </Link>
-              <Link to={`/c/${c.slug}`} className="underline hover:text-neutral-300">
+              <Link to={`/c/${c.slug}`} className="underline hover:text-stone-300">
                 View public page
               </Link>
             </div>

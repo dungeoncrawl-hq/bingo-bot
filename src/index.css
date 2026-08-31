@@ -1,3 +1,14 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Dungeon theme accent: h1/h2 (page titles, challenge names, the logo)
+   get the display font; body copy and smaller headings stay the default
+   sans stack for readability. */
+@layer base {
+  h1,
+  h2 {
+    font-family: theme('fontFamily.display');
+    letter-spacing: 0.01em;
+  }
+}

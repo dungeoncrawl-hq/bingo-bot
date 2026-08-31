@@ -66,7 +66,7 @@ export default function NewChallengePage() {
       <h1 className="text-2xl font-semibold">New challenge</h1>
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
         <div>
-          <label className="block text-sm text-neutral-400">Name</label>
+          <label className="block text-sm text-stone-400">Name</label>
           <input
             required
             value={name}
@@ -74,11 +74,11 @@ export default function NewChallengePage() {
               setName(e.target.value);
               if (!slugEdited) setSlug(slugify(e.target.value));
             }}
-            className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm focus:border-neutral-400 focus:outline-none"
+            className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
           />
         </div>
         <div>
-          <label className="block text-sm text-neutral-400">URL (dungeoncrawl.lol/c/…)</label>
+          <label className="block text-sm text-stone-400">URL (dungeoncrawl.lol/c/…)</label>
           <input
             required
             value={slug}
@@ -86,28 +86,28 @@ export default function NewChallengePage() {
               setSlug(slugify(e.target.value));
               setSlugEdited(true);
             }}
-            className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm focus:border-neutral-400 focus:outline-none"
+            className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
           />
         </div>
         <div className="flex gap-4">
           <div className="flex-1">
-            <label className="block text-sm text-neutral-400">Start date</label>
+            <label className="block text-sm text-stone-400">Start date</label>
             <input
               type="date"
               required
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm focus:border-neutral-400 focus:outline-none"
+              className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
             />
           </div>
           <div className="flex-1">
-            <label className="block text-sm text-neutral-400">End date</label>
+            <label className="block text-sm text-stone-400">End date</label>
             <input
               type="date"
               required
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm focus:border-neutral-400 focus:outline-none"
+              className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
             />
           </div>
         </div>
@@ -115,7 +115,7 @@ export default function NewChallengePage() {
         <button
           type="submit"
           disabled={submitting}
-          className="rounded-lg bg-neutral-100 px-4 py-2 text-sm font-semibold text-neutral-950 disabled:opacity-40"
+          className="rounded-lg bg-amber-500 hover:bg-amber-400 transition-colors px-4 py-2 text-sm font-semibold text-stone-950 disabled:opacity-40"
         >
           {submitting ? 'Creating…' : 'Create challenge'}
         </button>

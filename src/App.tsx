@@ -11,7 +11,7 @@ import SetupGuidePage from './pages/SetupGuidePage';
 function App() {
   return (
     <BrowserRouter>
-      <div className="min-h-screen bg-neutral-950 text-neutral-100">
+      <div className="min-h-screen bg-stone-950 text-stone-100">
         <Header />
         <Routes>
           <Route path="/" element={<HomePage />} />

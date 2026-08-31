@@ -150,7 +150,7 @@ interface Props {
 }
 
 const inputClass =
-  'mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm focus:border-neutral-400 focus:outline-none';
+  'mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none';
 
 export default function TileEditorForm({ existing, onSave, onDelete, onClose }: Props) {
   const [type, setType] = useState<TileCondition['type']>(existing?.condition.type ?? 'xpGained');
@@ -219,11 +219,11 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
       <form
         onSubmit={handleSubmit}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md space-y-4 rounded-xl border border-neutral-800 bg-neutral-950 p-6"
+        className="w-full max-w-md space-y-4 rounded-xl border border-stone-800 bg-stone-950 p-6"
       >
         <h2 className="text-lg font-semibold">{existing ? 'Edit tile' : 'Add tile'}</h2>
         <div>
-          <label className="block text-sm text-neutral-400">Condition</label>
+          <label className="block text-sm text-stone-400">Condition</label>
           <select
             value={type}
             onChange={(e) => applyType(e.target.value as TileCondition['type'])}
@@ -241,7 +241,7 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
           </select>
         </div>
         <div>
-          <label className="block text-sm text-neutral-400">Label</label>
+          <label className="block text-sm text-stone-400">Label</label>
           <input
             required
             value={label}
@@ -253,8 +253,8 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
           />
         </div>
         <div>
-          <label className="block text-sm text-neutral-400">Icon</label>
-          <div className="mt-1 flex max-h-32 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-neutral-800 bg-neutral-900 p-2">
+          <label className="block text-sm text-stone-400">Icon</label>
+          <div className="mt-1 flex max-h-32 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-stone-800 bg-stone-900 p-2">
             <button
               type="button"
               title="No icon"
@@ -262,8 +262,8 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
                 setIcon('');
                 setIconIsDefault(false);
               }}
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded border text-[9px] text-neutral-500 ${
-                icon === '' ? 'border-neutral-100' : 'border-neutral-700 hover:border-neutral-500'
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded border text-[9px] text-stone-500 ${
+                icon === '' ? 'border-stone-100' : 'border-stone-700 hover:border-stone-500'
               }`}
             >
               None
@@ -277,25 +277,25 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
                   setIcon(opt.url);
                   setIconIsDefault(false);
                 }}
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded border bg-neutral-800 p-1 ${
-                  icon === opt.url ? 'border-neutral-100' : 'border-neutral-700 hover:border-neutral-500'
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded border bg-stone-800 p-1 ${
+                  icon === opt.url ? 'border-stone-100' : 'border-stone-700 hover:border-stone-500'
                 }`}
               >
                 <img src={opt.url} alt={opt.label} className="h-full w-full object-contain" />
               </button>
             ))}
           </div>
-          {iconIsDefault && icon && <p className="mt-1 text-xs text-neutral-500">Default icon for this condition</p>}
+          {iconIsDefault && icon && <p className="mt-1 text-xs text-stone-500">Default icon for this condition</p>}
         </div>
         {type === 'kcGained' && (
           <div>
-            <label className="block text-sm text-neutral-400">Boss / activity name</label>
+            <label className="block text-sm text-stone-400">Boss / activity name</label>
             <input value={activity} onChange={(e) => applyActivity(e.target.value)} className={inputClass} />
           </div>
         )}
         {(type === 'skillLevelGained' || type === 'skillXpGained') && (
           <div>
-            <label className="block text-sm text-neutral-400">Skill</label>
+            <label className="block text-sm text-stone-400">Skill</label>
             <select value={skill} onChange={(e) => applySkill(e.target.value)} className={inputClass}>
               {SKILL_ORDER.map((s) => (
                 <option key={s} value={s}>
@@ -308,11 +308,11 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
         {type === 'itemCount' && (
           <>
             <div>
-              <label className="block text-sm text-neutral-400">Set name (e.g. "Barrows pieces")</label>
+              <label className="block text-sm text-stone-400">Set name (e.g. "Barrows pieces")</label>
               <input value={setName} onChange={(e) => applySetName(e.target.value)} className={inputClass} />
             </div>
             <div>
-              <label className="block text-sm text-neutral-400">Item names, comma-separated</label>
+              <label className="block text-sm text-stone-400">Item names, comma-separated</label>
               <textarea
                 value={itemNames}
                 onChange={(e) => setItemNames(e.target.value)}
@@ -324,7 +324,7 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
         )}
         {type !== 'tbd' && (
           <div>
-            <label className="block text-sm text-neutral-400">
+            <label className="block text-sm text-stone-400">
               {type === 'maxDeaths' ? 'Max deaths allowed' : 'Threshold'}
             </label>
             <input
@@ -342,14 +342,14 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
             <button
               type="submit"
               disabled={saving}
-              className="rounded-lg bg-neutral-100 px-4 py-2 text-sm font-semibold text-neutral-950 disabled:opacity-40"
+              className="rounded-lg bg-amber-500 hover:bg-amber-400 transition-colors px-4 py-2 text-sm font-semibold text-stone-950 disabled:opacity-40"
             >
               {saving ? 'Saving…' : 'Save'}
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-300"
+              className="rounded-lg border border-stone-700 px-4 py-2 text-sm text-stone-300"
             >
               Cancel
             </button>

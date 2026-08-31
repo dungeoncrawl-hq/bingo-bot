@@ -6,19 +6,19 @@ import type { Challenge } from '../db/types';
 function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
     <div className="flex gap-3">
-      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-xs font-bold text-neutral-950">
+      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-500 hover:bg-amber-400 transition-colors text-xs font-bold text-stone-950">
         {n}
       </div>
       <div className="space-y-1">
         <h3 className="text-sm font-semibold">{title}</h3>
-        <div className="text-sm text-neutral-400">{children}</div>
+        <div className="text-sm text-stone-400">{children}</div>
       </div>
     </div>
   );
 }
 
 function Box({ children }: { children: React.ReactNode }) {
-  return <span className="font-semibold text-neutral-100">{children}</span>;
+  return <span className="font-semibold text-stone-100">{children}</span>;
 }
 
 export default function SetupGuidePage() {
@@ -38,7 +38,7 @@ export default function SetupGuidePage() {
 
   if (challenge === null) return null;
   if (challenge === 'not-found') {
-    return <p className="mx-auto max-w-lg py-24 text-center text-neutral-400">Challenge not found.</p>;
+    return <p className="mx-auto max-w-lg py-24 text-center text-stone-400">Challenge not found.</p>;
   }
 
   const webhookUrl = `${window.location.origin}/api/dink/${challenge.dink_secret}`;
@@ -47,23 +47,23 @@ export default function SetupGuidePage() {
     <div className="mx-auto max-w-2xl py-12">
       <div className="flex items-baseline justify-between gap-4">
         <h1 className="text-2xl font-semibold">Set up tracking for {challenge.name}</h1>
-        <Link to={`/c/${challenge.slug}`} className="shrink-0 text-sm text-neutral-500 underline hover:text-neutral-300">
+        <Link to={`/c/${challenge.slug}`} className="shrink-0 text-sm text-stone-500 underline hover:text-stone-300">
           &larr; back to board
         </Link>
       </div>
-      <p className="mt-2 text-sm text-neutral-400">
+      <p className="mt-2 text-sm text-stone-400">
         Everything on your board fills in automatically from RuneLite's <Box>Dink</Box> plugin -- no manual updates.
         It's all copy-pasting a link and checking boxes in Dink's settings, no technical know-how needed.
       </p>
 
       <div className="mt-6">
-        <label className="block text-sm text-neutral-400">Your webhook URL</label>
+        <label className="block text-sm text-stone-400">Your webhook URL</label>
         <div className="mt-1 flex gap-2">
           <input
             readOnly
             value={webhookUrl}
             onClick={(e) => e.currentTarget.select()}
-            className="flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 font-mono text-xs text-neutral-300"
+            className="flex-1 rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 font-mono text-xs text-stone-300"
           />
           <button
             type="button"
@@ -72,14 +72,14 @@ export default function SetupGuidePage() {
               setCopied(true);
               setTimeout(() => setCopied(false), 2000);
             }}
-            className="shrink-0 rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-300"
+            className="shrink-0 rounded-lg border border-stone-700 px-4 py-2 text-sm text-stone-300"
           >
             {copied ? 'Copied!' : 'Copy'}
           </button>
         </div>
       </div>
 
-      <div className="mt-8 space-y-5 rounded-lg border border-neutral-800 bg-neutral-900/50 p-4">
+      <div className="mt-8 space-y-5 rounded-lg border border-stone-800 bg-stone-900/50 p-4">
         <Step n={1} title="Install RuneLite and the Dink plugin">
           If you don't already use RuneLite, install it from <Box>runelite.net</Box>. Once it's running, click the
           wrench icon in the sidebar to open the Plugin Hub, search for <Box>Dink</Box>, and install it.
