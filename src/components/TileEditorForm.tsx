@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import type { TileCondition } from '../lib/tileConditions';
 import type { Tile } from '../db/types';
+import { SKILL_ORDER, PRESET_ICONS, defaultIconFor } from '../lib/tileIcons';
 
 const CONDITION_TYPES: { value: TileCondition['type']; label: string }[] = [
   { value: 'xpGained', label: 'Total XP gained' },
@@ -74,16 +75,21 @@ const inputClass =
 
 export default function TileEditorForm({ existing, onSave, onDelete, onClose }: Props) {
   const [label, setLabel] = useState(existing?.label ?? '');
-  const [icon, setIcon] = useState(existing?.icon ?? '');
   const [type, setType] = useState<TileCondition['type']>(existing?.condition.type ?? 'xpGained');
   const initial = existing
     ? formFromCondition(existing.condition)
     : { threshold: 1, activity: '', skill: '', itemNames: '', setName: '' };
   const [threshold, setThreshold] = useState(initial.threshold);
   const [activity, setActivity] = useState(initial.activity);
-  const [skill, setSkill] = useState(initial.skill);
+  const [skill, setSkill] = useState(initial.skill || SKILL_ORDER[0]);
   const [itemNames, setItemNames] = useState(initial.itemNames);
   const [setName, setSetName] = useState(initial.setName);
+  const [icon, setIcon] = useState(existing?.icon ?? defaultIconFor(type, skill) ?? '');
+  // Tracks whether `icon` still matches what defaultIconFor would produce,
+  // so switching condition type/skill keeps auto-filling it -- but the
+  // moment a host types their own icon URL, this flips off and their
+  // choice is left alone.
+  const [iconIsDefault, setIconIsDefault] = useState(!existing || existing.icon === defaultIconFor(type, skill));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -117,14 +123,14 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
           <input required value={label} onChange={(e) => setLabel(e.target.value)} className={inputClass} />
         </div>
         <div>
-          <label className="block text-sm text-neutral-400">Icon URL (optional)</label>
-          <input value={icon} onChange={(e) => setIcon(e.target.value)} className={inputClass} />
-        </div>
-        <div>
           <label className="block text-sm text-neutral-400">Condition</label>
           <select
             value={type}
-            onChange={(e) => setType(e.target.value as TileCondition['type'])}
+            onChange={(e) => {
+              const newType = e.target.value as TileCondition['type'];
+              setType(newType);
+              if (iconIsDefault) setIcon(defaultIconFor(newType, skill) ?? '');
+            }}
             className={inputClass}
           >
             {CONDITION_TYPES.map((c) => (
@@ -133,6 +139,41 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
               </option>
             ))}
           </select>
+        </div>
+        <div>
+          <label className="block text-sm text-neutral-400">Icon</label>
+          <div className="mt-1 flex max-h-32 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-neutral-800 bg-neutral-900 p-2">
+            <button
+              type="button"
+              title="No icon"
+              onClick={() => {
+                setIcon('');
+                setIconIsDefault(false);
+              }}
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded border text-[9px] text-neutral-500 ${
+                icon === '' ? 'border-neutral-100' : 'border-neutral-700 hover:border-neutral-500'
+              }`}
+            >
+              None
+            </button>
+            {PRESET_ICONS.map((opt) => (
+              <button
+                key={opt.url}
+                type="button"
+                title={opt.label}
+                onClick={() => {
+                  setIcon(opt.url);
+                  setIconIsDefault(false);
+                }}
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded border bg-neutral-800 p-1 ${
+                  icon === opt.url ? 'border-neutral-100' : 'border-neutral-700 hover:border-neutral-500'
+                }`}
+              >
+                <img src={opt.url} alt={opt.label} className="h-full w-full object-contain" />
+              </button>
+            ))}
+          </div>
+          {iconIsDefault && icon && <p className="mt-1 text-xs text-neutral-500">Default icon for this condition</p>}
         </div>
         {type === 'kcGained' && (
           <div>
@@ -143,7 +184,21 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
         {(type === 'skillLevelGained' || type === 'skillXpGained') && (
           <div>
             <label className="block text-sm text-neutral-400">Skill</label>
-            <input value={skill} onChange={(e) => setSkill(e.target.value)} className={inputClass} />
+            <select
+              value={skill}
+              onChange={(e) => {
+                const newSkill = e.target.value;
+                setSkill(newSkill);
+                if (iconIsDefault) setIcon(defaultIconFor(type, newSkill) ?? '');
+              }}
+              className={inputClass}
+            >
+              {SKILL_ORDER.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
           </div>
         )}
         {type === 'itemCount' && (
