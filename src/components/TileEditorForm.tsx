@@ -4,22 +4,51 @@ import type { TileCondition } from '../lib/tileConditions';
 import type { Tile } from '../db/types';
 import { SKILL_ORDER, PRESET_ICONS, defaultIconFor } from '../lib/tileIcons';
 
-const CONDITION_TYPES: { value: TileCondition['type']; label: string }[] = [
-  { value: 'xpGained', label: 'Total XP gained' },
-  { value: 'bossKcGained', label: 'Total boss KC gained' },
-  { value: 'kcGained', label: 'KC gained on a specific boss' },
-  { value: 'slayerTasksCompleted', label: 'Slayer tasks completed' },
-  { value: 'lootValueGained', label: 'Total GP looted' },
-  { value: 'singleDropValue', label: 'A single drop worth at least...' },
-  { value: 'cluesCompleted', label: 'Clue scrolls completed' },
-  { value: 'hardCluesCompleted', label: 'Hard clue scrolls completed' },
-  { value: 'collectionLogGained', label: 'New collection log items' },
-  { value: 'skillLevelGained', label: 'Levels gained in a skill' },
-  { value: 'skillXpGained', label: 'XP gained in a skill' },
-  { value: 'itemCount', label: 'Obtain a set of items' },
-  { value: 'maxDeaths', label: 'Stay under a death limit' },
-  { value: 'petsObtained', label: 'Pets obtained' },
-  { value: 'tbd', label: 'TBD (placeholder)' },
+const CONDITION_GROUPS: { group: string; options: { value: TileCondition['type']; label: string }[] }[] = [
+  {
+    group: 'Experience & Levels',
+    options: [
+      { value: 'xpGained', label: 'Total XP gained' },
+      { value: 'skillXpGained', label: 'XP gained in a skill' },
+      { value: 'skillLevelGained', label: 'Levels gained in a skill' },
+    ],
+  },
+  {
+    group: 'Combat',
+    options: [
+      { value: 'bossKcGained', label: 'Total boss KC gained' },
+      { value: 'kcGained', label: 'KC gained on a specific boss' },
+      { value: 'slayerTasksCompleted', label: 'Slayer tasks completed' },
+      { value: 'maxDeaths', label: 'Stay under a death limit' },
+    ],
+  },
+  {
+    group: 'Loot',
+    options: [
+      { value: 'lootValueGained', label: 'Total GP looted' },
+      { value: 'singleDropValue', label: 'A single drop worth at least...' },
+      { value: 'itemCount', label: 'Obtain a set of items' },
+    ],
+  },
+  {
+    group: 'Clue Scrolls',
+    options: [
+      { value: 'cluesCompleted', label: 'Clue scrolls completed' },
+      { value: 'hardCluesCompleted', label: 'Hard clue scrolls completed' },
+    ],
+  },
+  {
+    group: 'Collection Log',
+    options: [{ value: 'collectionLogGained', label: 'New collection log items' }],
+  },
+  {
+    group: 'Pets',
+    options: [{ value: 'petsObtained', label: 'Pets obtained' }],
+  },
+  {
+    group: 'Other',
+    options: [{ value: 'tbd', label: 'TBD (placeholder)' }],
+  },
 ];
 
 function conditionFromForm(
@@ -133,10 +162,14 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
             }}
             className={inputClass}
           >
-            {CONDITION_TYPES.map((c) => (
-              <option key={c.value} value={c.value}>
-                {c.label}
-              </option>
+            {CONDITION_GROUPS.map((g) => (
+              <optgroup key={g.group} label={g.group}>
+                {g.options.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>
