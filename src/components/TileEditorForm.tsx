@@ -82,6 +82,41 @@ function conditionFromForm(
   }
 }
 
+function defaultLabelFor(type: TileCondition['type'], skill: string, activity: string, setName: string): string {
+  switch (type) {
+    case 'xpGained':
+      return 'Total XP';
+    case 'skillXpGained':
+      return `${skill} XP`;
+    case 'skillLevelGained':
+      return `${skill} Level`;
+    case 'bossKcGained':
+      return 'Boss KC';
+    case 'kcGained':
+      return activity.trim() ? `${activity.trim()} KC` : 'Boss KC';
+    case 'slayerTasksCompleted':
+      return 'Slayer Tasks';
+    case 'maxDeaths':
+      return 'Max Deaths';
+    case 'lootValueGained':
+      return 'Loot Value';
+    case 'singleDropValue':
+      return 'Big Drop';
+    case 'itemCount':
+      return setName.trim() || 'Item Set';
+    case 'cluesCompleted':
+      return 'Clue Scrolls';
+    case 'hardCluesCompleted':
+      return 'Hard Clues';
+    case 'collectionLogGained':
+      return 'Collection Log';
+    case 'petsObtained':
+      return 'Pet';
+    case 'tbd':
+      return 'TBD';
+  }
+}
+
 function formFromCondition(cond: TileCondition) {
   return {
     threshold: 'threshold' in cond ? cond.threshold : 1,
@@ -103,7 +138,6 @@ const inputClass =
   'mt-1 w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm focus:border-neutral-400 focus:outline-none';
 
 export default function TileEditorForm({ existing, onSave, onDelete, onClose }: Props) {
-  const [label, setLabel] = useState(existing?.label ?? '');
   const [type, setType] = useState<TileCondition['type']>(existing?.condition.type ?? 'xpGained');
   const initial = existing
     ? formFromCondition(existing.condition)
@@ -113,14 +147,40 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
   const [skill, setSkill] = useState(initial.skill || SKILL_ORDER[0]);
   const [itemNames, setItemNames] = useState(initial.itemNames);
   const [setName, setSetName] = useState(initial.setName);
+  const [label, setLabel] = useState(existing?.label ?? defaultLabelFor(type, skill, activity, setName));
+  // Tracks whether `label`/`icon` still match what their defaultXFor
+  // functions would produce, so switching condition type/skill/activity/
+  // set name keeps auto-filling them -- but the moment a host edits one
+  // directly, it flips off and their choice is left alone.
+  const [labelIsDefault, setLabelIsDefault] = useState(
+    !existing || existing.label === defaultLabelFor(type, skill, activity, setName),
+  );
   const [icon, setIcon] = useState(existing?.icon ?? defaultIconFor(type, skill) ?? '');
-  // Tracks whether `icon` still matches what defaultIconFor would produce,
-  // so switching condition type/skill keeps auto-filling it -- but the
-  // moment a host types their own icon URL, this flips off and their
-  // choice is left alone.
   const [iconIsDefault, setIconIsDefault] = useState(!existing || existing.icon === defaultIconFor(type, skill));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  function applyType(newType: TileCondition['type']) {
+    setType(newType);
+    if (labelIsDefault) setLabel(defaultLabelFor(newType, skill, activity, setName));
+    if (iconIsDefault) setIcon(defaultIconFor(newType, skill) ?? '');
+  }
+
+  function applySkill(newSkill: string) {
+    setSkill(newSkill);
+    if (labelIsDefault) setLabel(defaultLabelFor(type, newSkill, activity, setName));
+    if (iconIsDefault) setIcon(defaultIconFor(type, newSkill) ?? '');
+  }
+
+  function applyActivity(newActivity: string) {
+    setActivity(newActivity);
+    if (labelIsDefault) setLabel(defaultLabelFor(type, skill, newActivity, setName));
+  }
+
+  function applySetName(newSetName: string) {
+    setSetName(newSetName);
+    if (labelIsDefault) setLabel(defaultLabelFor(type, skill, activity, newSetName));
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -148,18 +208,10 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
       >
         <h2 className="text-lg font-semibold">{existing ? 'Edit tile' : 'Add tile'}</h2>
         <div>
-          <label className="block text-sm text-neutral-400">Label</label>
-          <input required value={label} onChange={(e) => setLabel(e.target.value)} className={inputClass} />
-        </div>
-        <div>
           <label className="block text-sm text-neutral-400">Condition</label>
           <select
             value={type}
-            onChange={(e) => {
-              const newType = e.target.value as TileCondition['type'];
-              setType(newType);
-              if (iconIsDefault) setIcon(defaultIconFor(newType, skill) ?? '');
-            }}
+            onChange={(e) => applyType(e.target.value as TileCondition['type'])}
             className={inputClass}
           >
             {CONDITION_GROUPS.map((g) => (
@@ -172,6 +224,18 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
               </optgroup>
             ))}
           </select>
+        </div>
+        <div>
+          <label className="block text-sm text-neutral-400">Label</label>
+          <input
+            required
+            value={label}
+            onChange={(e) => {
+              setLabel(e.target.value);
+              setLabelIsDefault(false);
+            }}
+            className={inputClass}
+          />
         </div>
         <div>
           <label className="block text-sm text-neutral-400">Icon</label>
@@ -211,21 +275,13 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
         {type === 'kcGained' && (
           <div>
             <label className="block text-sm text-neutral-400">Boss / activity name</label>
-            <input value={activity} onChange={(e) => setActivity(e.target.value)} className={inputClass} />
+            <input value={activity} onChange={(e) => applyActivity(e.target.value)} className={inputClass} />
           </div>
         )}
         {(type === 'skillLevelGained' || type === 'skillXpGained') && (
           <div>
             <label className="block text-sm text-neutral-400">Skill</label>
-            <select
-              value={skill}
-              onChange={(e) => {
-                const newSkill = e.target.value;
-                setSkill(newSkill);
-                if (iconIsDefault) setIcon(defaultIconFor(type, newSkill) ?? '');
-              }}
-              className={inputClass}
-            >
+            <select value={skill} onChange={(e) => applySkill(e.target.value)} className={inputClass}>
               {SKILL_ORDER.map((s) => (
                 <option key={s} value={s}>
                   {s}
@@ -238,7 +294,7 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
           <>
             <div>
               <label className="block text-sm text-neutral-400">Set name (e.g. "Barrows pieces")</label>
-              <input value={setName} onChange={(e) => setSetName(e.target.value)} className={inputClass} />
+              <input value={setName} onChange={(e) => applySetName(e.target.value)} className={inputClass} />
             </div>
             <div>
               <label className="block text-sm text-neutral-400">Item names, comma-separated</label>
