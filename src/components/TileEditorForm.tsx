@@ -4,6 +4,11 @@ import type { TileCondition } from '../lib/tileConditions';
 import type { Tile } from '../db/types';
 import { SKILL_ORDER, PRESET_ICONS, defaultIconFor } from '../lib/tileIcons';
 
+// Keeps a label from overflowing the tile grid cell it renders in
+// (BoardPage.tsx/EditChallengePage.tsx both cap the label at 2 lines with
+// line-clamp-2 -- much beyond this and it just gets clipped anyway).
+const LABEL_MAX_LENGTH = 40;
+
 const CONDITION_GROUPS: { group: string; options: { value: TileCondition['type']; label: string }[] }[] = [
   {
     group: 'Experience & Levels',
@@ -244,6 +249,7 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
           <label className="block text-sm text-stone-400">Label</label>
           <input
             required
+            maxLength={LABEL_MAX_LENGTH}
             value={label}
             onChange={(e) => {
               setLabel(e.target.value);
@@ -251,6 +257,9 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
             }}
             className={inputClass}
           />
+          <p className="mt-1 text-right text-xs text-stone-600">
+            {label.length}/{LABEL_MAX_LENGTH}
+          </p>
         </div>
         <div>
           <label className="block text-sm text-stone-400">Icon</label>

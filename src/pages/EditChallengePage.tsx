@@ -144,16 +144,16 @@ export default function EditChallengePage() {
             <button
               key={i}
               onClick={() => setEditingCell({ row, col })}
-              className={`flex aspect-square flex-col items-center justify-center rounded-lg border p-2 text-center shadow-inner transition-colors hover:border-amber-500 ${
+              className={`flex aspect-square min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden rounded-lg border p-2 text-center shadow-inner transition-colors hover:border-amber-500 ${
                 tile ? 'border-stone-700 bg-stone-900' : 'border-stone-800/60 bg-stone-950/50'
               }`}
             >
               {tile ? (
                 <>
-                  {tile.icon && <img src={tile.icon} alt="" className="h-6 w-6" />}
-                  <span className="mt-1 line-clamp-2 text-[11px]">{tile.label}</span>
+                  {tile.icon && <img src={tile.icon} alt="" className="h-6 w-6 shrink-0" />}
+                  <span className="mt-1 line-clamp-2 w-full break-words text-[11px]">{tile.label}</span>
                   {formatTileGoal(tile.condition) && (
-                    <span className="text-[9px] text-stone-500">{formatTileGoal(tile.condition)}</span>
+                    <span className="w-full break-words text-[9px] text-stone-500">{formatTileGoal(tile.condition)}</span>
                   )}
                 </>
               ) : (

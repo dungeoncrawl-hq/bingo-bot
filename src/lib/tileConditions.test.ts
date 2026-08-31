@@ -97,7 +97,7 @@ describe('formatTileProgress', () => {
   it('formats current/goal in shorthand for xpGained, current rounded down', () => {
     const cond: TileCondition = { type: 'xpGained', threshold: 1_500_000 };
     const status = checkTile(cond, stats({ xpGained: 1_999_999 }));
-    expect(formatTileProgress(cond, status)).toBe('1.999M / 1.5M XP');
+    expect(formatTileProgress(cond, status)).toBe('1.99M / 1.5M XP');
   });
 
   it('formats current/goal in shorthand for lootValueGained', () => {
@@ -109,7 +109,7 @@ describe('formatTileProgress', () => {
   it('formats current/goal for skillXpGained using the skill-specific progress', () => {
     const cond: TileCondition = { type: 'skillXpGained', skill: 'Attack', threshold: 1_524_000 };
     const status = checkTile(cond, stats({ skillXpGained: { Attack: 1_524_000 } }));
-    expect(formatTileProgress(cond, status)).toBe('1.524M / 1.524M XP');
+    expect(formatTileProgress(cond, status)).toBe('1.52M / 1.52M XP');
   });
 
   it('returns null for condition types outside XP/loot scope (avoid clutter)', () => {

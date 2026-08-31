@@ -21,7 +21,6 @@ interface ParticipantRow {
   id: string;
   profile_id: string;
   rsn: string;
-  profiles: { display_name: string } | null;
 }
 
 interface CompletionRow {
@@ -57,14 +56,11 @@ export default function BoardPage() {
     setChallenge(challengeData as Challenge);
     const [{ data: tilesData }, { data: participantsData }, { data: completionsData }] = await Promise.all([
       supabase.from('tiles').select('*').eq('challenge_id', challengeData.id),
-      supabase
-        .from('challenge_participants')
-        .select('id, profile_id, rsn, profiles(display_name)')
-        .eq('challenge_id', challengeData.id),
+      supabase.from('challenge_participants').select('id, profile_id, rsn').eq('challenge_id', challengeData.id),
       supabase.from('tile_completions').select('participant_id, kind, ref').eq('challenge_id', challengeData.id),
     ]);
     const tilesList = (tilesData as Tile[]) ?? [];
-    const participantsList = (participantsData as unknown as ParticipantRow[]) ?? [];
+    const participantsList = (participantsData as ParticipantRow[]) ?? [];
     setTiles(tilesList);
     setParticipants(participantsList);
     setCompletions((completionsData as CompletionRow[]) ?? []);
@@ -192,7 +188,7 @@ export default function BoardPage() {
       <p className="text-sm text-stone-500">
         {challenge.start_date} – {challenge.end_date}
       </p>
-      {myParticipant && <p className="mt-2 text-xs text-stone-500">Showing your own progress below.</p>}
+      {myParticipant && <p className="mt-2 text-sm font-medium text-stone-400">{myParticipant.rsn}'s board</p>}
 
       <div className="mt-8 grid grid-cols-5 gap-2">
         {Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, i) => {
@@ -211,7 +207,7 @@ export default function BoardPage() {
             <div
               key={i}
               title={tile ? describeTileCondition(tile.condition) : undefined}
-              className={`relative flex aspect-square flex-col items-center justify-center overflow-hidden rounded-lg border p-2 text-center shadow-inner ${
+              className={`relative flex aspect-square min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden rounded-lg border p-2 text-center shadow-inner ${
                 done
                   ? 'border-green-500 bg-green-950/40'
                   : tile
@@ -229,9 +225,9 @@ export default function BoardPage() {
               )}
               {tile ? (
                 <>
-                  {tile.icon && <img src={tile.icon} alt="" className="h-6 w-6" />}
-                  <span className="mt-1 line-clamp-2 text-[11px]">{tile.label}</span>
-                  {caption && <span className="text-[9px] text-stone-500">{caption}</span>}
+                  {tile.icon && <img src={tile.icon} alt="" className="h-6 w-6 shrink-0" />}
+                  <span className="mt-1 line-clamp-2 w-full break-words text-[11px]">{tile.label}</span>
+                  {caption && <span className="w-full break-words text-[9px] text-stone-500">{caption}</span>}
                   {done && <span className="mt-1 text-[10px] text-green-400">✓ done</span>}
                 </>
               ) : (
@@ -247,7 +243,7 @@ export default function BoardPage() {
         <ul className="mt-3 space-y-1 text-sm text-stone-300">
           {participants.map((p) => (
             <li key={p.id}>
-              {p.profiles?.display_name ?? 'Unknown'} — {p.rsn} — {completedCount(p.id)}/{tiles.length} tiles
+              {p.rsn} — {completedCount(p.id)}/{tiles.length} tiles
               {hasCompletedBoard(p.id) && <span className="ml-2 text-yellow-400">🏆 Complete!</span>}
             </li>
           ))}
