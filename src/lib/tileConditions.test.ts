@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkTile, gridLines, type ParticipantStats, type TileCondition } from './tileConditions';
+import { checkTile, gridLines, progressPercent, type ParticipantStats, type TileCondition } from './tileConditions';
 
 const ZERO_STATS: ParticipantStats = {
   xpGained: 0,
@@ -83,6 +83,31 @@ describe('checkTile', () => {
       progress: 0,
       goal: 0,
     });
+  });
+});
+
+describe('progressPercent', () => {
+  it('returns null for singleDropValue and tbd (no meaningful bar)', () => {
+    const cond1: TileCondition = { type: 'singleDropValue', threshold: 1000 };
+    expect(progressPercent(cond1, checkTile(cond1, stats({ biggestDropValue: 500 })))).toBeNull();
+    const cond2: TileCondition = { type: 'tbd' };
+    expect(progressPercent(cond2, checkTile(cond2, ZERO_STATS))).toBeNull();
+  });
+
+  it('is proportional to progress/goal for a standard condition, clamped to 100', () => {
+    const cond: TileCondition = { type: 'xpGained', threshold: 1000 };
+    expect(progressPercent(cond, checkTile(cond, stats({ xpGained: 250 })))).toBe(25);
+    expect(progressPercent(cond, checkTile(cond, stats({ xpGained: 5000 })))).toBe(100);
+    expect(progressPercent(cond, checkTile(cond, stats({ xpGained: 0 })))).toBe(0);
+  });
+
+  it('is inverted for maxDeaths -- full at 0 deaths, draining toward 0 as the limit is approached/broken', () => {
+    const cond: TileCondition = { type: 'maxDeaths', threshold: 4 };
+    expect(progressPercent(cond, checkTile(cond, stats({ deathsInPeriod: 0 })))).toBe(100);
+    expect(progressPercent(cond, checkTile(cond, stats({ deathsInPeriod: 2 })))).toBe(50);
+    expect(progressPercent(cond, checkTile(cond, stats({ deathsInPeriod: 4 })))).toBe(0);
+    // Broken the limit entirely -- clamped to 0, not negative.
+    expect(progressPercent(cond, checkTile(cond, stats({ deathsInPeriod: 10 })))).toBe(0);
   });
 });
 

@@ -4,7 +4,9 @@ import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { getSupabase } from '../db/supabaseClient';
 import type { Challenge, Tile } from '../db/types';
-import { describeTileCondition, formatTileGoal } from '../lib/tileConditions';
+import { checkTile, describeTileCondition, formatTileGoal, progressPercent, type TileStatus } from '../lib/tileConditions';
+import { computeParticipantStats, type RawParticipantData } from '../lib/participantStats';
+import { computeHiscoresRecap, type SnapshotRow } from '../lib/hiscoresRecap';
 
 const GRID_SIZE = 5;
 
@@ -35,6 +37,7 @@ export default function BoardPage() {
   const [rsnDraft, setRsnDraft] = useState('');
   const [savingRsn, setSavingRsn] = useState(false);
   const [rsnError, setRsnError] = useState('');
+  const [myTileStatuses, setMyTileStatuses] = useState<Record<string, TileStatus>>({});
 
   const load = useCallback(async () => {
     if (!slug) return;
@@ -53,10 +56,50 @@ export default function BoardPage() {
         .eq('challenge_id', challengeData.id),
       supabase.from('tile_completions').select('participant_id, kind, ref').eq('challenge_id', challengeData.id),
     ]);
-    setTiles((tilesData as Tile[]) ?? []);
-    setParticipants((participantsData as unknown as ParticipantRow[]) ?? []);
+    const tilesList = (tilesData as Tile[]) ?? [];
+    const participantsList = (participantsData as unknown as ParticipantRow[]) ?? [];
+    setTiles(tilesList);
+    setParticipants(participantsList);
     setCompletions((completionsData as CompletionRow[]) ?? []);
-  }, [slug]);
+
+    // Live progress bars (not just done/not-done) for the signed-in
+    // viewer's own tiles -- computed client-side by re-running the same
+    // pure functions the server uses (challengeProgress.ts), since the
+    // intermediate progress numbers are never persisted, only the final
+    // done/not-done result. Raw event tables are all public-read RLS
+    // (Milestones 3/4), so this needs no elevated access.
+    const me = session ? participantsList.find((p) => p.profile_id === session.user.id) : undefined;
+    if (!me) {
+      setMyTileStatuses({});
+      return;
+    }
+    const pid = me.id;
+    const [bossKills, slayerTasks, lootDrops, deaths, collectionLogEntries, petObtains, snapshots] = await Promise.all([
+      supabase.from('boss_kills').select('boss, kc, created_at').eq('participant_id', pid),
+      supabase.from('slayer_tasks').select('created_at').eq('participant_id', pid),
+      supabase.from('loot_drops').select('items, total_value, created_at').eq('participant_id', pid),
+      supabase.from('deaths').select('created_at').eq('participant_id', pid),
+      supabase.from('collection_log_entries').select('created_at').eq('participant_id', pid),
+      supabase.from('pet_obtains').select('updated_at').eq('participant_id', pid),
+      supabase.from('participant_snapshots').select('recorded_on, total_xp, skills, activities').eq('participant_id', pid),
+    ]);
+    const raw: RawParticipantData = {
+      bossKills: (bossKills.data as RawParticipantData['bossKills']) ?? [],
+      slayerTasks: (slayerTasks.data as RawParticipantData['slayerTasks']) ?? [],
+      lootDrops: (lootDrops.data as RawParticipantData['lootDrops']) ?? [],
+      deaths: (deaths.data as RawParticipantData['deaths']) ?? [],
+      collectionLogEntries: (collectionLogEntries.data as RawParticipantData['collectionLogEntries']) ?? [],
+      petObtains: (petObtains.data as RawParticipantData['petObtains']) ?? [],
+    };
+    const window = { start: challengeData.start_date, end: challengeData.end_date };
+    const hiscoresRecap = computeHiscoresRecap((snapshots.data as SnapshotRow[]) ?? [], window);
+    const stats = computeParticipantStats(raw, window, hiscoresRecap);
+    const statuses: Record<string, TileStatus> = {};
+    for (const tile of tilesList) {
+      statuses[tile.id] = checkTile(tile.condition, stats);
+    }
+    setMyTileStatuses(statuses);
+  }, [slug, session]);
 
   useEffect(() => {
     load();
@@ -150,11 +193,13 @@ export default function BoardPage() {
           const col = i % GRID_SIZE;
           const tile = tileAt(row, col);
           const done = tile != null && myCompletedTileIds.has(tile.id);
+          const status = tile ? myTileStatuses[tile.id] : undefined;
+          const percent = tile && status && !done ? progressPercent(tile.condition, status) : null;
           return (
             <div
               key={i}
               title={tile ? describeTileCondition(tile.condition) : undefined}
-              className={`flex aspect-square flex-col items-center justify-center rounded-lg border p-2 text-center shadow-inner ${
+              className={`relative flex aspect-square flex-col items-center justify-center overflow-hidden rounded-lg border p-2 text-center shadow-inner ${
                 done
                   ? 'border-green-500 bg-green-950/40'
                   : tile
@@ -162,6 +207,14 @@ export default function BoardPage() {
                     : 'border-stone-800/60 bg-stone-950/50'
               }`}
             >
+              {percent !== null && (
+                <div
+                  className="absolute inset-y-0 left-0 w-1"
+                  style={{ background: 'linear-gradient(to top, #ef4444, #eab308, #22c55e)' }}
+                >
+                  <div className="absolute inset-x-0 top-0 bg-stone-900" style={{ height: `${100 - percent}%` }} />
+                </div>
+              )}
               {tile ? (
                 <>
                   {tile.icon && <img src={tile.icon} alt="" className="h-6 w-6" />}

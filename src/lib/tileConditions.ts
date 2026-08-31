@@ -229,6 +229,26 @@ export function formatTileGoal(cond: TileCondition): string | null {
   }
 }
 
+// A 0-100 fill percentage for the tile's progress bar on the board, or
+// null when a bar wouldn't tell a meaningful story:
+// - 'singleDropValue' is binary luck (one big drop either happened or it
+//   didn't) rather than a running total worth visualizing.
+// - 'tbd' has no real goal.
+// maxDeaths is inverted -- it starts complete (full bar) and drains
+// toward empty as deaths climb toward the limit, detected structurally
+// via `failed !== undefined` (only maxDeaths sets it) rather than
+// hardcoding the type, so any future start-complete/degrade-style
+// condition gets this behavior automatically.
+export function progressPercent(cond: TileCondition, status: TileStatus): number | null {
+  if (cond.type === 'singleDropValue' || cond.type === 'tbd') return null;
+  if (status.failed !== undefined) {
+    if (status.goal <= 0) return null;
+    return Math.max(0, Math.min(100, ((status.goal - status.progress) / status.goal) * 100));
+  }
+  if (status.goal <= 0) return null;
+  return Math.max(0, Math.min(100, (status.progress / status.goal) * 100));
+}
+
 // Every row, every column, and both diagonals of an NxN grid -- a completed
 // line is classic bingo scoring. Specific to board_type='grid5x5' (called
 // with size=5); a future irregular board_type brings its own scoring
