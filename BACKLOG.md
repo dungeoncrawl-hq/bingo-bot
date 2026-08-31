@@ -49,3 +49,12 @@ ordered -- just captured so they don't get lost.
     `src/server/challengeProgress.ts`); richer embeds, per-tile custom
     messages, first-completer callouts, etc. (`rs`'s `bingoDiscord.ts` has
     a fuller version of this worth referencing).
+
+## Tile detail view
+15. Clicking a tile should open a detail view: the full condition
+    description (`describeTileCondition`, already exists), and every
+    participant's progress bar for that specific tile, sorted from most
+    to least complete -- today the board only ever shows the *viewer's
+    own* progress (see item 6, viewing other players' boards -- related
+    but this is scoped to one tile across everyone, not one player across
+    every tile).

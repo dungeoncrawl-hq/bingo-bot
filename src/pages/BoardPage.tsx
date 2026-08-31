@@ -4,7 +4,14 @@ import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { getSupabase } from '../db/supabaseClient';
 import type { Challenge, Tile } from '../db/types';
-import { checkTile, describeTileCondition, formatTileGoal, progressPercent, type TileStatus } from '../lib/tileConditions';
+import {
+  checkTile,
+  describeTileCondition,
+  formatTileGoal,
+  formatTileProgress,
+  progressPercent,
+  type TileStatus,
+} from '../lib/tileConditions';
 import { computeParticipantStats, type RawParticipantData } from '../lib/participantStats';
 import { computeHiscoresRecap, type SnapshotRow } from '../lib/hiscoresRecap';
 
@@ -195,6 +202,11 @@ export default function BoardPage() {
           const done = tile != null && myCompletedTileIds.has(tile.id);
           const status = tile ? myTileStatuses[tile.id] : undefined;
           const percent = tile && status && !done ? progressPercent(tile.condition, status) : null;
+          // formatTileProgress (current/goal, e.g. "620K / 1.5M XP") only
+          // covers the condition types where a running total is large
+          // enough for shorthand to actually help -- everything else
+          // falls back to the plain goal-only caption.
+          const caption = tile ? (status && formatTileProgress(tile.condition, status)) ?? formatTileGoal(tile.condition) : null;
           return (
             <div
               key={i}
@@ -219,9 +231,7 @@ export default function BoardPage() {
                 <>
                   {tile.icon && <img src={tile.icon} alt="" className="h-6 w-6" />}
                   <span className="mt-1 line-clamp-2 text-[11px]">{tile.label}</span>
-                  {formatTileGoal(tile.condition) && (
-                    <span className="text-[9px] text-stone-500">{formatTileGoal(tile.condition)}</span>
-                  )}
+                  {caption && <span className="text-[9px] text-stone-500">{caption}</span>}
                   {done && <span className="mt-1 text-[10px] text-green-400">✓ done</span>}
                 </>
               ) : (

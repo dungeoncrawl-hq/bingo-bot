@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { checkTile, gridLines, progressPercent, type ParticipantStats, type TileCondition } from './tileConditions';
+import {
+  checkTile,
+  formatTileProgress,
+  gridLines,
+  progressPercent,
+  type ParticipantStats,
+  type TileCondition,
+} from './tileConditions';
 
 const ZERO_STATS: ParticipantStats = {
   xpGained: 0,
@@ -83,6 +90,31 @@ describe('checkTile', () => {
       progress: 0,
       goal: 0,
     });
+  });
+});
+
+describe('formatTileProgress', () => {
+  it('formats current/goal in shorthand for xpGained, current rounded down', () => {
+    const cond: TileCondition = { type: 'xpGained', threshold: 1_500_000 };
+    const status = checkTile(cond, stats({ xpGained: 1_999_999 }));
+    expect(formatTileProgress(cond, status)).toBe('1.999M / 1.5M XP');
+  });
+
+  it('formats current/goal in shorthand for lootValueGained', () => {
+    const cond: TileCondition = { type: 'lootValueGained', threshold: 12_000 };
+    const status = checkTile(cond, stats({ lootValueGained: 3_254 }));
+    expect(formatTileProgress(cond, status)).toBe('3,254 / 12K gp');
+  });
+
+  it('formats current/goal for skillXpGained using the skill-specific progress', () => {
+    const cond: TileCondition = { type: 'skillXpGained', skill: 'Attack', threshold: 1_524_000 };
+    const status = checkTile(cond, stats({ skillXpGained: { Attack: 1_524_000 } }));
+    expect(formatTileProgress(cond, status)).toBe('1.524M / 1.524M XP');
+  });
+
+  it('returns null for condition types outside XP/loot scope (avoid clutter)', () => {
+    const cond: TileCondition = { type: 'bossKcGained', threshold: 10 };
+    expect(formatTileProgress(cond, checkTile(cond, stats({ bossKcGained: 5 })))).toBeNull();
   });
 });
 

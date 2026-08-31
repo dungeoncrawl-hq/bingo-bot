@@ -4,6 +4,8 @@
 // from rs/src/lib/seasonalBingoConditions.ts (SeasonalTileCondition ->
 // TileCondition; "seasonal" was rs-specific framing for its one hardcoded
 // board, dropped here since tiles are host-defined data now).
+import { formatCompactNumber } from './format.js';
+
 export type TileCondition =
   | { type: 'xpGained'; threshold: number }
   | { type: 'bossKcGained'; threshold: number }
@@ -200,7 +202,7 @@ export function formatTileGoal(cond: TileCondition): string | null {
       return `≤${cond.threshold.toLocaleString()} deaths`;
     case 'xpGained':
     case 'skillXpGained':
-      return `${cond.threshold.toLocaleString()} XP`;
+      return `${formatCompactNumber(cond.threshold)} XP`;
     case 'skillLevelGained':
       return `${cond.threshold.toLocaleString()} level${cond.threshold === 1 ? '' : 's'}`;
     case 'bossKcGained':
@@ -209,9 +211,9 @@ export function formatTileGoal(cond: TileCondition): string | null {
     case 'slayerTasksCompleted':
       return `${cond.threshold.toLocaleString()} tasks`;
     case 'lootValueGained':
-      return `${cond.threshold.toLocaleString()} gp`;
+      return `${formatCompactNumber(cond.threshold)} gp`;
     case 'singleDropValue':
-      return `${cond.threshold.toLocaleString()}+ gp`;
+      return `${formatCompactNumber(cond.threshold)}+ gp`;
     case 'itemCount':
       return `${cond.threshold.toLocaleString()}x`;
     case 'cluesCompleted':
@@ -226,6 +228,27 @@ export function formatTileGoal(cond: TileCondition): string | null {
       return `${cond.threshold.toLocaleString()} items`;
     case 'petsObtained':
       return `${cond.threshold.toLocaleString()} pet${cond.threshold === 1 ? '' : 's'}`;
+  }
+}
+
+// A compact "620K / 1.5M XP" caption combining current progress with the
+// goal, replacing formatTileGoal's goal-only text for the condition types
+// where the running total is large enough that shorthand actually helps
+// (XP and loot value -- other types' numbers are small enough that a
+// combined caption would just be clutter for no benefit). Current progress
+// is always rounded down (formatCompactNumber's roundDown) so a tile never
+// visually reads as having reached the threshold before it actually has.
+// null for every other condition type -- callers should fall back to
+// formatTileGoal in that case.
+export function formatTileProgress(cond: TileCondition, status: TileStatus): string | null {
+  switch (cond.type) {
+    case 'xpGained':
+    case 'skillXpGained':
+      return `${formatCompactNumber(status.progress, { roundDown: true })} / ${formatCompactNumber(cond.threshold)} XP`;
+    case 'lootValueGained':
+      return `${formatCompactNumber(status.progress, { roundDown: true })} / ${formatCompactNumber(cond.threshold)} gp`;
+    default:
+      return null;
   }
 }
 
