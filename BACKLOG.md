@@ -4,57 +4,45 @@ Ideas and known gaps not yet scheduled into a milestone. Not prioritized/
 ordered -- just captured so they don't get lost.
 
 ## UI/UX polish
-1. The Players list (`EditChallengePage.tsx`) currently shows the
-   signed-in display name alongside the RSN -- should show RSN only.
-2. Cap the tile label length (open question: 40 characters?) so hosts
+1. Cap the tile label length (open question: 40 characters?) so hosts
    can't create labels that break the layout.
-3. `TileDetailModal.tsx`'s per-participant progress bars still use the
-   old fixed red/yellow/green gradient (`linear-gradient(to right, ...)`)
-   -- inconsistent now that the board grid's own progress bar
-   (`BoardPage.tsx`) was switched to a single solid color via
-   `progressColor()` (`src/lib/progressColor.ts`). Should reuse the same
-   function here for a consistent look.
 
 ## Tile mechanics
-4. Hidden/mystery tiles -- a tile that doesn't reveal itself until some
+2. Hidden/mystery tiles -- a tile that doesn't reveal itself until some
    trigger happens. Needs further design (what triggers it? does it show
    as a blank slot, a "?" placeholder, or not appear in the grid at
    all?).
-5. Improve the logic around the "Obtain a set of items" (`itemCount`)
+3. Improve the logic around the "Obtain a set of items" (`itemCount`)
    condition -- currently just a flat comma-separated item-name list
    matched case-insensitively against loot; needs a closer look (exact
    scope TBD).
-6. Improve the "KC gained on a specific boss" (`kcGained`) condition --
-   right now `activity` is host-typed free text (see TileEditorForm.tsx).
-   Three parts: (1) restrict it to a fixed, curated list of bosses/
-   minigames/raids instead of freeform typing -- same "catalog, not
-   freeform" pattern already used for item sets (`src/lib/itemSets.ts`)
-   and now `bigDropsCount`'s value floor; (2) give each boss/minigame/
-   raid in that list its own specific icon instead of the generic combat
-   icon every `kcGained`/`bossKcGained` tile shares today
-   (`defaultIconFor` in `src/lib/tileIcons.ts`); (3) make sure that
-   specific icon actually shows up everywhere a tile's icon is used --
-   the board grid, the tile editor, and the Discord completion embed's
-   thumbnail (`src/server/discordEmbeds.ts`).
-7. Add a "Free space" tile condition -- always shows as completed for
-   every participant, awards no points. Distinct from every other
-   condition type in that `checkTile` never has to evaluate any raw
-   stats for it; it's just an always-true special case.
-8. Restrict `lootValueGained`/`singleDropValue`/`xpGained`-style GP and
+4. Restrict `lootValueGained`/`singleDropValue`/`xpGained`-style GP and
    XP thresholds to increments of 1,000 instead of any raw number a
    host types in. In `TileEditorForm.tsx`, replace the free-typed
    number with a denomination selector (K/M) plus a value, so the host
    picks e.g. "100" + "M" to form a 100,000,000 threshold instead of
    typing the full number by hand.
+5. New condition: "XP gained in lowest skill." Unlike `skillXpGained`
+   (host picks a fixed skill), the skill itself is derived per
+   participant -- whichever skill was their *lowest level* as of their
+   final hiscores sync before the challenge's start_date. Open
+   questions: tie-break rule if two skills are tied for lowest; what
+   "final sync before start" means for someone who joins mid-challenge
+   (no pre-start snapshot to anchor to); whether the resolved skill name
+   should be shown on the tile so players know what they're being
+   judged on.
+6. New condition: "Levels gained in lowest skill" -- same per-participant
+   lowest-skill resolution as #5 above, tracking `skillLevelsGained`
+   instead of `skillXpGained`. Shares the same open design questions.
 
 ## Host tooling
-9. "Randomize a board" starting point -- host picks random tiles/
+7. "Randomize a board" starting point -- host picks random tiles/
    conditions to seed a new board, then edits/tweaks from there instead
    of starting from a fully blank grid.
-10. A library of pre-made boards hosts can pick from to start a challenge.
-11. "Copy a past challenge" -- start a new challenge that mirrors an
-    existing/past board's tiles instead of rebuilding it from scratch.
-12. Restrict which icons are selectable based on the tile's condition,
+8. A library of pre-made boards hosts can pick from to start a challenge.
+9. "Copy a past challenge" -- start a new challenge that mirrors an
+   existing/past board's tiles instead of rebuilding it from scratch.
+10. Restrict which icons are selectable based on the tile's condition,
     instead of the full picker always being open. E.g. a loot-value
     condition should always be the 10k coin stack; a total-XP condition
     should always be the generic skill icon; a specific-skill condition
@@ -62,16 +50,45 @@ ordered -- just captured so they don't get lost.
     icon could reasonably fit, offer a small curated set instead of the
     full picker. Goal: fewer decisions for the host, and a standardized,
     recognizable look across boards for players.
-13. Once a challenge has started, its tile conditions should no longer be
+11. Once a challenge has started, its tile conditions should no longer be
     editable from `EditChallengePage.tsx` -- changing a condition
     mid-challenge could invalidate progress players have already made
     toward it. (Tile *metadata* like label/icon presumably still fine to
     edit; scope of what counts as "started" and what stays editable
-    needs a closer look.)
+    needs a closer look.) Deferred for now -- every current challenge is
+    still a test board, so there's no live risk yet.
 
-## Multiplayer / social
-14. Let the host define how many points a player gets for being *first*
-    to complete a given task -- every completion of a tile currently
-    scores the same flat points regardless of who got there first; needs
-    a separate first-completer bonus value the host sets, on top of the
-    base points.
+## My Dungeons page (rename of "My Challenges" / DashboardPage.tsx)
+12. Rename the page/route from "My Challenges" to "My Dungeons"
+    (`DashboardPage.tsx`, `Header.tsx`'s nav link, any other on-site
+    copy) and enhance it:
+    - A quick button on each row to copy that challenge's Dink webhook
+      URL to the clipboard, without opening the setup guide page.
+    - Colored status badges: Active = green, Draft, Upcoming, Past, etc.
+      (today `c.status` just prints as plain uppercase text -- see
+      `challenges.status`, currently `'draft' | 'active' | 'ended'`; an
+      "Upcoming" status implied here doesn't exist yet -- active vs.
+      upcoming presumably needs deriving from `start_date` vs. today
+      rather than a new stored status, since a challenge is published
+      -- `status = 'active'` -- before its start_date arrives).
+    - Replace the "Edit" text link with an icon button, and either turn
+      "View public page" into a recognizable icon too or make the whole
+      row itself a clickable link to the board.
+    - Friendlier date formatting -- "Sep 1 - Sep 13" instead of the raw
+      `2026-09-01` / `2026-09-13` strings.
+    - "X days remaining" on an Active row, "X days until it begins" on
+      an Upcoming row, "X days to publish" on a Draft row -- all derived
+      from `start_date`/`end_date` vs. today, not stored.
+    - Move past/ended challenges out of the main list into their own
+      section further down the page.
+
+## Dungeon types
+13. Support more than one board shape/ruleset ("dungeon type"), building
+    on `challenges.board_type` (already unconstrained text specifically
+    so a new type needs no migration -- see its own comment in
+    `supabase/schema.sql`). The current 5x5 grid becomes the "Standard"
+    type (today's only value, `'grid5x5'`). A second type, "Adventure,"
+    gets its own `size` attribute (`small` | `medium` | `large`) --
+    scope for this backlog entry is just the "small" Adventure dungeon;
+    medium/large and Adventure's actual rules (what a size even changes)
+    are TBD, to be defined later.
