@@ -32,28 +32,11 @@ const DEATH_ICON_URL = 'https://oldschool.runescape.wiki/images/Items_kept_on_de
 // "a pet" generically since the wiki has no single generic pet icon.
 const PETS_ICON_URL = 'https://oldschool.runescape.wiki/images/Baby_Mole.png';
 
-// Closed pool of selectable icons -- hosts pick from this rather than
-// pasting an arbitrary image URL, so tiles can't be used to hotlink/embed
-// unrelated or inappropriate images.
-export const PRESET_ICONS: { url: string; label: string }[] = [
-  { url: TOTAL_LEVEL_ICON_URL, label: 'Total level / XP' },
-  { url: COMBAT_ICON_URL, label: 'Combat / KC' },
-  { url: COINS_ICON_URL, label: 'Coins / loot' },
-  { url: CLUE_ICON_URL, label: 'Clue scroll (any)' },
-  { url: BEGINNER_CLUE_ICON_URL, label: 'Beginner clue scroll' },
-  { url: EASY_CLUE_ICON_URL, label: 'Easy clue scroll' },
-  { url: MEDIUM_CLUE_ICON_URL, label: 'Medium clue scroll' },
-  { url: HARD_CLUE_ICON_URL, label: 'Hard clue scroll' },
-  { url: ELITE_CLUE_ICON_URL, label: 'Elite clue scroll' },
-  { url: MASTER_CLUE_ICON_URL, label: 'Master clue scroll' },
-  { url: COLLECTION_LOG_ICON_URL, label: 'Collection log' },
-  { url: DEATH_ICON_URL, label: 'Deaths' },
-  { url: PETS_ICON_URL, label: 'Pets' },
-  ...SKILL_ORDER.map((s) => ({ url: skillIconUrl(s), label: s })),
-];
-
-// null means there's no sensible default (itemCount is host-specific by
-// nature; tbd is a placeholder) -- the host picks one from PRESET_ICONS.
+// Every condition maps to exactly one icon -- hosts can't pick their own
+// (no hotlinking/embedding arbitrary images), and there's nothing left to
+// choose: the icon is entirely determined by the condition itself (and its
+// skill, for the per-skill conditions). null only for 'tbd', a placeholder
+// with nothing to depict.
 export function defaultIconFor(type: TileCondition['type'], skill?: string): string | null {
   switch (type) {
     case 'xpGained':
@@ -91,6 +74,7 @@ export function defaultIconFor(type: TileCondition['type'], skill?: string): str
       return PETS_ICON_URL;
     case 'itemCount':
     case 'itemSetCollected':
+      return COLLECTION_LOG_ICON_URL;
     case 'tbd':
       return null;
   }

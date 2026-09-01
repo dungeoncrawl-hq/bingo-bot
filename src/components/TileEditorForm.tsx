@@ -2,13 +2,17 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import type { TileCondition } from '../lib/tileConditions';
 import type { Tile } from '../db/types';
-import { SKILL_ORDER, PRESET_ICONS, defaultIconFor } from '../lib/tileIcons';
+import { SKILL_ORDER, defaultIconFor } from '../lib/tileIcons';
 import { PRESET_ITEM_SETS } from '../lib/itemSets';
 
-// Keeps a label from overflowing the tile grid cell it renders in
+// Keeps a derived label from overflowing the tile grid cell it renders in
 // (BoardPage.tsx/EditChallengePage.tsx both cap the label at 2 lines with
-// line-clamp-2 -- much beyond this and it just gets clipped anyway).
+// line-clamp-2 -- much beyond this and it just gets clipped anyway). Applied
+// to the host-typed inputs the label is built from (setName bare, activity
+// with " KC" appended) rather than the label itself, since the label is no
+// longer directly editable.
 const LABEL_MAX_LENGTH = 40;
+const ACTIVITY_MAX_LENGTH = LABEL_MAX_LENGTH - ' KC'.length;
 
 const CONDITION_GROUPS: { group: string; options: { value: TileCondition['type']; label: string }[] }[] = [
   {
@@ -95,6 +99,9 @@ function conditionFromForm(
   }
 }
 
+// The label is entirely derived from the condition (and its skill/activity/
+// set-name parameters) -- not a separate host-editable field. Every branch
+// is deterministic, so there's nothing for a host to choose here either.
 function defaultLabelFor(type: TileCondition['type'], skill: string, activity: string, setName: string): string {
   switch (type) {
     case 'xpGained':
@@ -171,65 +178,20 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
   const [skill, setSkill] = useState(initial.skill || SKILL_ORDER[0]);
   const [itemNames, setItemNames] = useState(initial.itemNames);
   const [setName, setSetName] = useState(initial.setName);
-  const [label, setLabel] = useState(existing?.label ?? defaultLabelFor(type, skill, activity, setName));
-  // Tracks whether `label`/`icon` still match what their defaultXFor
-  // functions would produce, so switching condition type/skill/activity/
-  // set name keeps auto-filling them -- but the moment a host edits one
-  // directly, it flips off and their choice is left alone.
-  const [labelIsDefault, setLabelIsDefault] = useState(
-    !existing || existing.label === defaultLabelFor(type, skill, activity, setName),
-  );
-  // When defaultIconFor resolves to a real icon, that condition has exactly
-  // one sensible choice -- the icon is forced to it (see #15 below) and any
-  // previously-stored divergent icon (e.g. from before this restriction
-  // existed) is snapped back in line rather than respected.
-  const initialDefaultIcon = defaultIconFor(type, skill);
-  const [icon, setIcon] = useState(initialDefaultIcon ?? existing?.icon ?? '');
-  const [iconIsDefault, setIconIsDefault] = useState(
-    initialDefaultIcon !== null || !existing || existing.icon === initialDefaultIcon,
-  );
   const [points, setPoints] = useState(existing?.points ?? 1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  function applyType(newType: TileCondition['type']) {
-    setType(newType);
-    if (labelIsDefault) setLabel(defaultLabelFor(newType, skill, activity, setName));
-    const forced = defaultIconFor(newType, skill);
-    if (forced !== null) {
-      setIcon(forced);
-      setIconIsDefault(true);
-    } else if (iconIsDefault) {
-      setIcon('');
-    }
-  }
-
-  function applySkill(newSkill: string) {
-    setSkill(newSkill);
-    if (labelIsDefault) setLabel(defaultLabelFor(type, newSkill, activity, setName));
-    const forced = defaultIconFor(type, newSkill);
-    if (forced !== null) {
-      setIcon(forced);
-      setIconIsDefault(true);
-    } else if (iconIsDefault) {
-      setIcon('');
-    }
-  }
-
-  function applyActivity(newActivity: string) {
-    setActivity(newActivity);
-    if (labelIsDefault) setLabel(defaultLabelFor(type, skill, newActivity, setName));
-  }
-
-  function applySetName(newSetName: string) {
-    setSetName(newSetName);
-    if (labelIsDefault) setLabel(defaultLabelFor(type, skill, activity, newSetName));
-  }
+  // Label and icon are pure functions of the fields above -- no state of
+  // their own, no manual override. Any label/icon a tile was saved with
+  // before this restriction existed is superseded the moment it's reopened.
+  const label = defaultLabelFor(type, skill, activity, setName);
+  const icon = defaultIconFor(type, skill);
 
   function applyItemPreset(presetName: string) {
     const preset = PRESET_ITEM_SETS.find((p) => p.name === presetName);
     if (!preset) return;
-    applySetName(preset.name);
+    setSetName(preset.name);
     setItemNames(preset.items.join(', '));
     // "Collect a full item set" defaults to requiring every item in the
     // preset -- itemCount's threshold is a different scale entirely (a
@@ -239,13 +201,12 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!label.trim()) return;
     setSaving(true);
     setError('');
     try {
       await onSave({
-        label: label.trim(),
-        icon: icon.trim() || null,
+        label,
+        icon,
         condition: conditionFromForm(type, threshold, activity, skill, itemNames, setName),
         points: points || 1,
       });
@@ -254,8 +215,6 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
       setSaving(false);
     }
   }
-
-  const isIconForced = defaultIconFor(type, skill) !== null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
@@ -269,7 +228,7 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
           <label className="block text-sm text-stone-400">Condition</label>
           <select
             value={type}
-            onChange={(e) => applyType(e.target.value as TileCondition['type'])}
+            onChange={(e) => setType(e.target.value as TileCondition['type'])}
             className={inputClass}
           >
             {CONDITION_GROUPS.map((g) => (
@@ -285,71 +244,30 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
         </div>
         <div>
           <label className="block text-sm text-stone-400">Label</label>
-          <input
-            required
-            maxLength={LABEL_MAX_LENGTH}
-            value={label}
-            onChange={(e) => {
-              setLabel(e.target.value);
-              setLabelIsDefault(false);
-            }}
-            className={inputClass}
-          />
-          <p className="mt-1 text-right text-xs text-stone-600">
-            {label.length}/{LABEL_MAX_LENGTH}
-          </p>
-        </div>
-        <div>
-          <label className="block text-sm text-stone-400">Icon</label>
-          {isIconForced ? (
-            <div className="mt-1 flex items-center gap-2 rounded-lg border border-stone-800 bg-stone-900 p-2">
-              {icon && <img src={icon} alt="" className="h-8 w-8 object-contain" />}
-              <p className="text-xs text-stone-500">Icon is set automatically for this condition</p>
-            </div>
-          ) : (
-            <div className="mt-1 flex max-h-32 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-stone-800 bg-stone-900 p-2">
-              <button
-                type="button"
-                title="No icon"
-                onClick={() => {
-                  setIcon('');
-                  setIconIsDefault(false);
-                }}
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded border text-[9px] text-stone-500 ${
-                  icon === '' ? 'border-stone-100' : 'border-stone-700 hover:border-stone-500'
-                }`}
-              >
-                None
-              </button>
-              {PRESET_ICONS.map((opt) => (
-                <button
-                  key={opt.url}
-                  type="button"
-                  title={opt.label}
-                  onClick={() => {
-                    setIcon(opt.url);
-                    setIconIsDefault(false);
-                  }}
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded border bg-stone-800 p-1 ${
-                    icon === opt.url ? 'border-stone-100' : 'border-stone-700 hover:border-stone-500'
-                  }`}
-                >
-                  <img src={opt.url} alt={opt.label} className="h-full w-full object-contain" />
-                </button>
-              ))}
-            </div>
-          )}
+          <div className="mt-1 flex items-center gap-2 rounded-lg border border-stone-800 bg-stone-900 p-2">
+            {icon && <img src={icon} alt="" className="h-8 w-8 shrink-0 object-contain" />}
+            <p className="text-sm">{label}</p>
+          </div>
+          <p className="mt-1 text-xs text-stone-500">Label and icon are set automatically for this condition.</p>
         </div>
         {type === 'kcGained' && (
           <div>
             <label className="block text-sm text-stone-400">Boss / activity name</label>
-            <input value={activity} onChange={(e) => applyActivity(e.target.value)} className={inputClass} />
+            <input
+              maxLength={ACTIVITY_MAX_LENGTH}
+              value={activity}
+              onChange={(e) => setActivity(e.target.value)}
+              className={inputClass}
+            />
+            <p className="mt-1 text-right text-xs text-stone-600">
+              {activity.length}/{ACTIVITY_MAX_LENGTH}
+            </p>
           </div>
         )}
         {(type === 'skillLevelGained' || type === 'skillXpGained') && (
           <div>
             <label className="block text-sm text-stone-400">Skill</label>
-            <select value={skill} onChange={(e) => applySkill(e.target.value)} className={inputClass}>
+            <select value={skill} onChange={(e) => setSkill(e.target.value)} className={inputClass}>
               {SKILL_ORDER.map((s) => (
                 <option key={s} value={s}>
                   {s}
@@ -377,7 +295,15 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
             </div>
             <div>
               <label className="block text-sm text-stone-400">Set name (e.g. "Barrows pieces")</label>
-              <input value={setName} onChange={(e) => applySetName(e.target.value)} className={inputClass} />
+              <input
+                maxLength={LABEL_MAX_LENGTH}
+                value={setName}
+                onChange={(e) => setSetName(e.target.value)}
+                className={inputClass}
+              />
+              <p className="mt-1 text-right text-xs text-stone-600">
+                {setName.length}/{LABEL_MAX_LENGTH}
+              </p>
             </div>
             <div>
               <label className="block text-sm text-stone-400">Item names, comma-separated</label>
