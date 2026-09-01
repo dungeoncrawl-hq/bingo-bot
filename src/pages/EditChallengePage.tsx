@@ -150,7 +150,7 @@ export default function EditChallengePage() {
             <button
               key={i}
               onClick={() => setEditingCell({ row, col })}
-              className={`relative flex aspect-square min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden rounded-lg border p-2 text-center shadow-inner transition-colors hover:border-amber-500 before:pointer-events-none before:absolute before:inset-0 before:bg-[url('/stone-texture.jpg')] before:bg-cover before:bg-center before:opacity-30 before:content-[''] ${
+              className={`relative flex aspect-square min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden rounded-lg border p-2 text-center shadow-inner transition-colors hover:border-amber-500 before:pointer-events-none before:absolute before:inset-0 before:bg-[url('/stone-texture.svg')] before:bg-cover before:bg-center before:opacity-30 before:content-[''] ${
                 tile ? 'border-stone-700 bg-stone-900' : 'border-stone-800/60 bg-stone-950/50'
               }`}
             >

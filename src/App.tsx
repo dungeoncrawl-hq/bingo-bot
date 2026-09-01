@@ -8,6 +8,7 @@ import NewChallengePage from './pages/NewChallengePage';
 import EditChallengePage from './pages/EditChallengePage';
 import BoardPage from './pages/BoardPage';
 import SetupGuidePage from './pages/SetupGuidePage';
+import AboutPage from './pages/AboutPage';
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
             <Route path="/c/:slug" element={<BoardPage />} />
             <Route path="/c/:slug/edit" element={<EditChallengePage />} />
             <Route path="/c/:slug/setup" element={<SetupGuidePage />} />
+            <Route path="/about" element={<AboutPage />} />
           </Routes>
         </div>
         <Footer />
