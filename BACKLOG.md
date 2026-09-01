@@ -135,3 +135,35 @@ ordered -- just captured so they don't get lost.
     but replace the fixed flavor-text lines (e.g. "Aren't they just
     showing off at this point?") with randomized joke/banter variants
     pulled from a pool, to lean into the site's ".lol" branding.
+
+## Account / profile
+19. A user profile page letting someone change their email and set a
+    default RSN, so they don't have to retype it every time they join a
+    new challenge. Two different underlying mechanisms: email lives on
+    Supabase's own `auth.users` (changing it goes through
+    `supabase.auth.updateUser()`, which re-sends a confirmation email --
+    not a plain field update), while a default RSN would need a new
+    column on `profiles` (today just `id`, `display_name`,
+    `created_at` -- see `supabase/schema.sql`), then `BoardPage.tsx`'s
+    join form pre-filling from it instead of starting blank.
+
+## Game modes
+20. New game modes, applying to any dungeon type (orthogonal to #13's
+    board *type* -- Standard/Adventure -- this is about how a board is
+    *scored*, not shaped). Today every participant has their own
+    private board/completions (`challenge_participants` ->
+    `tile_completions`, one row per participant). Two new modes:
+    - Cooperative: one shared board for the whole challenge -- every
+      participant's stat gains count toward the *same* tile's
+      condition, not just their own board.
+    - Team-based: participants are grouped into teams, each team has
+      its own shared board (same pooled-contribution idea as
+      Cooperative, but scoped per team instead of the whole challenge).
+      Needs a teams concept that doesn't exist yet (a team grouping for
+      `challenge_participants`, presumably a new table).
+    Both need real design work before implementation: how `checkTile`
+    (currently one participant's stats in, one status out) aggregates
+    multiple participants' contributions, how the leaderboard/points
+    model changes when scoring isn't 1 board = 1 person, and how
+    Discord completion embeds attribute credit when a tile completes
+    from pooled progress rather than one person's own gain.
