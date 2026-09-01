@@ -189,6 +189,7 @@ export default function BoardPage() {
   }
 
   const tileAt = (row: number, col: number) => tiles.find((t) => t.layout.row === row && t.layout.col === col) ?? null;
+  const isHost = session?.user.id === challenge.host_id;
   const viewedParticipant = participants.find((p) => p.id === viewedParticipantId);
   const viewedCompletedTileIds = new Set(
     completions.filter((c) => c.kind === 'tile' && c.participant_id === viewedParticipantId).map((c) => c.ref),
@@ -206,178 +207,203 @@ export default function BoardPage() {
   const firstCompleters = computeFirstCompleters(completions);
 
   return (
-    <div className="mx-auto max-w-2xl py-12">
+    <div className="mx-auto max-w-7xl px-4 py-12">
       <h1 className="text-2xl font-semibold">{challenge.name}</h1>
       <p className="text-sm text-stone-500">
         {challenge.start_date} – {challenge.end_date}
       </p>
       {viewedParticipant && <p className="mt-2 text-sm font-medium text-stone-400">{viewedParticipant.rsn}'s board</p>}
 
-      <div className="mt-8 grid grid-cols-5 gap-2">
-        {Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, i) => {
-          const row = Math.floor(i / GRID_SIZE);
-          const col = i % GRID_SIZE;
-          const tile = tileAt(row, col);
-          const done = tile != null && viewedCompletedTileIds.has(tile.id);
-          const status = tile ? viewedTileStatuses[tile.id] : undefined;
-          const percent = tile && status && !done ? progressPercent(tile.condition, status) : null;
-          // formatTileProgress (current/goal, e.g. "620K / 1.5M XP") only
-          // covers the condition types where a running total is large
-          // enough for shorthand to actually help -- everything else
-          // falls back to the plain goal-only caption.
-          const caption = tile ? (status && formatTileProgress(tile.condition, status)) ?? formatTileGoal(tile.condition) : null;
-          const isFirst = tile != null && done && firstCompleters[tile.id] === viewedParticipantId;
-          const noOneCompleted = tile != null && !completions.some((c) => c.kind === 'tile' && c.ref === tile.id);
-          return (
-            <div
-              key={i}
-              title={tile ? describeTileCondition(tile.condition) : undefined}
-              onClick={tile ? () => setSelectedTile(tile) : undefined}
-              className={`relative flex aspect-square min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden rounded-lg border p-2 text-center shadow-inner before:pointer-events-none before:absolute before:inset-0 before:bg-[url('/stone-texture.jpg')] before:bg-cover before:bg-center before:opacity-30 before:content-[''] ${tile ? 'cursor-pointer' : ''} ${
-                done
-                  ? 'border-green-500 bg-green-950/40'
-                  : tile
-                    ? 'border-stone-700 bg-stone-900'
-                    : 'border-stone-800/60 bg-stone-950/50'
-              }`}
-            >
-              {percent !== null && (
+      <div className="mt-8 flex flex-col gap-8 lg:flex-row lg:items-start">
+        {/* Board -- above the leaderboard on mobile, left column (~80%) on desktop. */}
+        <div className="order-2 min-w-0 lg:order-1 lg:flex-1">
+          <div className="grid grid-cols-5 gap-2">
+            {Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, i) => {
+              const row = Math.floor(i / GRID_SIZE);
+              const col = i % GRID_SIZE;
+              const tile = tileAt(row, col);
+              const done = tile != null && viewedCompletedTileIds.has(tile.id);
+              const status = tile ? viewedTileStatuses[tile.id] : undefined;
+              const percent = tile && status && !done ? progressPercent(tile.condition, status) : null;
+              // formatTileProgress (current/goal, e.g. "620K / 1.5M XP") only
+              // covers the condition types where a running total is large
+              // enough for shorthand to actually help -- everything else
+              // falls back to the plain goal-only caption.
+              const caption = tile ? (status && formatTileProgress(tile.condition, status)) ?? formatTileGoal(tile.condition) : null;
+              const isFirst = tile != null && done && firstCompleters[tile.id] === viewedParticipantId;
+              const noOneCompleted = tile != null && !completions.some((c) => c.kind === 'tile' && c.ref === tile.id);
+              return (
                 <div
-                  className="absolute inset-y-0 left-0 w-1"
-                  style={{ background: 'linear-gradient(to top, #ef4444, #eab308, #22c55e)' }}
+                  key={i}
+                  title={tile ? describeTileCondition(tile.condition) : undefined}
+                  onClick={tile ? () => setSelectedTile(tile) : undefined}
+                  className={`relative flex aspect-square min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden rounded-lg border p-2 text-center shadow-inner before:pointer-events-none before:absolute before:inset-0 before:bg-[url('/stone-texture.jpg')] before:bg-cover before:bg-center before:opacity-30 before:content-[''] ${tile ? 'cursor-pointer' : ''} ${
+                    done
+                      ? 'border-green-500 bg-green-950/40'
+                      : tile
+                        ? 'border-stone-700 bg-stone-900'
+                        : 'border-stone-800/60 bg-stone-950/50'
+                  }`}
                 >
-                  <div className="absolute inset-x-0 top-0 bg-stone-900" style={{ height: `${100 - percent}%` }} />
-                </div>
-              )}
-              {tile ? (
-                <>
-                  {tile.icon && <img src={tile.icon} alt="" className="h-6 w-6 shrink-0" />}
-                  <span className="mt-1 line-clamp-2 w-full break-words text-[11px]">{tile.label}</span>
-                  {caption && <span className="w-full break-words text-[9px] text-stone-500">{caption}</span>}
-                  {isFirst ? (
-                    <span className="mt-1 text-[10px] text-amber-400">⭐</span>
-                  ) : done ? (
-                    <span className="mt-1 text-[10px] text-green-400">✓</span>
-                  ) : (
-                    noOneCompleted && <span className="mt-1 text-[10px] text-stone-600">○</span>
+                  {percent !== null && (
+                    <div
+                      className="absolute inset-y-0 left-0 w-1"
+                      style={{ background: 'linear-gradient(to top, #ef4444, #eab308, #22c55e)' }}
+                    >
+                      <div className="absolute inset-x-0 top-0 bg-stone-900" style={{ height: `${100 - percent}%` }} />
+                    </div>
                   )}
-                </>
-              ) : (
-                <span className="text-xs text-stone-700">—</span>
-              )}
-            </div>
-          );
-        })}
-      </div>
+                  {tile ? (
+                    <>
+                      {tile.icon && <img src={tile.icon} alt="" className="h-6 w-6 shrink-0" />}
+                      <span className="mt-1 line-clamp-2 w-full break-words text-[11px]">{tile.label}</span>
+                      {caption && <span className="w-full break-words text-[9px] text-stone-500">{caption}</span>}
+                      {isFirst ? (
+                        <span className="mt-1 text-[10px] text-amber-400">⭐</span>
+                      ) : done ? (
+                        <span className="mt-1 text-[10px] text-green-400">✓</span>
+                      ) : (
+                        noOneCompleted && <span className="mt-1 text-[10px] text-stone-600">○</span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-xs text-stone-700">—</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
 
-      <div className="mt-10">
-        <h2 className="text-lg font-semibold">Leaderboard</h2>
-        <ul className="mt-3 space-y-1 text-sm">
-          {leaderboard.map((entry, i) => {
-            const p = participants.find((pp) => pp.id === entry.participantId);
-            if (!p) return null;
-            const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : null;
-            const isViewed = entry.participantId === viewedParticipantId;
-            const isYou = entry.participantId === myParticipant?.id;
-            return (
-              <li key={p.id} className="flex items-center gap-2">
+        {/* Leaderboard + actions -- above the board on mobile, right column
+            (~20%, fixed-width so entries never wrap) on desktop. */}
+        <div className="order-1 lg:order-2 lg:w-80 lg:shrink-0">
+          <h2 className="text-lg font-semibold">Leaderboard</h2>
+          <ul className="mt-3 space-y-1 text-sm">
+            {leaderboard.map((entry, i) => {
+              const p = participants.find((pp) => pp.id === entry.participantId);
+              if (!p) return null;
+              const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : null;
+              const isViewed = entry.participantId === viewedParticipantId;
+              const isYou = entry.participantId === myParticipant?.id;
+              return (
+                <li key={p.id} className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSearchParams({ p: p.id })}
+                    className={`whitespace-nowrap text-left hover:underline ${isViewed ? 'font-semibold text-amber-400' : 'text-stone-300'}`}
+                  >
+                    {`#${i + 1}${medal ? ` ${medal}` : ''} ${p.rsn} — ${entry.points} pts (${entry.tilesCompleted}/${tiles.length} tiles)`}
+                  </button>
+                  {isYou && <span className="shrink-0 text-xs text-stone-500">(you)</span>}
+                  {hasCompletedBoard(p.id) && <span className="shrink-0 text-yellow-400">🏆 Complete!</span>}
+                </li>
+              );
+            })}
+            {participants.length === 0 && <li className="text-stone-500">No one's joined yet.</li>}
+          </ul>
+
+          {/* Actions available to the current viewer for this challenge. */}
+          <div className="mt-6 space-y-3">
+            {!session && (
+              <p className="text-sm text-stone-400">
+                <Link to="/login" className="underline">
+                  Sign in
+                </Link>{' '}
+                to join this challenge.{' '}
+                <Link to={`/c/${challenge.slug}/setup`} className="underline">
+                  See what's involved
+                </Link>
+                .
+              </p>
+            )}
+            {session && !myParticipant && (
+              <form onSubmit={handleJoin} className="flex flex-col gap-2">
+                <input
+                  required
+                  value={rsn}
+                  onChange={(e) => setRsn(e.target.value)}
+                  placeholder="Your OSRS username"
+                  className="rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={joining}
+                  className="rounded-lg bg-amber-500 hover:bg-amber-400 transition-colors px-4 py-2 text-sm font-semibold text-stone-950 disabled:opacity-40"
+                >
+                  {joining ? 'Joining…' : 'Join'}
+                </button>
+              </form>
+            )}
+            {joinError && <p className="text-sm text-red-400">{joinError}</p>}
+
+            {session && myParticipant && !editingRsn && (
+              <p className="text-sm text-stone-400">
+                You're in as {myParticipant.rsn}.{' '}
                 <button
                   type="button"
-                  onClick={() => setSearchParams({ p: p.id })}
-                  className={`text-left hover:underline ${isViewed ? 'font-semibold text-amber-400' : 'text-stone-300'}`}
+                  onClick={() => {
+                    setRsnDraft(myParticipant.rsn);
+                    setEditingRsn(true);
+                    setRsnError('');
+                  }}
+                  className="underline"
                 >
-                  {`#${i + 1}${medal ? ` ${medal}` : ''} ${p.rsn} — ${entry.points} pts (${entry.tilesCompleted}/${tiles.length} tiles)`}
-                </button>
-                {isYou && <span className="text-xs text-stone-500">(you)</span>}
-                {hasCompletedBoard(p.id) && <span className="text-yellow-400">🏆 Complete!</span>}
-              </li>
-            );
-          })}
-          {participants.length === 0 && <li className="text-stone-500">No one's joined yet.</li>}
-        </ul>
+                  Edit
+                </button>{' '}
+                ·{' '}
+                <Link to={`/c/${challenge.slug}/setup`} className="underline">
+                  Set up Dink &rarr;
+                </Link>
+              </p>
+            )}
+            {session && myParticipant && editingRsn && (
+              <form onSubmit={handleRenameRsn} className="flex flex-col gap-2">
+                <input
+                  required
+                  autoFocus
+                  value={rsnDraft}
+                  onChange={(e) => setRsnDraft(e.target.value)}
+                  className="rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    disabled={savingRsn}
+                    className="rounded-lg bg-amber-500 hover:bg-amber-400 transition-colors px-4 py-2 text-sm font-semibold text-stone-950 disabled:opacity-40"
+                  >
+                    {savingRsn ? 'Saving…' : 'Save'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditingRsn(false)}
+                    className="rounded-lg border border-stone-700 px-4 py-2 text-sm text-stone-300"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            )}
+            {rsnError && <p className="text-sm text-red-400">{rsnError}</p>}
 
-        <div className="mt-6">
-          {!session && (
-            <p className="text-sm text-stone-400">
-              <Link to="/login" className="underline">
-                Sign in
-              </Link>{' '}
-              to join this challenge.{' '}
-              <Link to={`/c/${challenge.slug}/setup`} className="underline">
-                See what's involved
-              </Link>
-              .
-            </p>
-          )}
-          {session && myParticipant && !editingRsn && (
-            <p className="text-sm text-stone-400">
-              You're in as {myParticipant.rsn}.{' '}
+            {myParticipant && (
               <button
                 type="button"
-                onClick={() => {
-                  setRsnDraft(myParticipant.rsn);
-                  setEditingRsn(true);
-                  setRsnError('');
-                }}
-                className="underline"
+                onClick={handleLeave}
+                className="w-full rounded-lg border border-red-900 px-4 py-2 text-sm text-red-400 hover:bg-red-950/40"
               >
-                Edit
-              </button>{' '}
-              ·{' '}
-              <button type="button" onClick={handleLeave} className="underline text-red-400">
-                Leave
-              </button>{' '}
-              ·{' '}
-              <Link to={`/c/${challenge.slug}/setup`} className="underline">
-                Set up Dink &rarr;
+                Leave Challenge
+              </button>
+            )}
+            {isHost && (
+              <Link
+                to={`/c/${challenge.slug}/edit`}
+                className="block w-full rounded-lg border border-stone-700 px-4 py-2 text-center text-sm text-stone-300 hover:border-amber-500"
+              >
+                Edit Challenge
               </Link>
-            </p>
-          )}
-          {session && myParticipant && editingRsn && (
-            <form onSubmit={handleRenameRsn} className="flex gap-2">
-              <input
-                required
-                autoFocus
-                value={rsnDraft}
-                onChange={(e) => setRsnDraft(e.target.value)}
-                className="flex-1 rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
-              />
-              <button
-                type="submit"
-                disabled={savingRsn}
-                className="rounded-lg bg-amber-500 hover:bg-amber-400 transition-colors px-4 py-2 text-sm font-semibold text-stone-950 disabled:opacity-40"
-              >
-                {savingRsn ? 'Saving…' : 'Save'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditingRsn(false)}
-                className="rounded-lg border border-stone-700 px-4 py-2 text-sm text-stone-300"
-              >
-                Cancel
-              </button>
-            </form>
-          )}
-          {rsnError && <p className="mt-2 text-sm text-red-400">{rsnError}</p>}
-          {session && !myParticipant && (
-            <form onSubmit={handleJoin} className="flex gap-2">
-              <input
-                required
-                value={rsn}
-                onChange={(e) => setRsn(e.target.value)}
-                placeholder="Your OSRS username"
-                className="flex-1 rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
-              />
-              <button
-                type="submit"
-                disabled={joining}
-                className="rounded-lg bg-amber-500 hover:bg-amber-400 transition-colors px-4 py-2 text-sm font-semibold text-stone-950 disabled:opacity-40"
-              >
-                {joining ? 'Joining…' : 'Join'}
-              </button>
-            </form>
-          )}
-          {joinError && <p className="mt-2 text-sm text-red-400">{joinError}</p>}
+            )}
+          </div>
         </div>
       </div>
 

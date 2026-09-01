@@ -38,6 +38,18 @@ ordered -- just captured so they don't get lost.
     condition -- currently just a flat comma-separated item-name list
     matched case-insensitively against loot; needs a closer look (exact
     scope TBD).
+19. Improve the "KC gained on a specific boss" (`kcGained`) condition --
+    right now `activity` is host-typed free text (see TileEditorForm.tsx).
+    Three parts: (1) restrict it to a fixed, curated list of bosses/
+    minigames/raids instead of freeform typing -- same "catalog, not
+    freeform" pattern already used for item sets (`src/lib/itemSets.ts`)
+    and now `bigDropsCount`'s value floor; (2) give each boss/minigame/
+    raid in that list its own specific icon instead of the generic combat
+    icon every `kcGained`/`bossKcGained` tile shares today
+    (`defaultIconFor` in `src/lib/tileIcons.ts`); (3) make sure that
+    specific icon actually shows up everywhere a tile's icon is used --
+    the board grid, the tile editor, and the Discord completion embed's
+    thumbnail (`src/server/discordEmbeds.ts`).
 
 ## Host tooling
 12. "Randomize a board" starting point -- host picks random tiles/
