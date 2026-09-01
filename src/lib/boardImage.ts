@@ -17,7 +17,10 @@ interface Rgb {
 const DONE_COLOR: Rgb = { r: 0x22, g: 0xc5, b: 0x5e }; // green-500
 const FIRST_COLOR: Rgb = { r: 0xfb, g: 0xbf, b: 0x24 }; // amber-400, matches the board's star badge
 const NOT_DONE_COLOR: Rgb = { r: 0x1c, g: 0x19, b: 0x17 }; // stone-900
-const EMPTY_COLOR: Rgb = { r: 0x0c, g: 0x0a, b: 0x09 }; // stone-950
+// Deliberately NOT the same as GUTTER_COLOR below -- an empty row would
+// otherwise blend seamlessly into the gutters around it, reading as a
+// rendering glitch (a missing row) rather than "no tile here."
+const EMPTY_COLOR: Rgb = { r: 0x14, g: 0x12, b: 0x10 };
 const GUTTER_COLOR: Rgb = { r: 0x0c, g: 0x0a, b: 0x09 }; // stone-950
 
 export function colorForCell(status: CellStatus): Rgb {
