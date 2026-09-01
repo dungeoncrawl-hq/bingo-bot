@@ -4,7 +4,9 @@ import { useAuth } from '../auth/useAuth';
 import { getSupabase } from '../db/supabaseClient';
 import type { Challenge } from '../db/types';
 
-type ChallengeRow = Pick<Challenge, 'id' | 'name' | 'slug' | 'status' | 'start_date' | 'end_date'>;
+type ChallengeRow = Pick<Challenge, 'id' | 'name' | 'slug' | 'status' | 'start_date' | 'end_date' | 'created_at'> & {
+  isHost: boolean;
+};
 
 export default function DashboardPage() {
   const { session, loading } = useAuth();
@@ -12,12 +14,28 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!session) return;
-    getSupabase()
-      .from('challenges')
-      .select('id, name, slug, status, start_date, end_date')
-      .eq('host_id', session.user.id)
-      .order('created_at', { ascending: false })
-      .then(({ data }) => setChallenges((data as ChallengeRow[]) ?? []));
+    const supabase = getSupabase();
+    const fields = 'id, name, slug, status, start_date, end_date, created_at';
+    Promise.all([
+      supabase.from('challenges').select(fields).eq('host_id', session.user.id),
+      supabase.from('challenge_participants').select(`challenges(${fields})`).eq('profile_id', session.user.id),
+    ]).then(([hosted, joined]) => {
+      const byId = new Map<string, ChallengeRow>();
+      for (const c of (hosted.data as Omit<ChallengeRow, 'isHost'>[]) ?? []) {
+        byId.set(c.id, { ...c, isHost: true });
+      }
+      // Each row's `challenges` comes back as an array from the embedded
+      // join even though challenge_id -> challenges is many-to-one --
+      // that's just how PostgREST shapes embedded resources.
+      const joinedRows = (joined.data as { challenges: Omit<ChallengeRow, 'isHost'>[] }[] | null) ?? [];
+      for (const row of joinedRows) {
+        for (const c of row.challenges) {
+          if (!byId.has(c.id)) byId.set(c.id, { ...c, isHost: false });
+        }
+      }
+      const merged = [...byId.values()].sort((a, b) => b.created_at.localeCompare(a.created_at));
+      setChallenges(merged);
+    });
   }, [session]);
 
   if (loading) return null;
@@ -38,15 +56,20 @@ export default function DashboardPage() {
           <div key={c.id} className="rounded-lg border border-stone-800 px-4 py-3">
             <div className="flex items-center justify-between">
               <span className="font-medium">{c.name}</span>
-              <span className="text-xs uppercase text-stone-500">{c.status}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs uppercase text-stone-500">{c.isHost ? 'Host' : 'Participant'}</span>
+                <span className="text-xs uppercase text-stone-500">{c.status}</span>
+              </div>
             </div>
             <p className="text-sm text-stone-500">
               {c.start_date} – {c.end_date}
             </p>
             <div className="mt-2 flex gap-4 text-sm">
-              <Link to={`/c/${c.slug}/edit`} className="underline hover:text-stone-300">
-                Edit
-              </Link>
+              {c.isHost && (
+                <Link to={`/c/${c.slug}/edit`} className="underline hover:text-stone-300">
+                  Edit
+                </Link>
+              )}
               <Link to={`/c/${c.slug}`} className="underline hover:text-stone-300">
                 View public page
               </Link>
