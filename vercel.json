@@ -1,4 +1,10 @@
 {
   "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }],
+  "headers": [
+    {
+      "source": "/assets/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }]
+    }
+  ],
   "crons": [{ "path": "/api/sync-snapshots", "schedule": "55 3 * * *" }]
 }
