@@ -11,6 +11,7 @@ type ChallengeRow = Pick<Challenge, 'id' | 'name' | 'slug' | 'status' | 'start_d
 export default function DashboardPage() {
   const { session, loading } = useAuth();
   const [challenges, setChallenges] = useState<ChallengeRow[] | null>(null);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     if (!session) return;
@@ -19,23 +20,28 @@ export default function DashboardPage() {
     Promise.all([
       supabase.from('challenges').select(fields).eq('host_id', session.user.id),
       supabase.from('challenge_participants').select(`challenges(${fields})`).eq('profile_id', session.user.id),
-    ]).then(([hosted, joined]) => {
-      const byId = new Map<string, ChallengeRow>();
-      for (const c of (hosted.data as Omit<ChallengeRow, 'isHost'>[]) ?? []) {
-        byId.set(c.id, { ...c, isHost: true });
-      }
-      // Each row's `challenges` comes back as an array from the embedded
-      // join even though challenge_id -> challenges is many-to-one --
-      // that's just how PostgREST shapes embedded resources.
-      const joinedRows = (joined.data as { challenges: Omit<ChallengeRow, 'isHost'>[] }[] | null) ?? [];
-      for (const row of joinedRows) {
-        for (const c of row.challenges) {
-          if (!byId.has(c.id)) byId.set(c.id, { ...c, isHost: false });
+    ])
+      .then(([hosted, joined]) => {
+        const byId = new Map<string, ChallengeRow>();
+        for (const c of (hosted.data as Omit<ChallengeRow, 'isHost'>[]) ?? []) {
+          byId.set(c.id, { ...c, isHost: true });
         }
-      }
-      const merged = [...byId.values()].sort((a, b) => b.created_at.localeCompare(a.created_at));
-      setChallenges(merged);
-    });
+        // Each row's `challenges` comes back as a single object, not an
+        // array -- challenge_participants.challenge_id -> challenges is
+        // many-to-one from this side, so PostgREST embeds the parent as
+        // one object.
+        const joinedRows = (joined.data as { challenges: Omit<ChallengeRow, 'isHost'> | null }[] | null) ?? [];
+        for (const row of joinedRows) {
+          const c = row.challenges;
+          if (c && !byId.has(c.id)) byId.set(c.id, { ...c, isHost: false });
+        }
+        const merged = [...byId.values()].sort((a, b) => b.created_at.localeCompare(a.created_at));
+        setChallenges(merged);
+      })
+      .catch((err) => {
+        console.error('Failed to load challenges', err);
+        setLoadError(true);
+      });
   }, [session]);
 
   if (loading) return null;
@@ -50,8 +56,9 @@ export default function DashboardPage() {
         </Link>
       </div>
       <div className="mt-6 space-y-3">
-        {challenges === null && <p className="text-stone-500">Loading…</p>}
-        {challenges?.length === 0 && <p className="text-stone-500">No challenges yet.</p>}
+        {loadError && <p className="text-sm text-red-400">Couldn't load your challenges. Try refreshing the page.</p>}
+        {!loadError && challenges === null && <p className="text-stone-500">Loading…</p>}
+        {!loadError && challenges?.length === 0 && <p className="text-stone-500">No challenges yet.</p>}
         {challenges?.map((c) => (
           <div key={c.id} className="rounded-lg border border-stone-800 px-4 py-3">
             <div className="flex items-center justify-between">
