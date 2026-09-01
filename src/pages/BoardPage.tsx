@@ -207,7 +207,7 @@ export default function BoardPage() {
   const firstCompleters = computeFirstCompleters(completions);
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-12">
+    <div className="mx-auto max-w-5xl px-4 py-12">
       <h1 className="text-2xl font-semibold">{challenge.name}</h1>
       <p className="text-sm text-stone-500">
         {challenge.start_date} – {challenge.end_date}
@@ -232,6 +232,19 @@ export default function BoardPage() {
               const caption = tile ? (status && formatTileProgress(tile.condition, status)) ?? formatTileGoal(tile.condition) : null;
               const isFirst = tile != null && done && firstCompleters[tile.id] === viewedParticipantId;
               const noOneCompleted = tile != null && !completions.some((c) => c.kind === 'tile' && c.ref === tile.id);
+              const someoneElseCompleted =
+                tile != null && !done && completions.some((c) => c.kind === 'tile' && c.ref === tile.id);
+              const badge = !tile
+                ? null
+                : isFirst
+                  ? { glyph: '⭐', className: 'text-amber-400' }
+                  : done
+                    ? { glyph: '✓', className: 'text-green-400' }
+                    : someoneElseCompleted
+                      ? { glyph: '✕', className: 'text-red-400' }
+                      : noOneCompleted
+                        ? { glyph: '○', className: 'text-stone-600' }
+                        : null;
               return (
                 <div
                   key={i}
@@ -253,18 +266,12 @@ export default function BoardPage() {
                       <div className="absolute inset-x-0 top-0 bg-stone-900" style={{ height: `${100 - percent}%` }} />
                     </div>
                   )}
+                  {badge && <span className={`absolute right-1 top-1 text-xs ${badge.className}`}>{badge.glyph}</span>}
                   {tile ? (
                     <>
                       {tile.icon && <img src={tile.icon} alt="" className="h-6 w-6 shrink-0" />}
                       <span className="mt-1 line-clamp-2 w-full break-words text-[11px]">{tile.label}</span>
                       {caption && <span className="w-full break-words text-[9px] text-stone-500">{caption}</span>}
-                      {isFirst ? (
-                        <span className="mt-1 text-[10px] text-amber-400">⭐</span>
-                      ) : done ? (
-                        <span className="mt-1 text-[10px] text-green-400">✓</span>
-                      ) : (
-                        noOneCompleted && <span className="mt-1 text-[10px] text-stone-600">○</span>
-                      )}
                     </>
                   ) : (
                     <span className="text-xs text-stone-700">—</span>
