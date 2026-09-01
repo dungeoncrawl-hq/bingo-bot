@@ -2,10 +2,11 @@
 // rs/src/server/dinkWebhook.ts. The challenge is already resolved (by
 // dink_secret) before this runs; everything here is scoped to that one
 // challenge and the participant the event's playerName matches within it.
-import { selectRows, upsertRow, insertRowUnlessRecentDuplicate } from './supabaseAdmin.js';
+import { selectRows, upsertRow, insertRowUnlessRecentDuplicate, callRpc } from './supabaseAdmin.js';
 import { checkChallengeProgress } from './challengeProgress.js';
 import { syncOneParticipant } from './participantSync.js';
-import type { Challenge } from '../db/types.js';
+import { isNotableLootItem } from '../lib/itemSets.js';
+import type { Challenge, Tile } from '../db/types.js';
 
 export interface WebhookResult {
   status: number;
@@ -73,6 +74,34 @@ interface RawLootItem {
   priceEach?: unknown;
 }
 
+// The lowest dropValueThreshold across a challenge's own 'bigDropsCount'
+// tiles (see tileConditions.ts), or null if it has none -- this is what
+// determines whether a big-but-untracked-item drop needs its own row
+// (see handleLoot below), not a baked-in number. Cached briefly at module
+// scope since this runs on every LOOT event and a warm serverless
+// instance can see a burst of them from one active player; a cold
+// instance just pays for the (small, single-table) query again.
+const bigDropsThresholdCache = new Map<string, { value: number | null; expiresAt: number }>();
+const BIG_DROPS_CACHE_TTL_MS = 60_000;
+
+async function minBigDropsThreshold(challengeId: string): Promise<number | null> {
+  const cached = bigDropsThresholdCache.get(challengeId);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
+  const tiles = await selectRows<{ condition: Tile['condition'] }>(
+    'tiles',
+    `challenge_id=eq.${encodeURIComponent(challengeId)}&select=condition`,
+  );
+  const thresholds = tiles
+    .map((t) => t.condition)
+    .filter((c): c is Extract<Tile['condition'], { type: 'bigDropsCount' }> => c.type === 'bigDropsCount')
+    .map((c) => c.dropValueThreshold);
+  const value = thresholds.length > 0 ? Math.min(...thresholds) : null;
+
+  bigDropsThresholdCache.set(challengeId, { value, expiresAt: Date.now() + BIG_DROPS_CACHE_TTL_MS });
+  return value;
+}
+
 async function handleLoot(challengeId: string, participantId: string, extra: Record<string, unknown>): Promise<WebhookResult> {
   const rawItems = Array.isArray(extra.items) ? (extra.items as RawLootItem[]) : [];
   if (rawItems.length === 0) return { status: 400, body: { error: 'Missing items' } };
@@ -85,6 +114,29 @@ async function handleLoot(challengeId: string, participantId: string, extra: Rec
   const totalValue = items.reduce((sum, it) => sum + it.quantity * it.priceEach, 0);
   const source = String(extra.source ?? 'Unknown').trim();
   const killCount = extra.killCount != null ? Number(extra.killCount) : null;
+
+  // A drop only needs its own row if a tile could actually need it
+  // individually: either it contains an item from the curated catalog
+  // (src/lib/itemSets.ts -- the only source of items an itemCount/
+  // itemSetCollected tile can ever reference, so catalog membership is
+  // both necessary and sufficient), or its value clears whatever
+  // threshold this challenge's own 'bigDropsCount' tile(s) actually use.
+  // A challenge with no such tile applies no value-based preservation at
+  // all -- everything else folds into one running bucket row per
+  // participant per day (increment_misc_loot).
+  const hasNotableItem = items.some((it) => isNotableLootItem(it.name));
+  const bigDropsCutoff = await minBigDropsThreshold(challengeId);
+  const needsOwnRow = hasNotableItem || (bigDropsCutoff !== null && totalValue >= bigDropsCutoff);
+
+  if (!needsOwnRow) {
+    await callRpc('increment_misc_loot', {
+      p_challenge_id: challengeId,
+      p_participant_id: participantId,
+      p_recorded_on: new Date().toISOString().slice(0, 10),
+      p_value: totalValue,
+    });
+    return { status: 200, body: { ok: true } };
+  }
 
   await insertRowUnlessRecentDuplicate(
     'loot_drops',

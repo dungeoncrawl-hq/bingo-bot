@@ -68,6 +68,23 @@ describe('computeParticipantStats', () => {
     expect(s.biggestDropValue).toBe(5000);
   });
 
+  it('uses max_single_value (not total_value) for a bucketed misc row, so it cannot masquerade as one huge single drop', () => {
+    const raw: RawParticipantData = {
+      ...EMPTY_RAW,
+      lootDrops: [
+        { items: [], total_value: 5000, created_at: '2026-09-01T00:00:00Z' },
+        // A bucket row's total_value (50) is a SUM across many small
+        // drops folded in over the day -- max_single_value (30) is the
+        // largest individual drop actually in it.
+        { items: [], total_value: 50, is_misc: true, max_single_value: 30, created_at: '2026-09-02T00:00:00Z' },
+      ],
+    };
+    const s = computeParticipantStats(raw, WINDOW, null);
+    expect(s.biggestDropValue).toBe(5000);
+    expect(s.lootValueGained).toBe(5050);
+    expect(s.dropValues).toEqual([5000]);
+  });
+
   it('aggregates item quantities case-insensitively across drops', () => {
     const raw: RawParticipantData = {
       ...EMPTY_RAW,

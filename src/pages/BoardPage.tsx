@@ -101,7 +101,10 @@ export default function BoardPage() {
       const [bossKills, slayerTasks, lootDrops, deaths, collectionLogEntries, petObtains, snapshots] = await Promise.all([
         supabase.from('boss_kills').select('boss, kc, created_at').eq('participant_id', pid),
         supabase.from('slayer_tasks').select('created_at').eq('participant_id', pid),
-        supabase.from('loot_drops').select('items, total_value, created_at').eq('participant_id', pid),
+        supabase
+          .from('loot_drops')
+          .select('items, total_value, created_at, is_misc, max_single_value')
+          .eq('participant_id', pid),
         supabase.from('deaths').select('created_at').eq('participant_id', pid),
         supabase.from('collection_log_entries').select('created_at').eq('participant_id', pid),
         supabase.from('pet_obtains').select('updated_at').eq('participant_id', pid),

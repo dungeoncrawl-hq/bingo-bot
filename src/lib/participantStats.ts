@@ -15,7 +15,19 @@ import type { HiscoresRecap } from './hiscoresRecap.js';
 export interface RawParticipantData {
   bossKills: { boss: string; kc: number; created_at: string }[];
   slayerTasks: { created_at: string }[];
-  lootDrops: { items: { name: string; quantity: number }[]; total_value: number; created_at: string }[];
+  lootDrops: {
+    items: { name: string; quantity: number }[];
+    total_value: number;
+    created_at: string;
+    // Optional so older callers/fixtures keep compiling -- absent/false
+    // means an ordinary single-drop row. A bucketed row (is_misc: true,
+    // from src/server/dinkWebhook.ts's increment_misc_loot) has a
+    // total_value that's a SUM across many drops, not one drop's real
+    // value -- max_single_value is the largest individual drop folded
+    // into it, used in its place (see biggestDropValue below).
+    is_misc?: boolean;
+    max_single_value?: number | null;
+  }[];
   deaths: { created_at: string }[];
   collectionLogEntries: { created_at: string }[];
   petObtains: { updated_at: string }[];
@@ -81,7 +93,7 @@ export function computeParticipantStats(
     kcGainedByActivity,
     slayerTasksCompleted: raw.slayerTasks.filter((t) => inWindow(t.created_at, window)).length,
     lootValueGained: lootInWindow.reduce((sum, d) => sum + d.total_value, 0),
-    biggestDropValue: lootInWindow.reduce((max, d) => Math.max(max, d.total_value), 0),
+    biggestDropValue: lootInWindow.reduce((max, d) => Math.max(max, d.is_misc ? (d.max_single_value ?? 0) : d.total_value), 0),
     cluesCompleted: hiscoresRecap?.cluesCompleted ?? 0,
     beginnerCluesCompleted: hiscoresRecap?.beginnerCluesCompleted ?? 0,
     easyCluesCompleted: hiscoresRecap?.easyCluesCompleted ?? 0,
@@ -95,5 +107,6 @@ export function computeParticipantStats(
     deathsInPeriod: raw.deaths.filter((d) => inWindow(d.created_at, window)).length,
     itemCounts,
     petsObtained: raw.petObtains.filter((p) => inWindow(p.updated_at, window)).length,
+    dropValues: lootInWindow.filter((d) => !d.is_misc).map((d) => d.total_value),
   };
 }

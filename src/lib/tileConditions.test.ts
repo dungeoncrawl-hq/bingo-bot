@@ -28,6 +28,7 @@ const ZERO_STATS: ParticipantStats = {
   deathsInPeriod: 0,
   itemCounts: {},
   petsObtained: 0,
+  dropValues: [],
 };
 
 function stats(overrides: Partial<ParticipantStats>): ParticipantStats {
@@ -120,6 +121,18 @@ describe('checkTile', () => {
     expect(checkTile(cond, s2).done).toBe(true);
   });
 
+  it('bigDropsCount counts only drops that individually clear the per-drop threshold', () => {
+    const cond: TileCondition = { type: 'bigDropsCount', dropValueThreshold: 1_000_000, threshold: 2 };
+    const s = stats({ dropValues: [500_000, 1_000_000, 2_000_000, 999_999] });
+    expect(checkTile(cond, s)).toEqual({ done: true, progress: 2, goal: 2 });
+  });
+
+  it('bigDropsCount is not done until the count goal is reached', () => {
+    const cond: TileCondition = { type: 'bigDropsCount', dropValueThreshold: 1_000_000, threshold: 3 };
+    const s = stats({ dropValues: [1_000_000, 2_000_000] });
+    expect(checkTile(cond, s)).toEqual({ done: false, progress: 2, goal: 3 });
+  });
+
   it('tbd never completes', () => {
     expect(checkTile({ type: 'tbd' }, stats({ xpGained: 999_999_999 }))).toEqual({
       done: false,
@@ -157,6 +170,12 @@ describe('formatTileProgress', () => {
     };
     const status = checkTile(cond, stats({ itemCounts: { "dharok's helm": 1, "dharok's platebody": 1 } }));
     expect(formatTileProgress(cond, status)).toBe('2/4 items');
+  });
+
+  it('formats bigDropsCount as a plain progress/goal drop count', () => {
+    const cond: TileCondition = { type: 'bigDropsCount', dropValueThreshold: 1_000_000, threshold: 3 };
+    const status = checkTile(cond, stats({ dropValues: [1_000_000, 5_000_000] }));
+    expect(formatTileProgress(cond, status)).toBe('2/3 big drops');
   });
 
   it('returns null for condition types outside XP/loot scope (avoid clutter)', () => {

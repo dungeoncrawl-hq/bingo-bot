@@ -3,16 +3,23 @@ import type { FormEvent } from 'react';
 import type { TileCondition } from '../lib/tileConditions';
 import type { Tile } from '../db/types';
 import { SKILL_ORDER, defaultIconFor } from '../lib/tileIcons';
-import { PRESET_ITEM_SETS } from '../lib/itemSets';
+import { PRESET_ITEM_SETS, type PresetItemSet } from '../lib/itemSets';
 
 // Keeps a derived label from overflowing the tile grid cell it renders in
 // (BoardPage.tsx/EditChallengePage.tsx both cap the label at 2 lines with
 // line-clamp-2 -- much beyond this and it just gets clipped anyway). Applied
-// to the host-typed inputs the label is built from (setName bare, activity
-// with " KC" appended) rather than the label itself, since the label is no
-// longer directly editable.
+// to the host-typed inputs the label is built from (activity, with " KC"
+// appended) rather than the label itself, since the label is no longer
+// directly editable. Item-set tiles get their label from a catalog name
+// (see PRESET_ITEM_SETS) instead, which needs no cap of its own.
 const LABEL_MAX_LENGTH = 40;
 const ACTIVITY_MAX_LENGTH = LABEL_MAX_LENGTH - ' KC'.length;
+
+// A host can't set a "big drop" threshold below this -- otherwise most
+// drops would clear it and defeat loot_drops bucketing (see
+// src/server/dinkWebhook.ts's handleLoot/minBigDropsThreshold).
+const MIN_DROP_VALUE_THRESHOLD = 100_000;
+const DEFAULT_DROP_VALUE_THRESHOLD = 1_000_000;
 
 const CONDITION_GROUPS: { group: string; options: { value: TileCondition['type']; label: string }[] }[] = [
   {
@@ -37,6 +44,7 @@ const CONDITION_GROUPS: { group: string; options: { value: TileCondition['type']
     options: [
       { value: 'lootValueGained', label: 'Total GP looted' },
       { value: 'singleDropValue', label: 'A single drop worth at least...' },
+      { value: 'bigDropsCount', label: 'Multiple drops worth at least...' },
       { value: 'itemCount', label: 'Obtain a set of items' },
       { value: 'itemSetCollected', label: 'Collect a full item set (each item once)' },
     ],
@@ -72,8 +80,8 @@ function conditionFromForm(
   threshold: number,
   activity: string,
   skill: string,
-  itemNames: string,
-  setName: string,
+  itemSet: PresetItemSet,
+  dropValueThreshold: number,
 ): TileCondition {
   switch (type) {
     case 'kcGained':
@@ -83,15 +91,9 @@ function conditionFromForm(
       return { type, skill, threshold };
     case 'itemCount':
     case 'itemSetCollected':
-      return {
-        type,
-        itemNames: itemNames
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean),
-        setName,
-        threshold,
-      };
+      return { type, itemNames: itemSet.items, setName: itemSet.name, threshold };
+    case 'bigDropsCount':
+      return { type, dropValueThreshold: Math.max(MIN_DROP_VALUE_THRESHOLD, dropValueThreshold), threshold };
     case 'tbd':
       return { type: 'tbd' };
     default:
@@ -100,8 +102,9 @@ function conditionFromForm(
 }
 
 // The label is entirely derived from the condition (and its skill/activity/
-// set-name parameters) -- not a separate host-editable field. Every branch
-// is deterministic, so there's nothing for a host to choose here either.
+// item-catalog parameters) -- not a separate host-editable field. Every
+// branch is deterministic, so there's nothing for a host to choose here
+// either.
 function defaultLabelFor(type: TileCondition['type'], skill: string, activity: string, setName: string): string {
   switch (type) {
     case 'xpGained':
@@ -122,9 +125,11 @@ function defaultLabelFor(type: TileCondition['type'], skill: string, activity: s
       return 'Loot Value';
     case 'singleDropValue':
       return 'Big Drop';
+    case 'bigDropsCount':
+      return 'Big Drops';
     case 'itemCount':
     case 'itemSetCollected':
-      return setName.trim() || 'Item Set';
+      return setName;
     case 'cluesCompleted':
       return 'Clue Scrolls';
     case 'beginnerCluesCompleted':
@@ -153,8 +158,8 @@ function formFromCondition(cond: TileCondition) {
     threshold: 'threshold' in cond ? cond.threshold : 1,
     activity: cond.type === 'kcGained' ? cond.activity : '',
     skill: cond.type === 'skillLevelGained' || cond.type === 'skillXpGained' ? cond.skill : '',
-    itemNames: cond.type === 'itemCount' || cond.type === 'itemSetCollected' ? cond.itemNames.join(', ') : '',
-    setName: cond.type === 'itemCount' || cond.type === 'itemSetCollected' ? cond.setName : '',
+    itemSetName: cond.type === 'itemCount' || cond.type === 'itemSetCollected' ? cond.setName : '',
+    dropValueThreshold: cond.type === 'bigDropsCount' ? cond.dropValueThreshold : DEFAULT_DROP_VALUE_THRESHOLD,
   };
 }
 
@@ -172,31 +177,38 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
   const [type, setType] = useState<TileCondition['type']>(existing?.condition.type ?? 'xpGained');
   const initial = existing
     ? formFromCondition(existing.condition)
-    : { threshold: 1, activity: '', skill: '', itemNames: '', setName: '' };
+    : { threshold: 1, activity: '', skill: '', itemSetName: '', dropValueThreshold: DEFAULT_DROP_VALUE_THRESHOLD };
   const [threshold, setThreshold] = useState(initial.threshold);
   const [activity, setActivity] = useState(initial.activity);
   const [skill, setSkill] = useState(initial.skill || SKILL_ORDER[0]);
-  const [itemNames, setItemNames] = useState(initial.itemNames);
-  const [setName, setSetName] = useState(initial.setName);
+  // A tile can only reference items from the curated catalog -- no
+  // freeform typing (see PRESET_ITEM_SETS' own comment). Falls back to
+  // the first catalog entry if the stored setName doesn't match anything
+  // (e.g. a tile saved before this restriction existed).
+  const [selectedItemSet, setSelectedItemSet] = useState(
+    PRESET_ITEM_SETS.find((p) => p.name === initial.itemSetName)?.name ?? PRESET_ITEM_SETS[0].name,
+  );
+  const [dropValueThreshold, setDropValueThreshold] = useState(initial.dropValueThreshold);
   const [points, setPoints] = useState(existing?.points ?? 1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  const selectedSet = PRESET_ITEM_SETS.find((p) => p.name === selectedItemSet) ?? PRESET_ITEM_SETS[0];
+
   // Label and icon are pure functions of the fields above -- no state of
   // their own, no manual override. Any label/icon a tile was saved with
   // before this restriction existed is superseded the moment it's reopened.
-  const label = defaultLabelFor(type, skill, activity, setName);
+  const label = defaultLabelFor(type, skill, activity, selectedSet.name);
   const icon = defaultIconFor(type, skill);
 
-  function applyItemPreset(presetName: string) {
-    const preset = PRESET_ITEM_SETS.find((p) => p.name === presetName);
-    if (!preset) return;
-    setSetName(preset.name);
-    setItemNames(preset.items.join(', '));
+  function selectItemSet(name: string) {
+    setSelectedItemSet(name);
+    const set = PRESET_ITEM_SETS.find((p) => p.name === name);
     // "Collect a full item set" defaults to requiring every item in the
-    // preset -- itemCount's threshold is a different scale entirely (a
-    // total-quantity goal), so it's left for the host to set by hand.
-    if (type === 'itemSetCollected') setThreshold(preset.items.length);
+    // catalog entry -- itemCount's threshold is a different scale
+    // entirely (a total-quantity goal), so it's left for the host to set
+    // by hand.
+    if (set && type === 'itemSetCollected') setThreshold(set.items.length);
   }
 
   async function handleSubmit(e: FormEvent) {
@@ -207,7 +219,7 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
       await onSave({
         label,
         icon,
-        condition: conditionFromForm(type, threshold, activity, skill, itemNames, setName),
+        condition: conditionFromForm(type, threshold, activity, skill, selectedSet, dropValueThreshold),
         points: points || 1,
       });
     } catch (err) {
@@ -276,50 +288,37 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
             </select>
           </div>
         )}
+        {type === 'bigDropsCount' && (
+          <div>
+            <label className="block text-sm text-stone-400">Drop value (minimum 100,000)</label>
+            <input
+              type="number"
+              min={MIN_DROP_VALUE_THRESHOLD}
+              value={dropValueThreshold}
+              onChange={(e) => setDropValueThreshold(Number(e.target.value))}
+              className={inputClass}
+            />
+          </div>
+        )}
         {(type === 'itemCount' || type === 'itemSetCollected') && (
-          <>
-            <div>
-              <label className="block text-sm text-stone-400">Load a preset (optional)</label>
-              <select
-                value=""
-                onChange={(e) => e.target.value && applyItemPreset(e.target.value)}
-                className={inputClass}
-              >
-                <option value="">Load a preset…</option>
-                {PRESET_ITEM_SETS.map((p) => (
-                  <option key={p.name} value={p.name}>
-                    {p.name} ({p.items.length})
-                  </option>
-                ))}
-              </select>
+          <div>
+            <label className="block text-sm text-stone-400">Item catalog</label>
+            <select value={selectedItemSet} onChange={(e) => selectItemSet(e.target.value)} className={inputClass}>
+              {PRESET_ITEM_SETS.map((p) => (
+                <option key={p.name} value={p.name}>
+                  {p.name} ({p.items.length})
+                </option>
+              ))}
+            </select>
+            <div className="mt-2 max-h-24 overflow-y-auto rounded-lg border border-stone-800 bg-stone-900 p-2 text-xs text-stone-400">
+              {selectedSet.items.join(', ')}
             </div>
-            <div>
-              <label className="block text-sm text-stone-400">Set name (e.g. "Barrows pieces")</label>
-              <input
-                maxLength={LABEL_MAX_LENGTH}
-                value={setName}
-                onChange={(e) => setSetName(e.target.value)}
-                className={inputClass}
-              />
-              <p className="mt-1 text-right text-xs text-stone-600">
-                {setName.length}/{LABEL_MAX_LENGTH}
-              </p>
-            </div>
-            <div>
-              <label className="block text-sm text-stone-400">Item names, comma-separated</label>
-              <textarea
-                value={itemNames}
-                onChange={(e) => setItemNames(e.target.value)}
-                className={inputClass}
-                rows={2}
-              />
-            </div>
-          </>
+          </div>
         )}
         {type !== 'tbd' && (
           <div>
             <label className="block text-sm text-stone-400">
-              {type === 'maxDeaths' ? 'Max deaths allowed' : 'Threshold'}
+              {type === 'maxDeaths' ? 'Max deaths allowed' : type === 'bigDropsCount' ? 'How many such drops' : 'Threshold'}
             </label>
             <input
               type="number"

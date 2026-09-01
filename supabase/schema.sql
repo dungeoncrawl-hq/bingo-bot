@@ -206,6 +206,51 @@ alter table loot_drops enable row level security;
 drop policy if exists "public read" on loot_drops;
 create policy "public read" on loot_drops for select using (true);
 
+-- Bucketing: a drop only gets its own row if it contains an item from the
+-- curated catalog (src/lib/itemSets.ts -- the only source of items an
+-- itemCount/itemSetCollected tile can ever reference) or its value clears
+-- whatever threshold a challenge's own 'bigDropsCount' tile(s) actually
+-- use (src/server/dinkWebhook.ts's handleLoot/minBigDropsThreshold).
+-- Everything else folds into one running bucket row per participant per
+-- day via increment_misc_loot below -- is_misc/recorded_on/drop_count/
+-- max_single_value are only ever set on that one row per participant per
+-- day; every other row leaves them at their defaults exactly as before
+-- this change.
+alter table loot_drops add column if not exists drop_count integer not null default 1;
+alter table loot_drops add column if not exists is_misc boolean not null default false;
+alter table loot_drops add column if not exists recorded_on date;
+alter table loot_drops add column if not exists max_single_value bigint;
+
+create unique index if not exists loot_drops_misc_daily_idx
+  on loot_drops (participant_id, recorded_on)
+  where is_misc;
+
+-- Atomic increment for the misc bucket row -- a plain PostgREST PATCH can
+-- only replace a column with a literal value, not add to it, so two
+-- concurrent small drops would otherwise race. A single INSERT ... ON
+-- CONFLICT DO UPDATE is atomic under Postgres without needing an explicit
+-- transaction. max_single_value tracks the largest individual drop ever
+-- folded into this bucket, so singleDropValue tiles stay correct even
+-- when a big-but-untracked drop gets bucketed (its total_value is a sum
+-- across many drops, not one drop's real value -- max_single_value is).
+create or replace function increment_misc_loot(
+  p_challenge_id uuid,
+  p_participant_id uuid,
+  p_recorded_on date,
+  p_value bigint
+) returns void
+language sql
+as $$
+  insert into loot_drops (challenge_id, participant_id, source, items, total_value, max_single_value, is_misc, recorded_on, drop_count, created_at)
+  values (p_challenge_id, p_participant_id, 'Misc', '[]'::jsonb, p_value, p_value, true, p_recorded_on, 1, now())
+  on conflict (participant_id, recorded_on) where is_misc
+  do update set
+    total_value = loot_drops.total_value + excluded.total_value,
+    max_single_value = greatest(loot_drops.max_single_value, excluded.max_single_value),
+    drop_count = loot_drops.drop_count + 1,
+    created_at = now();
+$$;
+
 create table if not exists deaths (
   id uuid primary key default gen_random_uuid(),
   challenge_id uuid not null references challenges(id) on delete cascade,

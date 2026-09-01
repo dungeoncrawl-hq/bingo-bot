@@ -40,6 +40,11 @@ export async function insertRow(table: string, row: Record<string, unknown>): Pr
   if (!res.ok) throw new Error(`Insert ${table} failed: ${res.status} ${await res.text()}`);
 }
 
+export async function callRpc(name: string, args: Record<string, unknown>): Promise<void> {
+  const res = await rest(`rpc/${name}`, { method: 'POST', body: JSON.stringify(args) });
+  if (!res.ok) throw new Error(`RPC ${name} failed: ${res.status} ${await res.text()}`);
+}
+
 // resolution=ignore-duplicates silently no-ops the write on a conflict
 // (append-only event logs with a natural idempotency key); merge-duplicates
 // updates the conflicting row instead (pet_obtains, so a re-fired PET event

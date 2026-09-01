@@ -65,7 +65,10 @@ export default function TileDetailModal({ tile, participants, challenge, firstCo
       const [bossKills, slayerTasks, lootDrops, deaths, collectionLogEntries, petObtains, snapshots] = await Promise.all([
         supabase.from('boss_kills').select('participant_id, boss, kc, created_at').in('participant_id', ids),
         supabase.from('slayer_tasks').select('participant_id, created_at').in('participant_id', ids),
-        supabase.from('loot_drops').select('participant_id, items, total_value, created_at').in('participant_id', ids),
+        supabase
+          .from('loot_drops')
+          .select('participant_id, items, total_value, created_at, is_misc, max_single_value')
+          .in('participant_id', ids),
         supabase.from('deaths').select('participant_id, created_at').in('participant_id', ids),
         supabase.from('collection_log_entries').select('participant_id, created_at').in('participant_id', ids),
         supabase.from('pet_obtains').select('participant_id, updated_at').in('participant_id', ids),

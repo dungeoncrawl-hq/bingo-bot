@@ -48,6 +48,7 @@ export function defaultIconFor(type: TileCondition['type'], skill?: string): str
       return skillIconUrl('Slayer');
     case 'lootValueGained':
     case 'singleDropValue':
+    case 'bigDropsCount':
       return COINS_ICON_URL;
     case 'cluesCompleted':
       return CLUE_ICON_URL;

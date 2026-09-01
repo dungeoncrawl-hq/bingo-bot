@@ -44,6 +44,14 @@ export type TileCondition =
   // usually itemNames.length ("collect the full set"), but a host can ask
   // for fewer ("any N of these M items").
   | { type: 'itemSetCollected'; itemNames: string[]; setName: string; threshold: number }
+  // A drop counts if its own total_value clears dropValueThreshold (not a
+  // running sum) -- e.g. "3 drops worth 1,000,000+ GP each". Distinct
+  // from singleDropValue above (a boolean -- did any one drop clear a
+  // bar): this counts how many separate times it happened, toward
+  // threshold. dropValueThreshold has a 100,000 floor enforced by
+  // TileEditorForm.tsx, so a host can't set it low enough to defeat
+  // loot_drops bucketing (src/server/dinkWebhook.ts's handleLoot).
+  | { type: 'bigDropsCount'; dropValueThreshold: number; threshold: number }
   // Inverted from every condition above: this tile starts complete (0
   // deaths is always "under the limit") and is LOST once deaths climb past
   // the threshold, rather than being earned by reaching one.
@@ -76,6 +84,13 @@ export interface ParticipantStats {
   // Lowercased item name -> total quantity obtained during the event.
   itemCounts: Record<string, number>;
   petsObtained: number;
+  // Every individual (non-bucketed) drop's own total_value in the
+  // window -- backs bigDropsCount, which needs to count how many
+  // separate drops cleared an arbitrary per-tile threshold, not just an
+  // aggregate. A bucketed/misc loot_drops row's total_value is a sum
+  // across many drops, not one drop's real value, so it's excluded here
+  // (see participantStats.ts).
+  dropValues: number[];
 }
 
 export interface TileStatus {
@@ -140,6 +155,10 @@ export function checkTile(cond: TileCondition, stats: ParticipantStats): TileSta
       const progress = cond.itemNames.filter((name) => (stats.itemCounts[name.toLowerCase()] ?? 0) > 0).length;
       return { done: progress >= cond.threshold, progress, goal: cond.threshold };
     }
+    case 'bigDropsCount': {
+      const progress = stats.dropValues.filter((v) => v >= cond.dropValueThreshold).length;
+      return { done: progress >= cond.threshold, progress, goal: cond.threshold };
+    }
     case 'maxDeaths': {
       const done = stats.deathsInPeriod <= cond.threshold;
       return { done, progress: stats.deathsInPeriod, goal: cond.threshold, failed: !done };
@@ -195,6 +214,8 @@ export function describeTileCondition(cond: TileCondition): string {
       return cond.threshold >= cond.itemNames.length
         ? `the full ${cond.setName} set (${cond.itemNames.length} items, each counts once)`
         : `${cond.threshold} of the ${cond.itemNames.length} items in ${cond.setName} (each counts once)`;
+    case 'bigDropsCount':
+      return `${cond.threshold.toLocaleString()} drops worth ${cond.dropValueThreshold.toLocaleString()}+ GP each`;
     case 'maxDeaths':
       return `${cond.threshold.toLocaleString()} deaths or fewer`;
     case 'petsObtained':
@@ -232,6 +253,8 @@ export function formatTileGoal(cond: TileCondition): string | null {
       return `${cond.threshold.toLocaleString()}x`;
     case 'itemSetCollected':
       return `${cond.threshold.toLocaleString()}/${cond.itemNames.length} items`;
+    case 'bigDropsCount':
+      return `${cond.threshold.toLocaleString()}x ${formatCompactNumber(cond.dropValueThreshold)}+ gp`;
     case 'cluesCompleted':
     case 'beginnerCluesCompleted':
     case 'easyCluesCompleted':
@@ -265,6 +288,8 @@ export function formatTileProgress(cond: TileCondition, status: TileStatus): str
       return `${formatCompactNumber(status.progress, { roundDown: true })} / ${formatCompactNumber(cond.threshold)} gp`;
     case 'itemSetCollected':
       return `${status.progress}/${status.goal} items`;
+    case 'bigDropsCount':
+      return `${status.progress}/${status.goal} big drops`;
     default:
       return null;
   }

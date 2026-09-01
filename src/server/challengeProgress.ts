@@ -48,10 +48,13 @@ export async function checkChallengeProgress(participantId: string): Promise<voi
     await Promise.all([
       selectRows<{ boss: string; kc: number; created_at: string }>('boss_kills', `participant_id=eq.${pid}&select=boss,kc,created_at`),
       selectRows<{ created_at: string }>('slayer_tasks', `participant_id=eq.${pid}&select=created_at`),
-      selectRows<{ items: { name: string; quantity: number }[]; total_value: number; created_at: string }>(
-        'loot_drops',
-        `participant_id=eq.${pid}&select=items,total_value,created_at`,
-      ),
+      selectRows<{
+        items: { name: string; quantity: number }[];
+        total_value: number;
+        created_at: string;
+        is_misc: boolean;
+        max_single_value: number | null;
+      }>('loot_drops', `participant_id=eq.${pid}&select=items,total_value,created_at,is_misc,max_single_value`),
       selectRows<{ created_at: string }>('deaths', `participant_id=eq.${pid}&select=created_at`),
       selectRows<{ created_at: string }>('collection_log_entries', `participant_id=eq.${pid}&select=created_at`),
       selectRows<{ updated_at: string }>('pet_obtains', `participant_id=eq.${pid}&select=updated_at`),
