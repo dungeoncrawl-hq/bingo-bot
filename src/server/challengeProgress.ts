@@ -7,11 +7,15 @@
 // insertRowReturning's comment in supabaseAdmin.ts).
 import { selectRows, insertRowReturning } from './supabaseAdmin.js';
 import { relayToDiscord } from './discordRelay.js';
+import { buildTileCompletionEmbed, buildLineCompletionEmbed, buildBoardCompletionEmbed } from './discordEmbeds.js';
+import type { ParticipantLite } from './discordEmbeds.js';
 import { checkTile, gridLines } from '../lib/tileConditions.js';
 import { computeParticipantStats } from '../lib/participantStats.js';
 import type { RawParticipantData } from '../lib/participantStats.js';
 import { computeHiscoresRecap } from '../lib/hiscoresRecap.js';
 import type { SnapshotRow } from '../lib/hiscoresRecap.js';
+import { computeLeaderboard } from '../lib/leaderboard.js';
+import { computeFirstCompleters } from '../lib/firstCompletions.js';
 import type { Challenge, Tile } from '../db/types.js';
 
 interface ParticipantRow {
@@ -23,6 +27,13 @@ interface ParticipantRow {
 interface CompletionRow {
   kind: 'tile' | 'line' | 'board';
   ref: string;
+}
+
+interface ChallengeCompletionRow {
+  participant_id: string;
+  kind: string;
+  ref: string;
+  completed_at: string;
 }
 
 const GRID_SIZE = 5;
@@ -71,13 +82,17 @@ export async function checkChallengeProgress(participantId: string): Promise<voi
   const alreadyTileIds = new Set(existingCompletions.filter((c) => c.kind === 'tile').map((c) => c.ref));
   const newlyDoneTileIds = [...doneTileIds].filter((id) => !alreadyTileIds.has(id));
 
+  // Phase 1: do every insert first, collecting only what actually landed
+  // (insertCompletion races on a unique constraint -- see its own
+  // comment). Discord embeds are built and sent in phase 2, once, using
+  // challenge-wide data that must reflect all of this event's inserts.
+  const insertedTileIds: string[] = [];
   for (const tileId of newlyDoneTileIds) {
-    const inserted = await insertCompletion(challenge.id, participant.id, 'tile', tileId);
-    if (inserted) {
-      const tile = tiles.find((t) => t.id === tileId);
-      await relayToDiscord(challenge.discord_webhook_url, `🎉 **${participant.rsn}** completed **${tile?.label ?? 'a tile'}**!`);
-    }
+    if (await insertCompletion(challenge.id, participant.id, 'tile', tileId)) insertedTileIds.push(tileId);
   }
+
+  const insertedLineIndices: string[] = [];
+  let boardInserted = false;
 
   if (challenge.board_type === 'grid5x5') {
     const tileByIndex = new Map(tiles.map((t) => [t.layout.row * GRID_SIZE + t.layout.col, t]));
@@ -90,17 +105,49 @@ export async function checkChallengeProgress(participantId: string): Promise<voi
         return tile != null && doneTileIds.has(tile.id);
       });
       if (allDone && !alreadyLineIndices.has(String(i))) {
-        const inserted = await insertCompletion(challenge.id, participant.id, 'line', String(i));
-        if (inserted) await relayToDiscord(challenge.discord_webhook_url, `🎉 **${participant.rsn}** completed a line!`);
+        if (await insertCompletion(challenge.id, participant.id, 'line', String(i))) insertedLineIndices.push(String(i));
       }
     }
 
     const boardDone = tiles.length === GRID_SIZE * GRID_SIZE && tiles.every((t) => doneTileIds.has(t.id));
     const alreadyBoard = existingCompletions.some((c) => c.kind === 'board');
     if (boardDone && !alreadyBoard) {
-      const inserted = await insertCompletion(challenge.id, participant.id, 'board', 'board');
-      if (inserted) await relayToDiscord(challenge.discord_webhook_url, `🏆 **${participant.rsn}** completed the whole board!`);
+      boardInserted = await insertCompletion(challenge.id, participant.id, 'board', 'board');
     }
+  }
+
+  // Phase 2: nothing to announce -- skip the extra challenge-wide queries
+  // entirely.
+  if (insertedTileIds.length === 0 && insertedLineIndices.length === 0 && !boardInserted) return;
+
+  const [allParticipants, challengeCompletions] = await Promise.all([
+    selectRows<ParticipantLite>('challenge_participants', `challenge_id=eq.${encodeURIComponent(challenge.id)}&select=id,rsn`),
+    selectRows<ChallengeCompletionRow>(
+      'tile_completions',
+      `challenge_id=eq.${encodeURIComponent(challenge.id)}&select=participant_id,kind,ref,completed_at`,
+    ),
+  ]);
+  const leaderboard = computeLeaderboard(tiles, challengeCompletions, allParticipants.map((p) => p.id));
+  const firstCompleters = computeFirstCompleters(challengeCompletions);
+  const participantLite: ParticipantLite = { id: participant.id, rsn: participant.rsn };
+
+  for (const tileId of insertedTileIds) {
+    const tile = tiles.find((t) => t.id === tileId);
+    if (!tile) continue;
+    const embed = buildTileCompletionEmbed({
+      participant: participantLite,
+      tile,
+      isFirst: firstCompleters[tileId] === participant.id,
+      leaderboard,
+      participants: allParticipants,
+    });
+    await relayToDiscord(challenge.discord_webhook_url, embed);
+  }
+  for (let i = 0; i < insertedLineIndices.length; i++) {
+    await relayToDiscord(challenge.discord_webhook_url, buildLineCompletionEmbed({ participant: participantLite }));
+  }
+  if (boardInserted) {
+    await relayToDiscord(challenge.discord_webhook_url, buildBoardCompletionEmbed({ participant: participantLite }));
   }
 }
 

@@ -70,3 +70,7 @@ ordered -- just captured so they don't get lost.
     own* progress (see item 6, viewing other players' boards -- related
     but this is scoped to one tile across everyone, not one player across
     every tile).
+
+## Auth / email
+18. Create a new confirmation email template for the magic-link sign-in
+    email (currently whatever Supabase's default template sends).
