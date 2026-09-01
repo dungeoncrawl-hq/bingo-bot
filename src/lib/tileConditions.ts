@@ -33,7 +33,7 @@ export type TileCondition =
   // which sums every skill together.
   | { type: 'skillXpGained'; skill: string; threshold: number }
   // Total quantity obtained across a named set of items during the event
-  // (e.g. the 24 Barrows equipment pieces) -- itemNames matched
+  // (e.g. the 24 Barrows uniques) -- itemNames matched
   // case-insensitively against loot item names. setName is a human-readable
   // name for that set, used only by describeTileCondition below (the
   // tile's own on-board label handles the item names themselves).
@@ -273,9 +273,10 @@ export function tileTaskPhrase(cond: TileCondition): string {
     case 'itemCount':
       return `${cond.threshold.toLocaleString()} ${cond.setName}`;
     case 'itemSetCollected':
-      return cond.threshold >= cond.itemNames.length
-        ? `full ${cond.setName} set (${cond.itemNames.length} items, each counts once)`
-        : `${cond.threshold} of the ${cond.itemNames.length} items in ${cond.setName} (each counts once)`;
+      // Deliberately short -- the item-count/"each counts once" detail
+      // lives in tileTaskDetail below instead, so this stays a clean,
+      // headline-sized phrase.
+      return cond.threshold >= cond.itemNames.length ? `full ${cond.setName}` : `${cond.threshold} of the ${cond.itemNames.length} items in ${cond.setName}`;
     case 'maxDeaths':
       return `${cond.threshold.toLocaleString()} deaths or fewer`;
     case 'petsObtained':
@@ -285,6 +286,22 @@ export function tileTaskPhrase(cond: TileCondition): string {
       // done (see its own comment), so no completion embed is ever built
       // for one.
       return 'mystery';
+  }
+}
+
+// Extra context that doesn't fit in tileTaskPhrase's headline-sized
+// phrase -- appended as its own line in the Discord embed's description
+// (discordEmbeds.ts), ahead of the "not as fast as"/"showing off" flavor
+// line. null for every condition whose phrase is already fully
+// self-contained.
+export function tileTaskDetail(cond: TileCondition): string | null {
+  switch (cond.type) {
+    case 'itemSetCollected':
+      return cond.threshold >= cond.itemNames.length
+        ? `${cond.itemNames.length} items -- each one only counts once.`
+        : 'Each item only counts once toward this.';
+    default:
+      return null;
   }
 }
 

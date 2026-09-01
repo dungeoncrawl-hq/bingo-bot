@@ -5,6 +5,7 @@ import {
   gridLines,
   progressPercent,
   tileTaskPhrase,
+  tileTaskDetail,
   type ParticipantStats,
   type TileCondition,
 } from './tileConditions';
@@ -248,8 +249,23 @@ describe('tileTaskPhrase', () => {
     expect(tileTaskPhrase({ type: 'petsObtained', threshold: 2 })).toBe('2 pets');
   });
 
-  it('itemSetCollected drops its leading "the" for a full set too', () => {
-    const full: TileCondition = { type: 'itemSetCollected', itemNames: ['a', 'b'], setName: 'Barrows equipment', threshold: 2 };
-    expect(tileTaskPhrase(full)).toBe('full Barrows equipment set (2 items, each counts once)');
+  it('itemSetCollected keeps the headline short -- no leading "the", no item-count detail', () => {
+    const full: TileCondition = { type: 'itemSetCollected', itemNames: ['a', 'b'], setName: 'Barrows uniques', threshold: 2 };
+    expect(tileTaskPhrase(full)).toBe('full Barrows uniques');
+    const partial: TileCondition = { type: 'itemSetCollected', itemNames: ['a', 'b', 'c'], setName: 'Barrows uniques', threshold: 2 };
+    expect(tileTaskPhrase(partial)).toBe('2 of the 3 items in Barrows uniques');
+  });
+});
+
+describe('tileTaskDetail', () => {
+  it('carries the item-count/"each counts once" context tileTaskPhrase leaves out', () => {
+    const full: TileCondition = { type: 'itemSetCollected', itemNames: ['a', 'b'], setName: 'Barrows uniques', threshold: 2 };
+    expect(tileTaskDetail(full)).toBe('2 items -- each one only counts once.');
+    const partial: TileCondition = { type: 'itemSetCollected', itemNames: ['a', 'b', 'c'], setName: 'Barrows uniques', threshold: 2 };
+    expect(tileTaskDetail(partial)).toBe('Each item only counts once toward this.');
+  });
+
+  it('is null for condition types whose phrase is already self-contained', () => {
+    expect(tileTaskDetail({ type: 'xpGained', threshold: 500_000 })).toBeNull();
   });
 });

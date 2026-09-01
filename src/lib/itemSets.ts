@@ -15,7 +15,7 @@ export interface PresetItemSet {
 
 export const PRESET_ITEM_SETS: PresetItemSet[] = [
   {
-    name: 'Barrows equipment',
+    name: 'Barrows uniques',
     items: [
       "Ahrim's hood",
       "Ahrim's robetop",

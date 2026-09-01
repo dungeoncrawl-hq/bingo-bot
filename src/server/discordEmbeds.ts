@@ -1,7 +1,7 @@
 // Builds the rich embeds challengeProgress.ts posts to Discord on a tile/
 // line/board completion -- kept separate from that file so it stays
 // focused on completion *detection*, not presentation.
-import { tileTaskPhrase } from '../lib/tileConditions.js';
+import { tileTaskPhrase, tileTaskDetail } from '../lib/tileConditions.js';
 import type { LeaderboardEntry } from '../lib/leaderboard.js';
 import type { Tile } from '../db/types.js';
 import type { DiscordEmbed, DiscordEmbedField } from './discordRelay.js';
@@ -69,13 +69,18 @@ export function buildTileCompletionEmbed(params: {
   // different thresholds) -- spelling out the exact requirement in the
   // title itself keeps the post unambiguous on its own.
   const phrase = tileTaskPhrase(tile.condition);
+  const flavor = isFirst
+    ? `+${tile.points} pts. Aren't they just showing off at this point?`
+    : `Unfortunately not as fast as ${firstCompleterRsn}, though.`;
+  // Extra context that didn't fit in the headline phrase (e.g. an
+  // itemSetCollected tile's "N items, each counts once") gets its own
+  // line ahead of the flavor text, rather than bloating the title.
+  const detail = tileTaskDetail(tile.condition);
   return {
     title: isFirst
       ? `${participant.rsn} was first to complete the ${phrase} task!`
       : `${participant.rsn} completed the ${phrase} task.`,
-    description: isFirst
-      ? `+${tile.points} pts. Aren't they just showing off at this point?`
-      : `Unfortunately not as fast as ${firstCompleterRsn}, though.`,
+    description: detail ? `${detail}\n${flavor}` : flavor,
     color: isFirst ? FIRST_COLOR : TILE_COLOR,
     thumbnail: tile.icon ? { url: tile.icon } : undefined,
     image: { url: boardImageUrl(participant.id) },
