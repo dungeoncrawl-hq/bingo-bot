@@ -277,7 +277,7 @@ export default function BoardPage() {
 
         {/* Leaderboard + actions -- above the board on mobile, right column
             (~20%, fixed-width so entries never wrap) on desktop. */}
-        <div className="order-1 lg:order-2 lg:w-80 lg:shrink-0">
+        <div className="order-1 lg:order-2 lg:w-72 lg:shrink-0">
           <h2 className="text-lg font-semibold">Leaderboard</h2>
           <ul className="mt-3 space-y-1 text-sm">
             {leaderboard.map((entry, i) => {
