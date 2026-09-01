@@ -64,6 +64,12 @@ ordered -- just captured so they don't get lost.
     copy) and enhance it:
     - A quick button on each row to copy that challenge's Dink webhook
       URL to the clipboard, without opening the setup guide page.
+    - A quick "copy invite message" button per row -- copies a short,
+      shareable message (a quick invite sentence plus a link to the
+      board's public page, `/c/:slug`, where an invited player finds the
+      Join form and instructions) that a host can paste straight into
+      Discord/etc. to invite others, distinct from the webhook-URL copy
+      above.
     - Colored status badges: Active = green, Draft, Upcoming, Past, etc.
       (today `c.status` just prints as plain uppercase text -- see
       `challenges.status`, currently `'draft' | 'active' | 'ended'`; an
