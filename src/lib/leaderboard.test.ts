@@ -14,7 +14,7 @@ function completion(participantId: string, ref: string): LeaderboardCompletion {
 describe('computeLeaderboard', () => {
   it('sums each participant\'s completed-tile points', () => {
     const completions = [completion('a', 't1'), completion('a', 't2'), completion('b', 't3')];
-    const result = computeLeaderboard(TILES, completions, ['a', 'b']);
+    const result = computeLeaderboard(TILES, completions, ['a', 'b'], {});
     expect(result).toEqual([
       { participantId: 'b', points: 10, tilesCompleted: 1 },
       { participantId: 'a', points: 6, tilesCompleted: 2 },
@@ -23,13 +23,13 @@ describe('computeLeaderboard', () => {
 
   it('ignores non-tile completions (line/board)', () => {
     const completions = [completion('a', 't1'), { participant_id: 'a', kind: 'board', ref: 'board' }];
-    const result = computeLeaderboard(TILES, completions, ['a']);
+    const result = computeLeaderboard(TILES, completions, ['a'], {});
     expect(result).toEqual([{ participantId: 'a', points: 1, tilesCompleted: 1 }]);
   });
 
   it('includes participants with zero completions at the bottom', () => {
     const completions = [completion('a', 't3')];
-    const result = computeLeaderboard(TILES, completions, ['a', 'b']);
+    const result = computeLeaderboard(TILES, completions, ['a', 'b'], {});
     expect(result).toEqual([
       { participantId: 'a', points: 10, tilesCompleted: 1 },
       { participantId: 'b', points: 0, tilesCompleted: 0 },
@@ -42,7 +42,7 @@ describe('computeLeaderboard', () => {
       { id: 't2', points: 5 },
     ];
     const completions = [completion('b', 't2'), completion('a', 't1')];
-    const result = computeLeaderboard(tiles, completions, ['b', 'a']);
+    const result = computeLeaderboard(tiles, completions, ['b', 'a'], {});
     expect(result).toEqual([
       { participantId: 'a', points: 5, tilesCompleted: 1 },
       { participantId: 'b', points: 5, tilesCompleted: 1 },
@@ -57,10 +57,37 @@ describe('computeLeaderboard', () => {
     ];
     // a: one 2pt tile. b: two 1pt tiles -- same total (2), but b completed more tiles.
     const completions = [completion('a', 't1'), completion('b', 't2'), completion('b', 't3')];
-    const result = computeLeaderboard(tiles, completions, ['a', 'b']);
+    const result = computeLeaderboard(tiles, completions, ['a', 'b'], {});
     expect(result).toEqual([
       { participantId: 'b', points: 2, tilesCompleted: 2 },
       { participantId: 'a', points: 2, tilesCompleted: 1 },
+    ]);
+  });
+
+  it('awards the first-completer bonus only to whoever is recorded as first', () => {
+    const tiles: LeaderboardTile[] = [{ id: 't1', points: 5, first_completer_bonus: 3 }];
+    const completions = [completion('a', 't1'), completion('b', 't1')];
+    const result = computeLeaderboard(tiles, completions, ['a', 'b'], { t1: 'a' });
+    expect(result).toEqual([
+      { participantId: 'a', points: 8, tilesCompleted: 1 },
+      { participantId: 'b', points: 5, tilesCompleted: 1 },
+    ]);
+  });
+
+  it('treats a missing first_completer_bonus as 0, even for the recorded first completer', () => {
+    const completions = [completion('a', 't1')];
+    const result = computeLeaderboard(TILES, completions, ['a'], { t1: 'a' });
+    expect(result).toEqual([{ participantId: 'a', points: 1, tilesCompleted: 1 }]);
+  });
+
+  it('does not award the bonus to a non-first completer of the same tile', () => {
+    const tiles: LeaderboardTile[] = [{ id: 't1', points: 5, first_completer_bonus: 3 }];
+    const completions = [completion('a', 't1'), completion('b', 't1')];
+    // b, not a, is recorded as first this time.
+    const result = computeLeaderboard(tiles, completions, ['a', 'b'], { t1: 'b' });
+    expect(result).toEqual([
+      { participantId: 'b', points: 8, tilesCompleted: 1 },
+      { participantId: 'a', points: 5, tilesCompleted: 1 },
     ]);
   });
 });

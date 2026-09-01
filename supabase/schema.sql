@@ -70,6 +70,10 @@ create table if not exists tiles (
   -- Defaults to 1 so an unweighted board (every tile worth the same)
   -- behaves exactly like a plain tile-completion count.
   points integer not null default 1,
+  -- Extra points awarded on top of `points`, to whichever participant is
+  -- first (earliest tile_completions row) to finish this tile. Defaults to
+  -- 0 so an existing/unset tile behaves exactly as before -- no bonus.
+  first_completer_bonus integer not null default 0,
   created_at timestamptz not null default now()
 );
 
@@ -77,6 +81,7 @@ create table if not exists tiles (
 -- production tiles table, so this ALTER is what actually lands the column
 -- there -- safe to re-run.
 alter table tiles add column if not exists points integer not null default 1;
+alter table tiles add column if not exists first_completer_bonus integer not null default 0;
 
 alter table tiles enable row level security;
 drop policy if exists "public read" on tiles;

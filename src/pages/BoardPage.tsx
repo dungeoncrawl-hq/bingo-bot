@@ -239,12 +239,13 @@ export default function BoardPage() {
     return completions.some((c) => c.kind === 'board' && c.participant_id === participantId);
   }
 
+  const firstCompleters = computeFirstCompleters(completions);
   const leaderboard = computeLeaderboard(
     tiles,
     completions,
     participants.map((p) => p.id),
+    firstCompleters,
   );
-  const firstCompleters = computeFirstCompleters(completions);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-12">
@@ -270,7 +271,15 @@ export default function BoardPage() {
               // enough for shorthand to actually help -- everything else
               // falls back to the plain goal-only caption.
               const caption = tile ? (status && formatTileProgress(tile.condition, status)) ?? formatTileGoal(tile.condition) : null;
-              const isFirst = tile != null && done && firstCompleters[tile.id] === viewedParticipantId;
+              // A free space has no "first" worth bragging about -- everyone
+              // gets it the instant it exists, so it's excluded here even
+              // though computeFirstCompleters technically records one
+              // (whoever's sync happened to land first).
+              const isFirst =
+                tile != null &&
+                done &&
+                tile.condition.type !== 'freeSpace' &&
+                firstCompleters[tile.id] === viewedParticipantId;
               const noOneCompleted = tile != null && !completions.some((c) => c.kind === 'tile' && c.ref === tile.id);
               const someoneElseCompleted =
                 tile != null && !done && completions.some((c) => c.kind === 'tile' && c.ref === tile.id);

@@ -69,8 +69,12 @@ export function buildTileCompletionEmbed(params: {
   // different thresholds) -- spelling out the exact requirement in the
   // title itself keeps the post unambiguous on its own.
   const phrase = tileTaskPhrase(tile.condition);
+  // Defensive `?? 0`: this field is required in the Tile type, but a
+  // deployment can land before the DB migration adding the column runs --
+  // fall back to no bonus rather than posting "NaN pts" in that gap.
+  const totalPoints = tile.points + (isFirst ? (tile.first_completer_bonus ?? 0) : 0);
   const flavor = isFirst
-    ? `+${tile.points} pts. Aren't they just showing off at this point?`
+    ? `+${totalPoints} pts. Aren't they just showing off at this point?`
     : `Unfortunately not as fast as ${firstCompleterRsn}, though.`;
   // Extra context that didn't fit in the headline phrase (e.g. an
   // itemSetCollected tile's "N items, each counts once") gets its own
@@ -85,7 +89,7 @@ export function buildTileCompletionEmbed(params: {
     thumbnail: tile.icon ? { url: tile.icon } : undefined,
     image: { url: boardImageUrl(participant.id) },
     fields: [
-      { name: 'Points', value: `+${tile.points}`, inline: true },
+      { name: 'Points', value: `+${totalPoints}`, inline: true },
       { name: 'Leaderboard', value: formatLeaderboardField(leaderboard, participants) || 'No one has scored yet.' },
       boardLinkField(challenge),
     ],

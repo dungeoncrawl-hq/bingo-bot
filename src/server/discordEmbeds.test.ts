@@ -31,6 +31,7 @@ function tile(overrides: Partial<Tile> = {}): Tile {
     layout: { row: 0, col: 0 },
     condition: { type: 'singleDropValue', threshold: 1_000_000 },
     points: 1,
+    first_completer_bonus: 0,
     created_at: '2026-09-01T00:00:00Z',
     ...overrides,
   };
@@ -87,6 +88,33 @@ describe('buildTileCompletionEmbed', () => {
     });
     expect(embed.title).toBe('26 Limont was first to complete the 500,000 total XP task!');
     expect(embed.description).toBe("+3 pts. Aren't they just showing off at this point?");
+  });
+
+  it('adds the first-completer bonus to the flavor text and Points field when isFirst', () => {
+    const embed = buildTileCompletionEmbed({
+      participant: PARTICIPANTS[0],
+      tile: tile({ points: 3, first_completer_bonus: 5, condition: { type: 'xpGained', threshold: 500_000 } }),
+      isFirst: true,
+      firstCompleterRsn: '26 Limont',
+      leaderboard: [],
+      participants: PARTICIPANTS,
+      challenge: CHALLENGE,
+    });
+    expect(embed.description).toBe("+8 pts. Aren't they just showing off at this point?");
+    expect(embed.fields?.find((f) => f.name === 'Points')?.value).toBe('+8');
+  });
+
+  it('does not apply the first-completer bonus to a non-first completion', () => {
+    const embed = buildTileCompletionEmbed({
+      participant: PARTICIPANTS[0],
+      tile: tile({ points: 3, first_completer_bonus: 5, condition: { type: 'xpGained', threshold: 500_000 } }),
+      isFirst: false,
+      firstCompleterRsn: 'otototo',
+      leaderboard: [],
+      participants: PARTICIPANTS,
+      challenge: CHALLENGE,
+    });
+    expect(embed.fields?.find((f) => f.name === 'Points')?.value).toBe('+3');
   });
 
   it('ends with a field linking the board name back to the site', () => {

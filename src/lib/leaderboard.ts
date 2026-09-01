@@ -5,6 +5,10 @@
 export interface LeaderboardTile {
   id: string;
   points: number;
+  // Extra points for whoever completes this tile first -- see
+  // firstCompleters below. 0 (or missing, for a tile saved before this
+  // field existed) means no bonus, same as today's flat scoring.
+  first_completer_bonus?: number;
 }
 
 export interface LeaderboardCompletion {
@@ -23,12 +27,21 @@ export function computeLeaderboard(
   tiles: LeaderboardTile[],
   completions: LeaderboardCompletion[],
   participantIds: string[],
+  // tile id -> id of the participant who completed it first (see
+  // firstCompletions.ts's computeFirstCompleters) -- only that participant
+  // gets the tile's first_completer_bonus.
+  firstCompleters: Record<string, string>,
 ): LeaderboardEntry[] {
-  const pointsByTileId = new Map(tiles.map((t) => [t.id, t.points]));
+  const tilesById = new Map(tiles.map((t) => [t.id, t]));
 
   const entries: LeaderboardEntry[] = participantIds.map((participantId) => {
     const tileCompletions = completions.filter((c) => c.kind === 'tile' && c.participant_id === participantId);
-    const points = tileCompletions.reduce((sum, c) => sum + (pointsByTileId.get(c.ref) ?? 0), 0);
+    const points = tileCompletions.reduce((sum, c) => {
+      const tile = tilesById.get(c.ref);
+      if (!tile) return sum;
+      const bonus = firstCompleters[c.ref] === participantId ? (tile.first_completer_bonus ?? 0) : 0;
+      return sum + tile.points + bonus;
+    }, 0);
     return { participantId, points, tilesCompleted: tileCompletions.length };
   });
 

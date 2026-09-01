@@ -71,7 +71,10 @@ const CONDITION_GROUPS: { group: string; options: { value: TileCondition['type']
   },
   {
     group: 'Other',
-    options: [{ value: 'tbd', label: 'TBD (placeholder)' }],
+    options: [
+      { value: 'freeSpace', label: 'Free space (always complete, no points)' },
+      { value: 'tbd', label: 'TBD (placeholder)' },
+    ],
   },
 ];
 
@@ -94,6 +97,8 @@ function conditionFromForm(
       return { type, itemNames: itemSet.items, setName: itemSet.name, threshold };
     case 'bigDropsCount':
       return { type, dropValueThreshold: Math.max(MIN_DROP_VALUE_THRESHOLD, dropValueThreshold), threshold };
+    case 'freeSpace':
+      return { type: 'freeSpace' };
     case 'tbd':
       return { type: 'tbd' };
     default:
@@ -148,6 +153,8 @@ function defaultLabelFor(type: TileCondition['type'], skill: string, activity: s
       return 'Collection Log';
     case 'petsObtained':
       return 'Pet';
+    case 'freeSpace':
+      return 'Free Space';
     case 'tbd':
       return 'TBD';
   }
@@ -165,7 +172,13 @@ function formFromCondition(cond: TileCondition) {
 
 interface Props {
   existing: Tile | null;
-  onSave: (fields: { label: string; icon: string | null; condition: TileCondition; points: number }) => Promise<void>;
+  onSave: (fields: {
+    label: string;
+    icon: string | null;
+    condition: TileCondition;
+    points: number;
+    first_completer_bonus: number;
+  }) => Promise<void>;
   onDelete?: () => Promise<void>;
   onClose: () => void;
 }
@@ -190,6 +203,7 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
   );
   const [dropValueThreshold, setDropValueThreshold] = useState(initial.dropValueThreshold);
   const [points, setPoints] = useState(existing?.points ?? 1);
+  const [firstCompleterBonus, setFirstCompleterBonus] = useState(existing?.first_completer_bonus ?? 0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -220,7 +234,12 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
         label,
         icon,
         condition: conditionFromForm(type, threshold, activity, skill, selectedSet, dropValueThreshold),
-        points: points || 1,
+        // A free space is always complete for everyone the instant it
+        // exists -- there's no "first" to reward and no achievement to
+        // weight, so it can never contribute points regardless of what's
+        // left over in the points/bonus inputs from a previous condition.
+        points: type === 'freeSpace' ? 0 : points || 1,
+        first_completer_bonus: type === 'freeSpace' ? 0 : Math.max(0, firstCompleterBonus || 0),
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.');
@@ -315,7 +334,7 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
             </div>
           </div>
         )}
-        {type !== 'tbd' && (
+        {type !== 'tbd' && type !== 'freeSpace' && (
           <div>
             <label className="block text-sm text-stone-400">
               {type === 'maxDeaths' ? 'Max deaths allowed' : type === 'bigDropsCount' ? 'How many such drops' : 'Threshold'}
@@ -329,16 +348,37 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
             />
           </div>
         )}
-        <div>
-          <label className="block text-sm text-stone-400">Points (leaderboard value)</label>
-          <input
-            type="number"
-            min={1}
-            value={points}
-            onChange={(e) => setPoints(Number(e.target.value))}
-            className={inputClass}
-          />
-        </div>
+        {type === 'freeSpace' ? (
+          <p className="text-xs text-stone-500">
+            A free space is always complete for every participant and never awards points.
+          </p>
+        ) : (
+          <>
+            <div>
+              <label className="block text-sm text-stone-400">Points (leaderboard value)</label>
+              <input
+                type="number"
+                min={1}
+                value={points}
+                onChange={(e) => setPoints(Number(e.target.value))}
+                className={inputClass}
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-stone-400">First-completer bonus</label>
+              <input
+                type="number"
+                min={0}
+                value={firstCompleterBonus}
+                onChange={(e) => setFirstCompleterBonus(Number(e.target.value))}
+                className={inputClass}
+              />
+              <p className="mt-1 text-xs text-stone-500">
+                Extra points for whoever completes this tile first. Leave at 0 for no bonus.
+              </p>
+            </div>
+          </>
+        )}
         {error && <p className="text-sm text-red-400">{error}</p>}
         <div className="flex items-center justify-between gap-2 pt-2">
           <div className="flex gap-2">

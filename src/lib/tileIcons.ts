@@ -35,8 +35,8 @@ const PETS_ICON_URL = 'https://oldschool.runescape.wiki/images/Baby_Mole.png';
 // Every condition maps to exactly one icon -- hosts can't pick their own
 // (no hotlinking/embedding arbitrary images), and there's nothing left to
 // choose: the icon is entirely determined by the condition itself (and its
-// skill, for the per-skill conditions). null only for 'tbd', a placeholder
-// with nothing to depict.
+// skill, for the per-skill conditions). null for 'tbd' (a placeholder with
+// nothing to depict) and 'freeSpace' (nothing to depict either).
 export function defaultIconFor(type: TileCondition['type'], skill?: string): string | null {
   switch (type) {
     case 'xpGained':
@@ -76,6 +76,7 @@ export function defaultIconFor(type: TileCondition['type'], skill?: string): str
     case 'itemCount':
     case 'itemSetCollected':
       return COLLECTION_LOG_ICON_URL;
+    case 'freeSpace':
     case 'tbd':
       return null;
   }

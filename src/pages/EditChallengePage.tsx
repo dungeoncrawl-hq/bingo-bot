@@ -58,7 +58,13 @@ export default function EditChallengePage() {
 
   const tileAt = (row: number, col: number) => tiles.find((t) => t.layout.row === row && t.layout.col === col) ?? null;
 
-  async function handleSave(fields: { label: string; icon: string | null; condition: TileCondition }) {
+  async function handleSave(fields: {
+    label: string;
+    icon: string | null;
+    condition: TileCondition;
+    points: number;
+    first_completer_bonus: number;
+  }) {
     if (!editingCell || !challenge || challenge === 'not-found') return;
     const supabase = getSupabase();
     const existing = tileAt(editingCell.row, editingCell.col);
@@ -169,9 +175,7 @@ export default function EditChallengePage() {
         <ul className="mt-3 space-y-2 text-sm text-stone-300">
           {participants.map((p) => (
             <li key={p.id} className="flex items-center justify-between gap-2">
-              <span>
-                {p.profiles?.display_name ?? 'Unknown'} — {p.rsn}
-              </span>
+              <span>{p.rsn}</span>
               <button
                 type="button"
                 onClick={() => handleRemoveParticipant(p)}

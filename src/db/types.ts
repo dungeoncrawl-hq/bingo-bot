@@ -33,6 +33,7 @@ export interface Tile {
   layout: TileLayout;
   condition: TileCondition;
   points: number;
+  first_completer_bonus: number;
   created_at: string;
 }
 

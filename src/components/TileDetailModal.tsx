@@ -11,6 +11,7 @@ import {
 } from '../lib/tileConditions';
 import { computeParticipantStats, type RawParticipantData } from '../lib/participantStats';
 import { computeHiscoresRecap, type SnapshotRow } from '../lib/hiscoresRecap';
+import { progressColor } from '../lib/progressColor';
 
 interface ParticipantLite {
   id: string;
@@ -129,6 +130,10 @@ export default function TileDetailModal({ tile, participants, challenge, firstCo
           <div>
             <h2 className="text-lg font-semibold">{tile.label}</h2>
             <p className="text-sm text-stone-400">{describeTileCondition(tile.condition)}</p>
+            <p className="text-xs text-stone-500">
+              {tile.points} pts
+              {tile.first_completer_bonus > 0 && <> · +{tile.first_completer_bonus} bonus for first to complete</>}
+            </p>
           </div>
         </div>
 
@@ -140,7 +145,7 @@ export default function TileDetailModal({ tile, participants, challenge, firstCo
               const status = statuses[p.id];
               if (!status) return null;
               const percent = progressPercent(tile.condition, status);
-              const isFirst = status.done && firstCompleters[tile.id] === p.id;
+              const isFirst = status.done && tile.condition.type !== 'freeSpace' && firstCompleters[tile.id] === p.id;
               const caption = formatTileProgress(tile.condition, status) ?? formatTileGoal(tile.condition);
               return (
                 <li key={p.id}>
@@ -157,13 +162,7 @@ export default function TileDetailModal({ tile, participants, challenge, firstCo
                   </div>
                   {percent !== null && (
                     <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-stone-900">
-                      <div
-                        className="h-full"
-                        style={{
-                          width: `${percent}%`,
-                          background: 'linear-gradient(to right, #ef4444, #eab308, #22c55e)',
-                        }}
-                      />
+                      <div className="h-full" style={{ width: `${percent}%`, backgroundColor: progressColor(percent) }} />
                     </div>
                   )}
                 </li>

@@ -59,6 +59,13 @@ export type TileCondition =
   // Any pet obtained during the event (threshold is usually 1) -- a
   // duplicate-pet ping doesn't count.
   | { type: 'petsObtained'; threshold: number }
+  // Always complete for every participant, the moment checkTile ever runs
+  // for them (typically right on joining -- see api/sync-participant.ts) --
+  // no stats involved, nothing to earn. Points/first_completer_bonus are
+  // forced to 0 for this type in TileEditorForm.tsx, so it never actually
+  // affects the leaderboard; it exists purely to fill a grid slot for
+  // line/board completion (see gridLines below).
+  | { type: 'freeSpace' }
   // Placeholder for a slot whose real task hasn't been decided yet -- never
   // completes, rendered distinctly in the UI rather than as a real 0/0 goal.
   | { type: 'tbd' };
@@ -165,6 +172,8 @@ export function checkTile(cond: TileCondition, stats: ParticipantStats): TileSta
     }
     case 'petsObtained':
       return { done: stats.petsObtained >= cond.threshold, progress: stats.petsObtained, goal: cond.threshold };
+    case 'freeSpace':
+      return { done: true, progress: 1, goal: 1 };
     case 'tbd':
       return { done: false, progress: 0, goal: 0 };
   }
@@ -220,6 +229,8 @@ export function describeTileCondition(cond: TileCondition): string {
       return `${cond.threshold.toLocaleString()} deaths or fewer`;
     case 'petsObtained':
       return cond.threshold > 1 ? `${cond.threshold} pets` : 'a pet';
+    case 'freeSpace':
+      return 'a free space -- always complete';
     case 'tbd':
       return 'this task';
   }
@@ -281,6 +292,10 @@ export function tileTaskPhrase(cond: TileCondition): string {
       return `${cond.threshold.toLocaleString()} deaths or fewer`;
     case 'petsObtained':
       return cond.threshold === 1 ? '1 pet' : `${cond.threshold} pets`;
+    case 'freeSpace':
+      // Unreachable in practice -- challengeProgress.ts never builds a
+      // completion embed for a freeSpace tile (see its own comment).
+      return 'free space';
     case 'tbd':
       // Unreachable in practice -- checkTile never marks a 'tbd' tile
       // done (see its own comment), so no completion embed is ever built
@@ -312,6 +327,7 @@ export function tileTaskDetail(cond: TileCondition): string | null {
 export function formatTileGoal(cond: TileCondition): string | null {
   switch (cond.type) {
     case 'tbd':
+    case 'freeSpace':
       return null;
     case 'maxDeaths':
       return `≤${cond.threshold.toLocaleString()} deaths`;
@@ -386,7 +402,7 @@ export function formatTileProgress(cond: TileCondition, status: TileStatus): str
 // hardcoding the type, so any future start-complete/degrade-style
 // condition gets this behavior automatically.
 export function progressPercent(cond: TileCondition, status: TileStatus): number | null {
-  if (cond.type === 'singleDropValue' || cond.type === 'tbd') return null;
+  if (cond.type === 'singleDropValue' || cond.type === 'tbd' || cond.type === 'freeSpace') return null;
   if (status.failed !== undefined) {
     if (status.goal <= 0) return null;
     return Math.max(0, Math.min(100, ((status.goal - status.progress) / status.goal) * 100));

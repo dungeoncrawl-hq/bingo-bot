@@ -127,14 +127,18 @@ export async function checkChallengeProgress(participantId: string): Promise<voi
       `challenge_id=eq.${encodeURIComponent(challenge.id)}&select=participant_id,kind,ref,completed_at`,
     ),
   ]);
-  const leaderboard = computeLeaderboard(tiles, challengeCompletions, allParticipants.map((p) => p.id));
   const firstCompleters = computeFirstCompleters(challengeCompletions);
+  const leaderboard = computeLeaderboard(tiles, challengeCompletions, allParticipants.map((p) => p.id), firstCompleters);
   const participantLite: ParticipantLite = { id: participant.id, rsn: participant.rsn };
   const challengeLite = { name: challenge.name, slug: challenge.slug };
 
   for (const tileId of insertedTileIds) {
     const tile = tiles.find((t) => t.id === tileId);
     if (!tile) continue;
+    // A free space completes for everyone the instant it exists (usually
+    // right on joining) -- not an achievement worth a Discord post, and
+    // posting one for every new joiner would just be noise.
+    if (tile.condition.type === 'freeSpace') continue;
     const isFirst = firstCompleters[tileId] === participant.id;
     const firstCompleterRsn = isFirst
       ? participant.rsn

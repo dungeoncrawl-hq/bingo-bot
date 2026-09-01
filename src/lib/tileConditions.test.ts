@@ -142,6 +142,10 @@ describe('checkTile', () => {
       goal: 0,
     });
   });
+
+  it('freeSpace is always done, regardless of stats', () => {
+    expect(checkTile({ type: 'freeSpace' }, ZERO_STATS)).toEqual({ done: true, progress: 1, goal: 1 });
+  });
 });
 
 describe('formatTileProgress', () => {
@@ -187,11 +191,13 @@ describe('formatTileProgress', () => {
 });
 
 describe('progressPercent', () => {
-  it('returns null for singleDropValue and tbd (no meaningful bar)', () => {
+  it('returns null for singleDropValue, tbd, and freeSpace (no meaningful bar)', () => {
     const cond1: TileCondition = { type: 'singleDropValue', threshold: 1000 };
     expect(progressPercent(cond1, checkTile(cond1, stats({ biggestDropValue: 500 })))).toBeNull();
     const cond2: TileCondition = { type: 'tbd' };
     expect(progressPercent(cond2, checkTile(cond2, ZERO_STATS))).toBeNull();
+    const cond3: TileCondition = { type: 'freeSpace' };
+    expect(progressPercent(cond3, checkTile(cond3, ZERO_STATS))).toBeNull();
   });
 
   it('is proportional to progress/goal for a standard condition, clamped to 100', () => {
