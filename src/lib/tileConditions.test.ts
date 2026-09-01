@@ -4,6 +4,7 @@ import {
   formatTileProgress,
   gridLines,
   progressPercent,
+  tileTaskPhrase,
   type ParticipantStats,
   type TileCondition,
 } from './tileConditions';
@@ -228,5 +229,27 @@ describe('gridLines', () => {
     const antiDiagonal = lines.find((l) => l[0] === 2 && l[l.length - 1] === 6);
     expect(mainDiagonal).toEqual([0, 4, 8]);
     expect(antiDiagonal).toEqual([2, 4, 6]);
+  });
+});
+
+describe('tileTaskPhrase', () => {
+  it('matches the exact phrasing examples given for Discord completion embeds', () => {
+    expect(tileTaskPhrase({ type: 'kcGained', activity: 'Lunar Chests', threshold: 5 })).toBe('5 Lunar Chests KC');
+    expect(tileTaskPhrase({ type: 'singleDropValue', threshold: 1_000_000 })).toBe('single drop worth 1M+ GP');
+    expect(tileTaskPhrase({ type: 'hardCluesCompleted', threshold: 2 })).toBe('2 Hard clue scrolls');
+    expect(tileTaskPhrase({ type: 'xpGained', threshold: 500_000 })).toBe('500,000 total XP');
+    expect(tileTaskPhrase({ type: 'lootValueGained', threshold: 10_000_000 })).toBe('10M GP looted');
+  });
+
+  it('never starts with "a"/"the" -- singular skillLevelGained/petsObtained read as a count instead of an article', () => {
+    expect(tileTaskPhrase({ type: 'skillLevelGained', skill: 'Attack', threshold: 1 })).toBe('1 Attack level');
+    expect(tileTaskPhrase({ type: 'skillLevelGained', skill: 'Attack', threshold: 3 })).toBe('3 Attack levels');
+    expect(tileTaskPhrase({ type: 'petsObtained', threshold: 1 })).toBe('1 pet');
+    expect(tileTaskPhrase({ type: 'petsObtained', threshold: 2 })).toBe('2 pets');
+  });
+
+  it('itemSetCollected drops its leading "the" for a full set too', () => {
+    const full: TileCondition = { type: 'itemSetCollected', itemNames: ['a', 'b'], setName: 'Barrows equipment', threshold: 2 };
+    expect(tileTaskPhrase(full)).toBe('full Barrows equipment set (2 items, each counts once)');
   });
 });

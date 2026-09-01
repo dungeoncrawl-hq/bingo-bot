@@ -225,6 +225,69 @@ export function describeTileCondition(cond: TileCondition): string {
   }
 }
 
+// A bare noun-phrase (no leading article) describing what a condition
+// requires -- sized to drop into "completed the {phrase} task" for
+// Discord completion embeds (discordEmbeds.ts). Unlike describeTileCondition
+// above (a standalone full sentence, e.g. "a single drop worth 1,000,000+
+// GP"), this must never start with "a"/"the", or the surrounding sentence
+// reads "the a ..."/"the the ...". Loot-value quantities use compact
+// shorthand (formatCompactNumber) here specifically for a punchier read;
+// every other quantity stays exact, matching describeTileCondition's own
+// convention.
+export function tileTaskPhrase(cond: TileCondition): string {
+  switch (cond.type) {
+    case 'xpGained':
+      return `${cond.threshold.toLocaleString()} total XP`;
+    case 'bossKcGained':
+      return `${cond.threshold.toLocaleString()} total boss KC`;
+    case 'kcGained':
+      return `${cond.threshold.toLocaleString()} ${cond.activity} KC`;
+    case 'slayerTasksCompleted':
+      return `${cond.threshold.toLocaleString()} Slayer tasks`;
+    case 'lootValueGained':
+      return `${formatCompactNumber(cond.threshold)} GP looted`;
+    case 'singleDropValue':
+      return `single drop worth ${formatCompactNumber(cond.threshold)}+ GP`;
+    case 'bigDropsCount':
+      return `${cond.threshold.toLocaleString()} drops worth ${formatCompactNumber(cond.dropValueThreshold)}+ GP each`;
+    case 'cluesCompleted':
+      return `${cond.threshold.toLocaleString()} clue scrolls`;
+    case 'beginnerCluesCompleted':
+      return `${cond.threshold.toLocaleString()} Beginner clue scrolls`;
+    case 'easyCluesCompleted':
+      return `${cond.threshold.toLocaleString()} Easy clue scrolls`;
+    case 'mediumCluesCompleted':
+      return `${cond.threshold.toLocaleString()} Medium clue scrolls`;
+    case 'hardCluesCompleted':
+      return `${cond.threshold.toLocaleString()} Hard clue scrolls`;
+    case 'eliteCluesCompleted':
+      return `${cond.threshold.toLocaleString()} Elite clue scrolls`;
+    case 'masterCluesCompleted':
+      return `${cond.threshold.toLocaleString()} Master clue scrolls`;
+    case 'collectionLogGained':
+      return `${cond.threshold.toLocaleString()} new collection log items`;
+    case 'skillLevelGained':
+      return cond.threshold === 1 ? `1 ${cond.skill} level` : `${cond.threshold} ${cond.skill} levels`;
+    case 'skillXpGained':
+      return `${cond.threshold.toLocaleString()} ${cond.skill} XP`;
+    case 'itemCount':
+      return `${cond.threshold.toLocaleString()} ${cond.setName}`;
+    case 'itemSetCollected':
+      return cond.threshold >= cond.itemNames.length
+        ? `full ${cond.setName} set (${cond.itemNames.length} items, each counts once)`
+        : `${cond.threshold} of the ${cond.itemNames.length} items in ${cond.setName} (each counts once)`;
+    case 'maxDeaths':
+      return `${cond.threshold.toLocaleString()} deaths or fewer`;
+    case 'petsObtained':
+      return cond.threshold === 1 ? '1 pet' : `${cond.threshold} pets`;
+    case 'tbd':
+      // Unreachable in practice -- checkTile never marks a 'tbd' tile
+      // done (see its own comment), so no completion embed is ever built
+      // for one.
+      return 'mystery';
+  }
+}
+
 // A short, tile-caption-sized rendering of just the goal number -- unlike
 // describeTileCondition's full sentence, this is meant to sit directly
 // under a tile's label on the board grid itself. null for 'tbd', which has

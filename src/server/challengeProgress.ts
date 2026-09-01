@@ -135,10 +135,15 @@ export async function checkChallengeProgress(participantId: string): Promise<voi
   for (const tileId of insertedTileIds) {
     const tile = tiles.find((t) => t.id === tileId);
     if (!tile) continue;
+    const isFirst = firstCompleters[tileId] === participant.id;
+    const firstCompleterRsn = isFirst
+      ? participant.rsn
+      : (allParticipants.find((p) => p.id === firstCompleters[tileId])?.rsn ?? participant.rsn);
     const embed = buildTileCompletionEmbed({
       participant: participantLite,
       tile,
-      isFirst: firstCompleters[tileId] === participant.id,
+      isFirst,
+      firstCompleterRsn,
       leaderboard,
       participants: allParticipants,
       challenge: challengeLite,

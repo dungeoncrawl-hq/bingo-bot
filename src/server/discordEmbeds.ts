@@ -1,7 +1,7 @@
 // Builds the rich embeds challengeProgress.ts posts to Discord on a tile/
 // line/board completion -- kept separate from that file so it stays
 // focused on completion *detection*, not presentation.
-import { describeTileCondition } from '../lib/tileConditions.js';
+import { tileTaskPhrase } from '../lib/tileConditions.js';
 import type { LeaderboardEntry } from '../lib/leaderboard.js';
 import type { Tile } from '../db/types.js';
 import type { DiscordEmbed, DiscordEmbedField } from './discordRelay.js';
@@ -57,19 +57,25 @@ export function buildTileCompletionEmbed(params: {
   participant: ParticipantLite;
   tile: Tile;
   isFirst: boolean;
+  // Who actually was first, regardless of isFirst -- lets the "not first"
+  // flavor text call them out by name ("not as fast as {rsn}, though").
+  firstCompleterRsn: string;
   leaderboard: LeaderboardEntry[];
   participants: ParticipantLite[];
   challenge: ChallengeLite;
 }): DiscordEmbed {
-  const { participant, tile, isFirst, leaderboard, participants, challenge } = params;
+  const { participant, tile, isFirst, firstCompleterRsn, leaderboard, participants, challenge } = params;
+  // Two tiles can share the same label (e.g. two "Big Drop" tiles with
+  // different thresholds) -- spelling out the exact requirement in the
+  // title itself keeps the post unambiguous on its own.
+  const phrase = tileTaskPhrase(tile.condition);
   return {
     title: isFirst
-      ? `⭐ ${participant.rsn} was first to complete ${tile.label}!`
-      : `🎉 ${participant.rsn} completed ${tile.label}!`,
-    // Two tiles can share the same label (e.g. two "Big Drop" tiles with
-    // different thresholds) -- spell out exactly what this one required
-    // so the post is unambiguous on its own.
-    description: describeTileCondition(tile.condition),
+      ? `${participant.rsn} was first to complete the ${phrase} task!`
+      : `${participant.rsn} completed the ${phrase} task.`,
+    description: isFirst
+      ? `+${tile.points} pts. Aren't they just showing off at this point?`
+      : `Unfortunately not as fast as ${firstCompleterRsn}, though.`,
     color: isFirst ? FIRST_COLOR : TILE_COLOR,
     thumbnail: tile.icon ? { url: tile.icon } : undefined,
     image: { url: boardImageUrl(participant.id) },
@@ -84,7 +90,7 @@ export function buildTileCompletionEmbed(params: {
 export function buildLineCompletionEmbed(params: { participant: ParticipantLite; challenge: ChallengeLite }): DiscordEmbed {
   const { participant, challenge } = params;
   return {
-    title: `🎉 ${participant.rsn} completed a line!`,
+    title: `${participant.rsn} completed a line!`,
     color: LINE_COLOR,
     image: { url: boardImageUrl(participant.id) },
     fields: [boardLinkField(challenge)],
@@ -94,7 +100,7 @@ export function buildLineCompletionEmbed(params: { participant: ParticipantLite;
 export function buildBoardCompletionEmbed(params: { participant: ParticipantLite; challenge: ChallengeLite }): DiscordEmbed {
   const { participant, challenge } = params;
   return {
-    title: `🏆 ${participant.rsn} completed the whole board!`,
+    title: `${participant.rsn} completed the whole board!`,
     description: 'Every tile conquered.',
     color: BOARD_COLOR,
     image: { url: boardImageUrl(participant.id) },

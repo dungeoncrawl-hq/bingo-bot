@@ -61,16 +61,32 @@ describe('formatLeaderboardField', () => {
 });
 
 describe('buildTileCompletionEmbed', () => {
-  it('spells out the exact condition in the description, so same-label tiles stay unambiguous', () => {
+  it('spells out the exact condition in the title, so same-label tiles stay unambiguous', () => {
     const embed = buildTileCompletionEmbed({
       participant: PARTICIPANTS[0],
       tile: tile({ condition: { type: 'singleDropValue', threshold: 1_000_000 } }),
       isFirst: false,
+      firstCompleterRsn: 'otototo',
       leaderboard: [],
       participants: PARTICIPANTS,
       challenge: CHALLENGE,
     });
-    expect(embed.description).toBe('a single drop worth 1,000,000+ GP');
+    expect(embed.title).toBe('26 Limont completed the single drop worth 1M+ GP task.');
+    expect(embed.description).toBe('Unfortunately not as fast as otototo, though.');
+  });
+
+  it('uses the "first to complete" title/description when isFirst', () => {
+    const embed = buildTileCompletionEmbed({
+      participant: PARTICIPANTS[0],
+      tile: tile({ points: 3, condition: { type: 'xpGained', threshold: 500_000 } }),
+      isFirst: true,
+      firstCompleterRsn: '26 Limont',
+      leaderboard: [],
+      participants: PARTICIPANTS,
+      challenge: CHALLENGE,
+    });
+    expect(embed.title).toBe('26 Limont was first to complete the 500,000 total XP task!');
+    expect(embed.description).toBe("+3 pts. Aren't they just showing off at this point?");
   });
 
   it('ends with a field linking the board name back to the site', () => {
@@ -78,6 +94,7 @@ describe('buildTileCompletionEmbed', () => {
       participant: PARTICIPANTS[0],
       tile: tile(),
       isFirst: false,
+      firstCompleterRsn: 'otototo',
       leaderboard: [],
       participants: PARTICIPANTS,
       challenge: CHALLENGE,
