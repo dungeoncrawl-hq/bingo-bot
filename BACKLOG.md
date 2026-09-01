@@ -98,3 +98,40 @@ ordered -- just captured so they don't get lost.
     scope for this backlog entry is just the "small" Adventure dungeon;
     medium/large and Adventure's actual rules (what a size even changes)
     are TBD, to be defined later.
+
+## Onboarding feedback (from a first-time playtester)
+14. "Threshold" wasn't obvious as a label when setting up a tile's
+    condition in `TileEditorForm.tsx` -- needs clearer wording and/or a
+    short explanatory hint (e.g. "the amount/count needed to complete
+    this tile").
+15. Not obvious how to invite other players to a challenge once it's
+    created -- likely addressed by #12's "copy invite message" button
+    above, but flagging as its own confirmed pain point in case that
+    alone doesn't make it discoverable enough (e.g. it may also need
+    to be reachable from somewhere more prominent than the My Dungeons
+    row, like the board page itself for a host viewing their own
+    challenge).
+16. Confusing how to set up Dink when participating in more than one
+    challenge at once -- `SetupGuidePage.tsx` only ever shows one
+    challenge's webhook URL, with no mention of what to do if you're
+    already tracking another. Fix: each of Dink's webhook fields
+    accepts multiple URLs, one per line -- update the setup guide's
+    instructions to say so explicitly, so a player in multiple
+    challenges adds every challenge's webhook URL on its own line
+    within the same field instead of only ever seeing/using one.
+
+## Anti-abuse
+17. Figure out how to handle a participant who leaves Dink's
+    "send screenshot" setting on and floods the site with screenshot
+    data (bandwidth/storage). Open question from the host: should this
+    email both the player and the host when it happens, or just log/
+    flag it for the host to notice? Needs detection first (nothing in
+    `dinkWebhook.ts` currently inspects payload size or screenshot
+    presence at all) before any notification behavior can be built.
+
+## Notifications
+18. Full rewrite of Discord notification content (`discordEmbeds.ts`) --
+    keep the current embed structure (title/description/fields/image),
+    but replace the fixed flavor-text lines (e.g. "Aren't they just
+    showing off at this point?") with randomized joke/banter variants
+    pulled from a pool, to lean into the site's ".lol" branding.
