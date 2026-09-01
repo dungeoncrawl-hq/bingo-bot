@@ -16,6 +16,7 @@ import { computeParticipantStats, type RawParticipantData } from '../lib/partici
 import { computeHiscoresRecap, type SnapshotRow } from '../lib/hiscoresRecap';
 import { computeLeaderboard } from '../lib/leaderboard';
 import { computeFirstCompleters } from '../lib/firstCompletions';
+import { progressColor } from '../lib/progressColor';
 import TileDetailModal from '../components/TileDetailModal';
 
 const GRID_SIZE = 5;
@@ -48,7 +49,7 @@ export default function BoardPage() {
   const [rsnDraft, setRsnDraft] = useState('');
   const [savingRsn, setSavingRsn] = useState(false);
   const [rsnError, setRsnError] = useState('');
-  const [viewedTileStatuses, setViewedTileStatuses] = useState<Record<string, TileStatus>>({});
+  const [tileStatusesByParticipant, setTileStatusesByParticipant] = useState<Record<string, Record<string, TileStatus>>>({});
   const [selectedTile, setSelectedTile] = useState<Tile | null>(null);
 
   const myParticipant = session ? participants.find((p) => p.profile_id === session.user.id) : undefined;
@@ -84,49 +85,87 @@ export default function BoardPage() {
     load();
   }, [load]);
 
-  // Live progress bars (not just done/not-done) for whichever participant's
-  // board is currently being viewed -- computed client-side by re-running
-  // the same pure functions the server uses (challengeProgress.ts), since
-  // the intermediate progress numbers are never persisted, only the final
-  // done/not-done result.
+  // Live progress (not just done/not-done) for every participant, not only
+  // the one currently being viewed -- computed client-side by re-running the
+  // same pure functions the server uses (challengeProgress.ts), since the
+  // intermediate progress numbers are never persisted, only the final
+  // done/not-done result. Fetched in bulk (one `.in(participant_id, ...)`
+  // query per raw table, not one round trip per participant) so the "who's
+  // closest" badge coloring below has every participant's numbers, not just
+  // the viewer's own.
   useEffect(() => {
-    if (!viewedParticipantId || challenge === null || challenge === 'not-found') {
-      setViewedTileStatuses({});
+    if (participants.length === 0 || tiles.length === 0 || challenge === null || challenge === 'not-found') {
+      setTileStatusesByParticipant({});
       return;
     }
     const supabase = getSupabase();
-    const pid = viewedParticipantId;
+    const participantIds = participants.map((p) => p.id);
     const window = { start: challenge.start_date, end: challenge.end_date };
     (async () => {
       const [bossKills, slayerTasks, lootDrops, deaths, collectionLogEntries, petObtains, snapshots] = await Promise.all([
-        supabase.from('boss_kills').select('boss, kc, created_at').eq('participant_id', pid),
-        supabase.from('slayer_tasks').select('created_at').eq('participant_id', pid),
+        supabase.from('boss_kills').select('participant_id, boss, kc, created_at').in('participant_id', participantIds),
+        supabase.from('slayer_tasks').select('participant_id, created_at').in('participant_id', participantIds),
         supabase
           .from('loot_drops')
-          .select('items, total_value, created_at, is_misc, max_single_value')
-          .eq('participant_id', pid),
-        supabase.from('deaths').select('created_at').eq('participant_id', pid),
-        supabase.from('collection_log_entries').select('created_at').eq('participant_id', pid),
-        supabase.from('pet_obtains').select('updated_at').eq('participant_id', pid),
-        supabase.from('participant_snapshots').select('recorded_on, total_xp, skills, activities').eq('participant_id', pid),
+          .select('participant_id, items, total_value, created_at, is_misc, max_single_value')
+          .in('participant_id', participantIds),
+        supabase.from('deaths').select('participant_id, created_at').in('participant_id', participantIds),
+        supabase.from('collection_log_entries').select('participant_id, created_at').in('participant_id', participantIds),
+        supabase.from('pet_obtains').select('participant_id, updated_at').in('participant_id', participantIds),
+        supabase
+          .from('participant_snapshots')
+          .select('participant_id, recorded_on, total_xp, skills, activities')
+          .in('participant_id', participantIds),
       ]);
-      const raw: RawParticipantData = {
-        bossKills: (bossKills.data as RawParticipantData['bossKills']) ?? [],
-        slayerTasks: (slayerTasks.data as RawParticipantData['slayerTasks']) ?? [],
-        lootDrops: (lootDrops.data as RawParticipantData['lootDrops']) ?? [],
-        deaths: (deaths.data as RawParticipantData['deaths']) ?? [],
-        collectionLogEntries: (collectionLogEntries.data as RawParticipantData['collectionLogEntries']) ?? [],
-        petObtains: (petObtains.data as RawParticipantData['petObtains']) ?? [],
-      };
-      const hiscoresRecap = computeHiscoresRecap((snapshots.data as SnapshotRow[]) ?? [], window);
-      const stats = computeParticipantStats(raw, window, hiscoresRecap);
-      const statuses: Record<string, TileStatus> = {};
-      for (const tile of tiles) {
-        statuses[tile.id] = checkTile(tile.condition, stats);
+
+      const rawByParticipant: Record<string, RawParticipantData> = {};
+      for (const pid of participantIds) {
+        rawByParticipant[pid] = {
+          bossKills: [],
+          slayerTasks: [],
+          lootDrops: [],
+          deaths: [],
+          collectionLogEntries: [],
+          petObtains: [],
+        };
       }
-      setViewedTileStatuses(statuses);
+      type WithParticipant<T> = T & { participant_id: string };
+      for (const row of ((bossKills.data ?? []) as WithParticipant<RawParticipantData['bossKills'][number]>[])) {
+        rawByParticipant[row.participant_id]?.bossKills.push(row);
+      }
+      for (const row of ((slayerTasks.data ?? []) as WithParticipant<RawParticipantData['slayerTasks'][number]>[])) {
+        rawByParticipant[row.participant_id]?.slayerTasks.push(row);
+      }
+      for (const row of ((lootDrops.data ?? []) as WithParticipant<RawParticipantData['lootDrops'][number]>[])) {
+        rawByParticipant[row.participant_id]?.lootDrops.push(row);
+      }
+      for (const row of ((deaths.data ?? []) as WithParticipant<RawParticipantData['deaths'][number]>[])) {
+        rawByParticipant[row.participant_id]?.deaths.push(row);
+      }
+      for (const row of ((collectionLogEntries.data ?? []) as WithParticipant<RawParticipantData['collectionLogEntries'][number]>[])) {
+        rawByParticipant[row.participant_id]?.collectionLogEntries.push(row);
+      }
+      for (const row of ((petObtains.data ?? []) as WithParticipant<RawParticipantData['petObtains'][number]>[])) {
+        rawByParticipant[row.participant_id]?.petObtains.push(row);
+      }
+      const snapshotsByParticipant: Record<string, SnapshotRow[]> = {};
+      for (const row of ((snapshots.data ?? []) as WithParticipant<SnapshotRow>[])) {
+        (snapshotsByParticipant[row.participant_id] ??= []).push(row);
+      }
+
+      const statuses: Record<string, Record<string, TileStatus>> = {};
+      for (const pid of participantIds) {
+        const hiscoresRecap = computeHiscoresRecap(snapshotsByParticipant[pid] ?? [], window);
+        const stats = computeParticipantStats(rawByParticipant[pid], window, hiscoresRecap);
+        const tileStatuses: Record<string, TileStatus> = {};
+        for (const tile of tiles) {
+          tileStatuses[tile.id] = checkTile(tile.condition, stats);
+        }
+        statuses[pid] = tileStatuses;
+      }
+      setTileStatusesByParticipant(statuses);
     })();
-  }, [viewedParticipantId, challenge, tiles]);
+  }, [participants, tiles, challenge]);
 
   async function handleJoin(e: FormEvent) {
     e.preventDefault();
@@ -191,6 +230,7 @@ export default function BoardPage() {
   const tileAt = (row: number, col: number) => tiles.find((t) => t.layout.row === row && t.layout.col === col) ?? null;
   const isHost = session?.user.id === challenge.host_id;
   const viewedParticipant = participants.find((p) => p.id === viewedParticipantId);
+  const viewedTileStatuses = (viewedParticipantId && tileStatusesByParticipant[viewedParticipantId]) || {};
   const viewedCompletedTileIds = new Set(
     completions.filter((c) => c.kind === 'tile' && c.participant_id === viewedParticipantId).map((c) => c.ref),
   );
@@ -234,7 +274,21 @@ export default function BoardPage() {
               const noOneCompleted = tile != null && !completions.some((c) => c.kind === 'tile' && c.ref === tile.id);
               const someoneElseCompleted =
                 tile != null && !done && completions.some((c) => c.kind === 'tile' && c.ref === tile.id);
-              const badge = !tile
+              // How close the closest participant is to finishing this
+              // still-unclaimed tile, across everyone (not just the viewer)
+              // -- colors the circle badge below from red (no one's close)
+              // to green (someone's nearly there).
+              const closestPercent =
+                tile && noOneCompleted
+                  ? Math.max(
+                      0,
+                      ...participants.map((p) => {
+                        const s = tileStatusesByParticipant[p.id]?.[tile.id];
+                        return s ? (progressPercent(tile.condition, s) ?? 0) : 0;
+                      }),
+                    )
+                  : 0;
+              const badge: { glyph: string; className?: string; color?: string } | null = !tile
                 ? null
                 : isFirst
                   ? { glyph: '⭐', className: 'text-amber-400' }
@@ -243,7 +297,7 @@ export default function BoardPage() {
                     : someoneElseCompleted
                       ? { glyph: '✕', className: 'text-red-400' }
                       : noOneCompleted
-                        ? { glyph: '○', className: 'text-stone-600' }
+                        ? { glyph: '○', color: progressColor(closestPercent) }
                         : null;
               return (
                 <div
@@ -259,14 +313,21 @@ export default function BoardPage() {
                   }`}
                 >
                   {percent !== null && (
-                    <div
-                      className="absolute inset-y-0 left-0 w-1"
-                      style={{ background: 'linear-gradient(to top, #ef4444, #eab308, #22c55e)' }}
-                    >
-                      <div className="absolute inset-x-0 top-0 bg-stone-900" style={{ height: `${100 - percent}%` }} />
+                    <div className="absolute inset-y-0 left-0 w-1 bg-stone-900">
+                      <div
+                        className="absolute inset-x-0 bottom-0"
+                        style={{ height: `${percent}%`, backgroundColor: progressColor(percent) }}
+                      />
                     </div>
                   )}
-                  {badge && <span className={`absolute right-1 top-1 text-xs ${badge.className}`}>{badge.glyph}</span>}
+                  {badge && (
+                    <span
+                      className={`absolute right-1 top-1 text-xs ${badge.className ?? ''}`}
+                      style={badge.color ? { color: badge.color } : undefined}
+                    >
+                      {badge.glyph}
+                    </span>
+                  )}
                   {tile ? (
                     <>
                       {tile.icon && <img src={tile.icon} alt="" className="h-6 w-6 shrink-0" />}

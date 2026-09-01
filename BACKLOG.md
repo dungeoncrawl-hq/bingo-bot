@@ -28,6 +28,11 @@ ordered -- just captured so they don't get lost.
 9. "First to complete" recognition for a given tile -- players should be
    able to tell at a glance which tiles are already claimed by someone
    else, which are still open, and which ones *they* were first to finish.
+22. Let the host define how many points a player gets for being *first*
+    to complete a given task -- right now (see item 8, the point system)
+    every completion of a tile is worth the same flat points regardless
+    of who got there first; needs a separate first-completer bonus value
+    the host sets, on top of the base points.
 
 ## Tile mechanics
 10. Hidden/mystery tiles -- a tile that doesn't reveal itself until some
@@ -50,6 +55,16 @@ ordered -- just captured so they don't get lost.
     specific icon actually shows up everywhere a tile's icon is used --
     the board grid, the tile editor, and the Discord completion embed's
     thumbnail (`src/server/discordEmbeds.ts`).
+21. Add a "Free space" tile condition -- always shows as completed for
+    every participant, awards no points. Distinct from every other
+    condition type in that `checkTile` never has to evaluate any raw
+    stats for it; it's just an always-true special case.
+23. Restrict `lootValueGained`/`singleDropValue`/`xpGained`-style GP and
+    XP thresholds to increments of 1,000 instead of any raw number a
+    host types in. In `TileEditorForm.tsx`, replace the free-typed
+    number with a denomination selector (K/M) plus a value, so the host
+    picks e.g. "100" + "M" to form a 100,000,000 threshold instead of
+    typing the full number by hand.
 
 ## Host tooling
 12. "Randomize a board" starting point -- host picks random tiles/
@@ -66,6 +81,12 @@ ordered -- just captured so they don't get lost.
     icon could reasonably fit, offer a small curated set instead of the
     full picker. Goal: fewer decisions for the host, and a standardized,
     recognizable look across boards for players.
+20. Once a challenge has started, its tile conditions should no longer be
+    editable from `EditChallengePage.tsx` -- changing a condition
+    mid-challenge could invalidate progress players have already made
+    toward it. (Tile *metadata* like label/icon presumably still fine to
+    edit; scope of what counts as "started" and what stays editable
+    needs a closer look.)
 
 ## Notifications
 16. Enhance Discord notifications for tile/line/board completions --
