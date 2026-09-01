@@ -64,12 +64,6 @@ ordered -- just captured so they don't get lost.
     copy) and enhance it:
     - A quick button on each row to copy that challenge's Dink webhook
       URL to the clipboard, without opening the setup guide page.
-    - A quick "copy invite message" button per row -- copies a short,
-      shareable message (a quick invite sentence plus a link to the
-      board's public page, `/c/:slug`, where an invited player finds the
-      Join form and instructions) that a host can paste straight into
-      Discord/etc. to invite others, distinct from the webhook-URL copy
-      above.
     - Colored status badges: Active = green, Draft, Upcoming, Past, etc.
       (today `c.status` just prints as plain uppercase text -- see
       `challenges.status`, currently `'draft' | 'active' | 'ended'`; an
@@ -99,29 +93,8 @@ ordered -- just captured so they don't get lost.
     medium/large and Adventure's actual rules (what a size even changes)
     are TBD, to be defined later.
 
-## Onboarding feedback (from a first-time playtester)
-14. "Threshold" wasn't obvious as a label when setting up a tile's
-    condition in `TileEditorForm.tsx` -- needs clearer wording and/or a
-    short explanatory hint (e.g. "the amount/count needed to complete
-    this tile").
-15. Not obvious how to invite other players to a challenge once it's
-    created -- likely addressed by #12's "copy invite message" button
-    above, but flagging as its own confirmed pain point in case that
-    alone doesn't make it discoverable enough (e.g. it may also need
-    to be reachable from somewhere more prominent than the My Dungeons
-    row, like the board page itself for a host viewing their own
-    challenge).
-16. Confusing how to set up Dink when participating in more than one
-    challenge at once -- `SetupGuidePage.tsx` only ever shows one
-    challenge's webhook URL, with no mention of what to do if you're
-    already tracking another. Fix: each of Dink's webhook fields
-    accepts multiple URLs, one per line -- update the setup guide's
-    instructions to say so explicitly, so a player in multiple
-    challenges adds every challenge's webhook URL on its own line
-    within the same field instead of only ever seeing/using one.
-
 ## Anti-abuse
-17. Figure out how to handle a participant who leaves Dink's
+14. Figure out how to handle a participant who leaves Dink's
     "send screenshot" setting on and floods the site with screenshot
     data (bandwidth/storage). Open question from the host: should this
     email both the player and the host when it happens, or just log/
@@ -130,14 +103,14 @@ ordered -- just captured so they don't get lost.
     presence at all) before any notification behavior can be built.
 
 ## Notifications
-18. Full rewrite of Discord notification content (`discordEmbeds.ts`) --
+15. Full rewrite of Discord notification content (`discordEmbeds.ts`) --
     keep the current embed structure (title/description/fields/image),
     but replace the fixed flavor-text lines (e.g. "Aren't they just
     showing off at this point?") with randomized joke/banter variants
     pulled from a pool, to lean into the site's ".lol" branding.
 
 ## Account / profile
-19. A user profile page letting someone change their email and set a
+16. A user profile page letting someone change their email and set a
     default RSN, so they don't have to retype it every time they join a
     new challenge. Two different underlying mechanisms: email lives on
     Supabase's own `auth.users` (changing it goes through
@@ -148,7 +121,7 @@ ordered -- just captured so they don't get lost.
     join form pre-filling from it instead of starting blank.
 
 ## Game modes
-20. New game modes, applying to any dungeon type (orthogonal to #13's
+17. New game modes, applying to any dungeon type (orthogonal to #13's
     board *type* -- Standard/Adventure -- this is about how a board is
     *scored*, not shaped). Today every participant has their own
     private board/completions (`challenge_participants` ->
