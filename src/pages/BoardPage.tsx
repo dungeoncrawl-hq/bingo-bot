@@ -233,7 +233,7 @@ export default function BoardPage() {
               key={i}
               title={tile ? describeTileCondition(tile.condition) : undefined}
               onClick={tile ? () => setSelectedTile(tile) : undefined}
-              className={`relative flex aspect-square min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden rounded-lg border p-2 text-center shadow-inner ${tile ? 'cursor-pointer' : ''} ${
+              className={`relative flex aspect-square min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden rounded-lg border p-2 text-center shadow-inner before:pointer-events-none before:absolute before:inset-0 before:bg-[url('/stone-texture.jpg')] before:bg-cover before:bg-center before:opacity-[0.12] before:content-[''] ${tile ? 'cursor-pointer' : ''} ${
                 done
                   ? 'border-green-500 bg-green-950/40'
                   : tile
