@@ -25,6 +25,7 @@ export default function EditChallengePage() {
   const [discordWebhookUrl, setDiscordWebhookUrl] = useState('');
   const [savingWebhook, setSavingWebhook] = useState(false);
   const [webhookSaved, setWebhookSaved] = useState(false);
+  const [inviteCopied, setInviteCopied] = useState(false);
 
   const load = useCallback(async () => {
     if (!slug) return;
@@ -126,6 +127,7 @@ export default function EditChallengePage() {
   }
 
   const editingTile = editingCell ? tileAt(editingCell.row, editingCell.col) : null;
+  const inviteMessage = `Come join my Dungeon Crawl challenge, "${challenge.name}"! Jump in here: ${window.location.origin}/c/${challenge.slug}`;
 
   return (
     <div className="mx-auto max-w-2xl py-12">
@@ -139,6 +141,32 @@ export default function EditChallengePage() {
         <button onClick={togglePublish} className="rounded-lg border border-stone-700 px-4 py-2 text-sm text-stone-300">
           {challenge.status === 'draft' ? 'Publish' : 'Unpublish'}
         </button>
+      </div>
+
+      <div className="mt-6 max-w-md">
+        <h2 className="text-sm font-semibold text-stone-300">Invite players</h2>
+        <p className="mt-1 text-xs text-stone-500">
+          Copy a ready-to-send message with a link where players can join and see how to get set up.
+        </p>
+        <div className="mt-2 flex gap-2">
+          <input
+            readOnly
+            value={inviteMessage}
+            onClick={(e) => e.currentTarget.select()}
+            className="flex-1 rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-xs text-stone-400"
+          />
+          <button
+            type="button"
+            onClick={async () => {
+              await navigator.clipboard.writeText(inviteMessage);
+              setInviteCopied(true);
+              setTimeout(() => setInviteCopied(false), 2000);
+            }}
+            className="shrink-0 rounded-lg border border-stone-700 px-4 py-2 text-sm text-stone-300"
+          >
+            {inviteCopied ? 'Copied!' : 'Copy'}
+          </button>
+        </div>
       </div>
 
       <div className="mt-8 grid grid-cols-5 gap-2">

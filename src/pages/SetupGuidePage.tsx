@@ -90,6 +90,11 @@ export default function SetupGuidePage() {
           <Box>Kill Count</Box>, <Box>Death</Box>, <Box>Collection Log</Box>, and <Box>Loot</Box> -- paste your
           webhook URL (above) into the box labeled <Box>Webhook URL</Box>. Don't check any boxes yet, just paste the
           link into all 6.
+          <p className="mt-2 rounded-lg border border-stone-800 bg-stone-950/60 p-2 text-xs text-stone-500">
+            Already tracking another Dungeon Crawl challenge? Each <Box>Webhook URL</Box> box accepts more than one
+            link -- go to the end of what's already there, press Enter, and paste this challenge's link on its own
+            new line underneath. Don't replace what's already pasted in.
+          </p>
         </Step>
 
         <Step n={3} title="Turn on 5 of those sections">
@@ -108,7 +113,8 @@ export default function SetupGuidePage() {
           Find the <Box>Advanced</Box> section (near the bottom). Paste the same link into the box labeled{' '}
           <Box>Custom Metadata Handler</Box>. There's no checkbox to enable -- pasting the link there is enough. This
           makes your XP/skill/clue stats refresh the instant you log out, instead of waiting for the once-daily
-          automatic sync everyone gets regardless.
+          automatic sync everyone gets regardless. Same as step 2 -- if you're tracking multiple challenges, add each
+          one's link on its own line here too.
         </Step>
       </div>
     </div>

@@ -336,7 +336,7 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
         {type !== 'tbd' && type !== 'freeSpace' && (
           <div>
             <label className="block text-sm text-stone-400">
-              {type === 'maxDeaths' ? 'Max deaths allowed' : type === 'bigDropsCount' ? 'How many such drops' : 'Threshold'}
+              {type === 'maxDeaths' ? 'Max deaths allowed' : type === 'bigDropsCount' ? 'How many such drops' : 'Goal'}
             </label>
             <input
               type="number"
@@ -345,6 +345,9 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
               onChange={(e) => setThreshold(Number(e.target.value))}
               className={inputClass}
             />
+            {type !== 'maxDeaths' && type !== 'bigDropsCount' && (
+              <p className="mt-1 text-xs text-stone-500">The amount a player needs to reach to complete this tile.</p>
+            )}
           </div>
         )}
         {type === 'freeSpace' ? (
