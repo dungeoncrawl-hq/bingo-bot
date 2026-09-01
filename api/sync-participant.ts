@@ -33,11 +33,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Best-effort: a brand-new/unranked account may not be on the hiscores
   // at all yet -- that's expected, not a failure worth surfacing to the
   // player. The join itself already succeeded before this ever runs.
+  //
+  // checkChallengeProgress runs in `finally`, independent of whether the
+  // hiscores fetch above succeeded -- it only reads already-persisted
+  // event/snapshot data (zero rows if the sync never landed anything, which
+  // computeParticipantStats treats as zero progress, not an error), so it's
+  // always safe to run. This matters for a condition like 'freeSpace' that
+  // needs no stats at all to complete: without this, a participant whose
+  // hiscores fetch fails (a test/unranked RSN, most commonly) would never
+  // get their free space marked done until some later, unrelated event
+  // happened to trigger a sync that succeeded.
+  let syncFailed = false;
   try {
     await syncOneParticipant(participant.challenge_id, participant.id, participant.rsn);
-    await checkChallengeProgress(participant.id).catch(() => {});
-    res.status(200).json({ ok: true });
   } catch {
-    res.status(200).json({ ok: false, note: 'hiscores fetch failed' });
+    syncFailed = true;
+  } finally {
+    await checkChallengeProgress(participant.id).catch(() => {});
   }
+  res.status(200).json(syncFailed ? { ok: false, note: 'hiscores fetch failed' } : { ok: true });
 }
