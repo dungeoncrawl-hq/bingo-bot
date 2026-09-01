@@ -4,16 +4,7 @@ import type { TileCondition } from '../lib/tileConditions';
 import type { Tile } from '../db/types';
 import { SKILL_ORDER, defaultIconFor } from '../lib/tileIcons';
 import { PRESET_ITEM_SETS, type PresetItemSet } from '../lib/itemSets';
-
-// Keeps a derived label from overflowing the tile grid cell it renders in
-// (BoardPage.tsx/EditChallengePage.tsx both cap the label at 2 lines with
-// line-clamp-2 -- much beyond this and it just gets clipped anyway). Applied
-// to the host-typed inputs the label is built from (activity, with " KC"
-// appended) rather than the label itself, since the label is no longer
-// directly editable. Item-set tiles get their label from a catalog name
-// (see PRESET_ITEM_SETS) instead, which needs no cap of its own.
-const LABEL_MAX_LENGTH = 40;
-const ACTIVITY_MAX_LENGTH = LABEL_MAX_LENGTH - ' KC'.length;
+import { BOSS_ACTIVITIES } from '../lib/bossActivities';
 
 // A host can't set a "big drop" threshold below this -- otherwise most
 // drops would clear it and defeat loot_drops bucketing (see
@@ -121,7 +112,10 @@ function defaultLabelFor(type: TileCondition['type'], skill: string, activity: s
     case 'bossKcGained':
       return 'Boss KC';
     case 'kcGained':
-      return activity.trim() ? `${activity.trim()} KC` : 'Boss KC';
+      // activity is always a catalog value once the dropdown below has
+      // ever been touched -- the empty-string fallback only matters for a
+      // tile saved before this catalog existed.
+      return activity ? `${activity} KC` : 'Boss KC';
     case 'slayerTasksCompleted':
       return 'Slayer Tasks';
     case 'maxDeaths':
@@ -192,7 +186,14 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
     ? formFromCondition(existing.condition)
     : { threshold: 1, activity: '', skill: '', itemSetName: '', dropValueThreshold: DEFAULT_DROP_VALUE_THRESHOLD };
   const [threshold, setThreshold] = useState(initial.threshold);
-  const [activity, setActivity] = useState(initial.activity);
+  // A tile can only reference a boss/minigame/raid from the curated catalog
+  // -- no freeform typing (see bossActivities.ts's own comment). Falls back
+  // to the first catalog entry if the stored activity doesn't match
+  // anything (e.g. a tile saved before this restriction existed, with a
+  // typo'd or blank activity).
+  const [activity, setActivity] = useState(
+    BOSS_ACTIVITIES.find((b) => b.name === initial.activity)?.name ?? BOSS_ACTIVITIES[0].name,
+  );
   const [skill, setSkill] = useState(initial.skill || SKILL_ORDER[0]);
   // A tile can only reference items from the curated catalog -- no
   // freeform typing (see PRESET_ITEM_SETS' own comment). Falls back to
@@ -213,7 +214,7 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
   // their own, no manual override. Any label/icon a tile was saved with
   // before this restriction existed is superseded the moment it's reopened.
   const label = defaultLabelFor(type, skill, activity, selectedSet.name);
-  const icon = defaultIconFor(type, skill);
+  const icon = defaultIconFor(type, skill, activity);
 
   function selectItemSet(name: string) {
     setSelectedItemSet(name);
@@ -283,16 +284,14 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
         </div>
         {type === 'kcGained' && (
           <div>
-            <label className="block text-sm text-stone-400">Boss / activity name</label>
-            <input
-              maxLength={ACTIVITY_MAX_LENGTH}
-              value={activity}
-              onChange={(e) => setActivity(e.target.value)}
-              className={inputClass}
-            />
-            <p className="mt-1 text-right text-xs text-stone-600">
-              {activity.length}/{ACTIVITY_MAX_LENGTH}
-            </p>
+            <label className="block text-sm text-stone-400">Boss / minigame / raid</label>
+            <select value={activity} onChange={(e) => setActivity(e.target.value)} className={inputClass}>
+              {BOSS_ACTIVITIES.map((b) => (
+                <option key={b.name} value={b.name}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
           </div>
         )}
         {(type === 'skillLevelGained' || type === 'skillXpGained') && (

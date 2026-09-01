@@ -2,6 +2,7 @@
 // down a wiki image URL for every tile by hand. Ported from
 // rs/src/lib/skillIcons.ts (same OSRS Wiki image host/convention).
 import type { TileCondition } from './tileConditions.js';
+import { bossActivityIcon } from './bossActivities.js';
 
 // The OSRS Wiki hosts a small, stable icon asset at this URL pattern for
 // every skill (verified against all 24 in SKILL_ORDER).
@@ -35,15 +36,23 @@ const PETS_ICON_URL = 'https://oldschool.runescape.wiki/images/Baby_Mole.png';
 // Every condition maps to exactly one icon -- hosts can't pick their own
 // (no hotlinking/embedding arbitrary images), and there's nothing left to
 // choose: the icon is entirely determined by the condition itself (and its
-// skill, for the per-skill conditions). null for 'tbd' (a placeholder with
-// nothing to depict) and 'freeSpace' (nothing to depict either).
-export function defaultIconFor(type: TileCondition['type'], skill?: string): string | null {
+// skill, for the per-skill conditions, or activity, for kcGained). null for
+// 'tbd' (a placeholder with nothing to depict) and 'freeSpace' (nothing to
+// depict either).
+export function defaultIconFor(type: TileCondition['type'], skill?: string, activity?: string): string | null {
   switch (type) {
     case 'xpGained':
       return TOTAL_LEVEL_ICON_URL;
     case 'bossKcGained':
-    case 'kcGained':
+      // Sums every boss together -- no single boss to depict, unlike
+      // kcGained below.
       return COMBAT_ICON_URL;
+    case 'kcGained':
+      // Falls back to the generic combat icon only for a stored tile whose
+      // activity predates this catalog (or somehow isn't in it) -- every
+      // value the dropdown in TileEditorForm.tsx can actually produce
+      // resolves to a real icon.
+      return (activity && bossActivityIcon(activity)) || COMBAT_ICON_URL;
     case 'slayerTasksCompleted':
       return skillIconUrl('Slayer');
     case 'lootValueGained':
