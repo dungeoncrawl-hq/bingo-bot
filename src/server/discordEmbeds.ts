@@ -1,9 +1,10 @@
 // Builds the rich embeds challengeProgress.ts posts to Discord on a tile/
 // line/board completion -- kept separate from that file so it stays
 // focused on completion *detection*, not presentation.
+import { describeTileCondition } from '../lib/tileConditions.js';
 import type { LeaderboardEntry } from '../lib/leaderboard.js';
 import type { Tile } from '../db/types.js';
-import type { DiscordEmbed } from './discordRelay.js';
+import type { DiscordEmbed, DiscordEmbedField } from './discordRelay.js';
 
 // Single production domain -- this app has no staging/preview Discord
 // relay concerns (webhook URLs are configured per-challenge, all pointing
@@ -20,11 +21,24 @@ export interface ParticipantLite {
   rsn: string;
 }
 
+export interface ChallengeLite {
+  name: string;
+  slug: string;
+}
+
 // The cache-busting query param exists so Discord doesn't reuse a stale
 // cached fetch of the same participant's image URL across multiple,
 // different-state notifications.
 export function boardImageUrl(participantId: string): string {
   return `${SITE_ORIGIN}/api/board-image/${participantId}?t=${Date.now()}`;
+}
+
+// A trailing field on every completion embed linking back to the board --
+// the empty-ish name (a zero-width space, since Discord requires a
+// non-empty field name) keeps it reading as a plain link rather than a
+// labeled field.
+function boardLinkField(challenge: ChallengeLite): DiscordEmbedField {
+  return { name: '​', value: `[${challenge.name}](${SITE_ORIGIN}/c/${challenge.slug})` };
 }
 
 // Same "#1 🥇 rsn — N pts" convention as BoardPage.tsx's own leaderboard
@@ -45,37 +59,45 @@ export function buildTileCompletionEmbed(params: {
   isFirst: boolean;
   leaderboard: LeaderboardEntry[];
   participants: ParticipantLite[];
+  challenge: ChallengeLite;
 }): DiscordEmbed {
-  const { participant, tile, isFirst, leaderboard, participants } = params;
+  const { participant, tile, isFirst, leaderboard, participants, challenge } = params;
   return {
     title: isFirst
       ? `⭐ ${participant.rsn} was first to complete ${tile.label}!`
       : `🎉 ${participant.rsn} completed ${tile.label}!`,
+    // Two tiles can share the same label (e.g. two "Big Drop" tiles with
+    // different thresholds) -- spell out exactly what this one required
+    // so the post is unambiguous on its own.
+    description: describeTileCondition(tile.condition),
     color: isFirst ? FIRST_COLOR : TILE_COLOR,
     thumbnail: tile.icon ? { url: tile.icon } : undefined,
     image: { url: boardImageUrl(participant.id) },
     fields: [
       { name: 'Points', value: `+${tile.points}`, inline: true },
       { name: 'Leaderboard', value: formatLeaderboardField(leaderboard, participants) || 'No one has scored yet.' },
+      boardLinkField(challenge),
     ],
   };
 }
 
-export function buildLineCompletionEmbed(params: { participant: ParticipantLite }): DiscordEmbed {
-  const { participant } = params;
+export function buildLineCompletionEmbed(params: { participant: ParticipantLite; challenge: ChallengeLite }): DiscordEmbed {
+  const { participant, challenge } = params;
   return {
     title: `🎉 ${participant.rsn} completed a line!`,
     color: LINE_COLOR,
     image: { url: boardImageUrl(participant.id) },
+    fields: [boardLinkField(challenge)],
   };
 }
 
-export function buildBoardCompletionEmbed(params: { participant: ParticipantLite }): DiscordEmbed {
-  const { participant } = params;
+export function buildBoardCompletionEmbed(params: { participant: ParticipantLite; challenge: ChallengeLite }): DiscordEmbed {
+  const { participant, challenge } = params;
   return {
     title: `🏆 ${participant.rsn} completed the whole board!`,
     description: 'Every tile conquered.',
     color: BOARD_COLOR,
     image: { url: boardImageUrl(participant.id) },
+    fields: [boardLinkField(challenge)],
   };
 }

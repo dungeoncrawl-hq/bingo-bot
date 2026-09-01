@@ -130,6 +130,7 @@ export async function checkChallengeProgress(participantId: string): Promise<voi
   const leaderboard = computeLeaderboard(tiles, challengeCompletions, allParticipants.map((p) => p.id));
   const firstCompleters = computeFirstCompleters(challengeCompletions);
   const participantLite: ParticipantLite = { id: participant.id, rsn: participant.rsn };
+  const challengeLite = { name: challenge.name, slug: challenge.slug };
 
   for (const tileId of insertedTileIds) {
     const tile = tiles.find((t) => t.id === tileId);
@@ -140,14 +141,21 @@ export async function checkChallengeProgress(participantId: string): Promise<voi
       isFirst: firstCompleters[tileId] === participant.id,
       leaderboard,
       participants: allParticipants,
+      challenge: challengeLite,
     });
     await relayToDiscord(challenge.discord_webhook_url, embed);
   }
   for (let i = 0; i < insertedLineIndices.length; i++) {
-    await relayToDiscord(challenge.discord_webhook_url, buildLineCompletionEmbed({ participant: participantLite }));
+    await relayToDiscord(
+      challenge.discord_webhook_url,
+      buildLineCompletionEmbed({ participant: participantLite, challenge: challengeLite }),
+    );
   }
   if (boardInserted) {
-    await relayToDiscord(challenge.discord_webhook_url, buildBoardCompletionEmbed({ participant: participantLite }));
+    await relayToDiscord(
+      challenge.discord_webhook_url,
+      buildBoardCompletionEmbed({ participant: participantLite, challenge: challengeLite }),
+    );
   }
 }
 
