@@ -40,6 +40,21 @@ export async function insertRow(table: string, row: Record<string, unknown>): Pr
   if (!res.ok) throw new Error(`Insert ${table} failed: ${res.status} ${await res.text()}`);
 }
 
+// PATCHes every row matching a raw PostgREST filter query (e.g.
+// "status=eq.active&end_date=lt.2026-09-02") with the same patch, in one
+// request -- PostgREST runs it as a single SQL UPDATE, not a loop of
+// per-row requests. Returns how many rows matched/changed.
+export async function updateRows(table: string, query: string, patch: Record<string, unknown>): Promise<number> {
+  const res = await rest(`${table}?${query}`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=representation' },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error(`Update ${table} failed: ${res.status} ${await res.text()}`);
+  const updated = (await res.json()) as unknown[];
+  return updated.length;
+}
+
 export async function callRpc(name: string, args: Record<string, unknown>): Promise<void> {
   const res = await rest(`rpc/${name}`, { method: 'POST', body: JSON.stringify(args) });
   if (!res.ok) throw new Error(`RPC ${name} failed: ${res.status} ${await res.text()}`);

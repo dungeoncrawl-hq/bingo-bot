@@ -17,6 +17,7 @@ import { computeHiscoresRecap, type SnapshotRow } from '../lib/hiscoresRecap';
 import { computeLeaderboard } from '../lib/leaderboard';
 import { computeFirstCompleters } from '../lib/firstCompletions';
 import { progressColor } from '../lib/progressColor';
+import { displayStatus } from '../lib/dungeonStatus';
 import TileDetailModal from '../components/TileDetailModal';
 
 const GRID_SIZE = 5;
@@ -266,6 +267,9 @@ export default function BoardPage() {
     firstCompleters,
   );
 
+  const today = new Date().toISOString().slice(0, 10);
+  const isPast = displayStatus(challenge, today) === 'past';
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-12">
       <h1 className="text-2xl font-semibold">{challenge.name}</h1>
@@ -273,6 +277,12 @@ export default function BoardPage() {
         {challenge.start_date} – {challenge.end_date}
       </p>
       {viewedParticipant && <p className="mt-2 text-sm font-medium text-stone-400">{viewedParticipant.rsn}'s board</p>}
+      {isPast && myParticipant && (
+        <p className="mt-3 rounded-lg border border-stone-700 bg-stone-900/60 px-3 py-2 text-sm text-stone-400">
+          This challenge has ended -- no more progress counts toward it. You can turn off its webhook URL in Dink's
+          settings now.
+        </p>
+      )}
 
       <div className="mt-8 flex flex-col gap-8 lg:flex-row lg:items-start">
         {/* Board -- above the leaderboard on mobile, left column (~80%) on desktop. */}
