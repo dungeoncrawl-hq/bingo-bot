@@ -124,17 +124,41 @@ forward, not just tiles, once those exist to copy.
    store) before this is buildable.
 
 ## Infrastructure research
-10. Research: build a first-party RuneLite plugin instead of depending
-    on the third-party Dink plugin for every game event this site
-    relies on (`KILL_COUNT`/`LOOT`/`SLAYER`/`DEATH`/`COLLECTION`/`PET`/
-    `LOGOUT`/`LEVEL`, plus the screenshot payloads `dinkPayload.ts`
-    already has to defensively discard). A real undertaking, not a
-    small research spike -- effectively re-implementing everything Dink
-    already does, plus RuneLite Plugin Hub review/approval, ongoing
-    maintenance against game updates, and asking every host's players
-    to install a second/different plugin instead of one many already
-    have. Purely exploratory for now: what would actually motivate this
-    (more event types than Dink exposes? faster/more precise event
-    timing, relevant to #4's logout-gated reset? less dependency risk on
-    a third party's plugin staying maintained?), not a committed
-    direction.
+10. **Build a first-party RuneLite plugin instead of depending on Dink.**
+    Full research written up in
+    [`docs/runelite-plugin-research.md`](docs/runelite-plugin-research.md)
+    -- summary here, details there.
+
+    **Actual motivation**: Dink's "Send screenshot" option is a
+    per-notifier client setting we have no way to disable from our
+    side -- today's mitigation is a setup-guide step asking hosts to
+    turn it off for 7 of 10 notifiers, which only works if every player
+    follows it. A plugin we author simply never constructs a screenshot
+    payload; there's no setting to misconfigure. Nothing short of
+    owning the plugin closes this gap.
+
+    **Not a blocker, found during research**: RuneLite Plugin Hub
+    review is security/Jagex-rules compliance only (not a functionality
+    review), and as of April 2026 an automated bot can auto-approve
+    routine updates to already-accepted plugins -- so ongoing review
+    friction is lower than it looked at first glance. An opt-in,
+    player-configured webhook (our exact shape) already has clear
+    precedent (Dink itself, `clan-chat-webhook`, others).
+
+    **Turned out to be a non-issue**: the original secondary
+    motivation -- whether Dink's events are precise enough for #4's
+    logout-gated baseline reset -- mostly evaporates on inspection.
+    Dink's `LOGIN` notifier already sends a full, exact per-skill XP
+    snapshot straight from the client, no hiscores round-trip needed;
+    we just don't consume it today. Worth its own small backlog item
+    independent of any plugin decision.
+
+    **Real, unchanged cost**: owning a plugin means owning game-update
+    maintenance forever (currently absorbed by Dink's maintainer for
+    free), plus asking every host's clan to install a second/different
+    plugin. Dink itself is healthy (67k+ installs, updated ~monthly) --
+    not an abandonment risk right now.
+
+    **If prioritized**: scope as a minimal notifier-only plugin
+    covering just the 7 event types we actually consume today, with
+    screenshots never wired up -- not a Dink feature-parity rewrite.
