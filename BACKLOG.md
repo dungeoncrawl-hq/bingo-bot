@@ -330,15 +330,54 @@ forward, not just tiles, once those exist to copy.
 
 ## Site administration
 12. A site-administrator role, for the site owner only -- not a
-    per-challenge host permission, a whole-site one. Surfaces at an
-    unpublished/unlinked URL (not in any nav), showing aggregate stats
-    across every challenge: total challenges/participants, screenshot-
-    flood offenders site-wide (today's ⚠ badge is scoped to one host's
-    own `EditChallengePage.tsx`, with no cross-challenge view at all),
-    growth over time, error rates. Directly unblocks #8's "who to
-    email" question -- decide that with real aggregate data in front
-    of you, not a guess. Scoping still to do: how "site admin" is
-    granted (a flag on one specific `profiles` row, presumably, rather
-    than a new role system), what the unpublished URL actually needs
-    to show first, and whether it's read-only or also lets the admin
-    act (e.g. force-close an abusive challenge) from day one.
+    per-challenge host permission, a whole-site one. Directly unblocks
+    #8's "who to email" question -- decide that with real aggregate
+    data in front of you, not a guess. Read-only for v1: no force-close/
+    ban actions yet, just visibility. That's a natural later addition
+    once the view itself proves useful, not a day-one requirement.
+
+    **Access.** A boolean `is_site_admin` column on `profiles` (today
+    just `id`, `display_name`, `created_at`), checked the same way
+    `host_id` ownership is already checked in `EditChallengePage.tsx` --
+    no new role system, no per-permission granularity, since there's
+    exactly one admin. Route itself still requires normal auth on top
+    of the flag; the URL being unlinked is a bonus, not the actual
+    security boundary.
+
+    **Route.** `/dungeon-master-admin`, not in any nav. Structured as a
+    dashboard-first hierarchy per the site's existing page conventions,
+    not one giant page:
+    - `/dungeon-master-admin` (index) -- top-line KPIs (challenges by
+      status: draft/active/ended, total participants, total tiles
+      completed site-wide) plus a "flags" section surfacing the worst
+      screenshot/traffic offenders inline, each linking out to the full
+      view.
+    - `/dungeon-master-admin/participants` -- full sortable table:
+      screenshot count/bytes, webhook call count, last-active
+      timestamp, which challenge, RSN. The cross-challenge view today's
+      ⚠ badge doesn't have (`EditChallengePage.tsx`'s badge is scoped to
+      one host's own Players list).
+    - `/dungeon-master-admin/growth` -- challenges/participants over
+      time, simple daily/weekly counts from existing `created_at`
+      columns. No chart library needed for v1, a plain table is enough
+      to start.
+
+    **New instrumentation: general webhook volume, not just
+    screenshots.** `screenshot_count`/`screenshot_bytes`
+    (`increment_screenshot_stats`) are today's only per-request volume
+    signal, and only fire when a screenshot rides along -- an ordinary
+    burst of ordinary events (or an ended challenge whose Dink client
+    never got pointed elsewhere) is invisible. Add
+    `challenge_participants.webhook_call_count` (integer, default 0)
+    and `last_webhook_at` (timestamptz, nullable), bumped once per
+    incoming call in `processDinkWebhook` (`dinkWebhook.ts`) regardless
+    of event type -- one small upsert alongside the existing
+    `recordScreenshot` call, cheap on the hot path. This is what makes
+    "who's generating excessive traffic" and "is a dead challenge still
+    getting hit" answerable at all, not just "who left screenshots on."
+
+    **Error rates: explicitly cut from v1.** No existing logging
+    pipeline (Vercel's own function logs aren't queried anywhere in the
+    app today) to build this on top of -- not worth a new log table
+    just to seed one dashboard stat. Revisit if/when there's an actual
+    error-tracking pipeline in place for other reasons.
