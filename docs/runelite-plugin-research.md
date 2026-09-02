@@ -47,11 +47,44 @@ we currently just log the volume of (`recordScreenshot`).
 
 ## Dink as a dependency: is it actually at risk?
 
-No, not currently. As of this research: **actively maintained, 67,709
-active installs, last updated about a month ago.** The "what if the
-maintainer stops" risk that partly motivated this research doesn't
-hold up against the current evidence -- Dink isn't an abandoned or
-niche plugin.
+No, not currently. As of this research: **actively maintained, 70,696
+active installs, last commit 2026-08-31.** The "what if the maintainer
+stops" risk that partly motivated this research doesn't hold up
+against the current evidence -- Dink isn't an abandoned or niche
+plugin.
+
+Pulled the full commit and release history from GitHub's API to check
+the cadence directly rather than go on a single "last updated" date.
+Over the trailing 12 months (2025-09-02 to 2026-09-02):
+
+**121 commits**, roughly monthly, one real quiet stretch:
+
+| Month | Commits |
+|---|---|
+| 2025-09 | 1 |
+| 2025-10 | 12 |
+| 2025-11 | 15 |
+| 2025-12 | 11 |
+| 2026-01 | 3 |
+| 2026-02 | 13 |
+| 2026-03 | 19 |
+| 2026-04 | 11 |
+| 2026-05 | 2 |
+| 2026-06 | 1 |
+| 2026-07 | 18 |
+| 2026-08 | 15 |
+
+**21 tagged releases**, averaging almost 2/month: `v1.11.14`
+(2025-10-15) through five point releases in Oct-Nov, `v1.11.21`/`22`
+in Dec, `v1.11.23`/`24` in Jan-Feb, `v1.12.0`/`1` in Feb, `v1.13.0`
+through `.2` in Mar, `v1.14.0` in Apr (the one real gap -- nothing
+released May-Jun), then `v1.14.1` through `.4` across Jul, and
+`v1.15.0` on 2026-08-30, two days before this research.
+
+The only lull was May-June 2026 (3 commits combined, zero releases) --
+everything else is a steady stream of point releases. Reads as a
+healthy, actively-maintained project, not one coasting toward
+abandonment.
 
 ## The XP-precision gap, revisited
 
