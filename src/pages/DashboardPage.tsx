@@ -1,22 +1,84 @@
 import { useEffect, useState } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { getSupabase } from '../db/supabaseClient';
 import type { Challenge } from '../db/types';
+import { displayStatus, formatDateRange, countdownText, type DisplayStatus } from '../lib/dungeonStatus';
 
-type ChallengeRow = Pick<Challenge, 'id' | 'name' | 'slug' | 'status' | 'start_date' | 'end_date' | 'created_at'> & {
+type ChallengeRow = Pick<Challenge, 'id' | 'name' | 'slug' | 'status' | 'start_date' | 'end_date' | 'created_at' | 'dink_secret'> & {
   isHost: boolean;
 };
+
+const STATUS_STYLE: Record<DisplayStatus, { label: string; className: string }> = {
+  draft: { label: 'Draft', className: 'border-stone-700 bg-stone-900 text-stone-400' },
+  upcoming: { label: 'Upcoming', className: 'border-blue-800 bg-blue-950/40 text-blue-400' },
+  active: { label: 'Active', className: 'border-green-800 bg-green-950/40 text-green-400' },
+  past: { label: 'Past', className: 'border-stone-800 bg-stone-950 text-stone-600' },
+};
+
+function DungeonRow({
+  c,
+  today,
+  copied,
+  onCopyWebhook,
+}: {
+  c: ChallengeRow;
+  today: string;
+  copied: boolean;
+  onCopyWebhook: (c: ChallengeRow) => void;
+}) {
+  const navigate = useNavigate();
+  const status = displayStatus(c, today);
+  const style = STATUS_STYLE[status];
+  const countdown = countdownText(c, status, today);
+  return (
+    <div
+      role="link"
+      tabIndex={0}
+      onClick={() => navigate(`/c/${c.slug}`)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') navigate(`/c/${c.slug}`);
+      }}
+      className="cursor-pointer rounded-lg border border-stone-800 px-4 py-3 hover:border-stone-700"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="font-medium">{c.name}</span>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="text-xs uppercase text-stone-500">{c.isHost ? 'Host' : 'Participant'}</span>
+          <span className={`rounded-full border px-2 py-0.5 text-xs ${style.className}`}>{style.label}</span>
+        </div>
+      </div>
+      <p className="text-sm text-stone-500">{formatDateRange(c.start_date, c.end_date)}</p>
+      {countdown && <p className="mt-0.5 text-xs text-stone-600">{countdown}</p>}
+      <div className="mt-2 flex items-center gap-3 text-sm" onClick={(e) => e.stopPropagation()}>
+        {c.isHost && (
+          <Link
+            to={`/c/${c.slug}/edit`}
+            title="Edit"
+            className="text-stone-400 hover:text-stone-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            ✎ Edit
+          </Link>
+        )}
+        <button type="button" onClick={() => onCopyWebhook(c)} className="text-stone-400 underline decoration-dotted hover:text-stone-200">
+          {copied ? 'Copied!' : '📋 Copy webhook'}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export default function DashboardPage() {
   const { session, loading } = useAuth();
   const [challenges, setChallenges] = useState<ChallengeRow[] | null>(null);
   const [loadError, setLoadError] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!session) return;
     const supabase = getSupabase();
-    const fields = 'id, name, slug, status, start_date, end_date, created_at';
+    const fields = 'id, name, slug, status, start_date, end_date, created_at, dink_secret';
     Promise.all([
       supabase.from('challenges').select(fields).eq('host_id', session.user.id),
       supabase.from('challenge_participants').select(`challenges(${fields})`).eq('profile_id', session.user.id),
@@ -47,43 +109,44 @@ export default function DashboardPage() {
   if (loading) return null;
   if (!session) return <Navigate to="/login" replace />;
 
+  const today = new Date().toISOString().slice(0, 10);
+  const current = (challenges ?? []).filter((c) => displayStatus(c, today) !== 'past');
+  const past = (challenges ?? []).filter((c) => displayStatus(c, today) === 'past');
+
+  async function copyWebhook(c: ChallengeRow) {
+    const url = `${window.location.origin}/api/dink/${c.dink_secret}`;
+    await navigator.clipboard.writeText(url);
+    setCopiedId(c.id);
+    setTimeout(() => setCopiedId((id) => (id === c.id ? null : id)), 2000);
+  }
+
   return (
     <div className="mx-auto max-w-3xl py-12">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">My challenges</h1>
+        <h1 className="text-2xl font-semibold">My Dungeons</h1>
         <Link to="/new" className="rounded-lg bg-amber-500 hover:bg-amber-400 transition-colors px-4 py-2 text-sm font-semibold text-stone-950">
           New challenge
         </Link>
       </div>
       <div className="mt-6 space-y-3">
-        {loadError && <p className="text-sm text-red-400">Couldn't load your challenges. Try refreshing the page.</p>}
+        {loadError && <p className="text-sm text-red-400">Couldn't load your dungeons. Try refreshing the page.</p>}
         {!loadError && challenges === null && <p className="text-stone-500">Loading…</p>}
-        {!loadError && challenges?.length === 0 && <p className="text-stone-500">No challenges yet.</p>}
-        {challenges?.map((c) => (
-          <div key={c.id} className="rounded-lg border border-stone-800 px-4 py-3">
-            <div className="flex items-center justify-between">
-              <span className="font-medium">{c.name}</span>
-              <div className="flex items-center gap-2">
-                <span className="text-xs uppercase text-stone-500">{c.isHost ? 'Host' : 'Participant'}</span>
-                <span className="text-xs uppercase text-stone-500">{c.status}</span>
-              </div>
-            </div>
-            <p className="text-sm text-stone-500">
-              {c.start_date} – {c.end_date}
-            </p>
-            <div className="mt-2 flex gap-4 text-sm">
-              {c.isHost && (
-                <Link to={`/c/${c.slug}/edit`} className="underline hover:text-stone-300">
-                  Edit
-                </Link>
-              )}
-              <Link to={`/c/${c.slug}`} className="underline hover:text-stone-300">
-                View public page
-              </Link>
-            </div>
-          </div>
+        {!loadError && challenges?.length === 0 && <p className="text-stone-500">No dungeons yet.</p>}
+        {current.map((c) => (
+          <DungeonRow key={c.id} c={c} today={today} copied={copiedId === c.id} onCopyWebhook={copyWebhook} />
         ))}
       </div>
+
+      {past.length > 0 && (
+        <div className="mt-10">
+          <h2 className="text-sm font-semibold uppercase text-stone-500">Past</h2>
+          <div className="mt-3 space-y-3">
+            {past.map((c) => (
+              <DungeonRow key={c.id} c={c} today={today} copied={copiedId === c.id} onCopyWebhook={copyWebhook} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

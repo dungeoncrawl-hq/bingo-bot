@@ -15,7 +15,7 @@ export default function Header() {
         {session ? (
           <>
             <Link to="/dashboard" className="text-stone-300 hover:text-stone-100">
-              My challenges
+              My Dungeons
             </Link>
             <span className="text-stone-500">{profile?.display_name ?? session.user.email}</span>
             <button
