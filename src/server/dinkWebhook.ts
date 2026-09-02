@@ -216,6 +216,20 @@ async function handlePet(challengeId: string, participantId: string, extra: Reco
 // it off doesn't spam the logs into uselessness.
 const SCREENSHOT_LOG_INTERVAL = 10;
 
+// Site-admin traffic visibility (BACKLOG.md #12) -- unlike
+// recordScreenshot below, this fires for every call regardless of event
+// type or whether a screenshot rode along, since it's meant to answer
+// "who's generating volume" and "is a dead challenge still getting hit,"
+// not just the screenshot-specific case.
+async function recordWebhookCall(participantId: string): Promise<void> {
+  try {
+    await callRpc('increment_webhook_stats', { p_participant_id: participantId });
+  } catch (err) {
+    // Never let tracking a call break the actual event it rode in on.
+    console.error('Failed to record webhook call stats:', err);
+  }
+}
+
 async function recordScreenshot(participantId: string, rsn: string, image: DinkImage): Promise<void> {
   try {
     const newCount = await callRpcReturning<number>('increment_screenshot_stats', {
@@ -246,6 +260,7 @@ export async function processDinkWebhook(challenge: Challenge, payload: unknown,
       return { status: 400, body: { error: `Unrecognized playerName "${playerName}"` } };
     }
 
+    await recordWebhookCall(participant.id);
     if (image) await recordScreenshot(participant.id, participant.rsn, image);
 
     let result: WebhookResult;

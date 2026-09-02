@@ -7,14 +7,9 @@ import type { Challenge, Tile, TileLayout } from '../db/types';
 import TileEditorForm from '../components/TileEditorForm';
 import { formatTileGoal, type TileCondition } from '../lib/tileConditions';
 import { displayStatus } from '../lib/dungeonStatus';
+import { formatBytes } from '../lib/format';
 
 const GRID_SIZE = 5;
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 interface ParticipantRow {
   id: string;

@@ -375,3 +375,40 @@ create table if not exists participant_snapshots (
 alter table participant_snapshots enable row level security;
 drop policy if exists "public read" on participant_snapshots;
 create policy "public read" on participant_snapshots for select using (true);
+
+-- Site administration (BACKLOG.md #12): a single flag marking the site
+-- owner, checked the same way challenges.host_id ownership already is --
+-- no new role system, since there's exactly one admin. profiles' existing
+-- "own row write" policy is `for all`, which would otherwise let any
+-- authenticated user grant themselves this flag via a plain client-side
+-- .update() -- explicitly revoke column-level UPDATE from `authenticated`
+-- so only the service role (or the Supabase SQL editor) can ever flip it.
+alter table profiles add column if not exists is_site_admin boolean not null default false;
+revoke update (is_site_admin) on profiles from authenticated;
+
+-- General webhook-call volume, not just screenshots -- answers "who's
+-- generating traffic" and "is an ended challenge still getting hit,"
+-- which screenshot_count/screenshot_bytes alone can't (those only fire
+-- when a screenshot rides along). Bumped by increment_webhook_stats
+-- below, called once per incoming Dink call regardless of event type.
+alter table challenge_participants add column if not exists webhook_call_count integer not null default 0;
+alter table challenge_participants add column if not exists last_webhook_at timestamptz;
+
+create or replace function increment_webhook_stats(
+  p_participant_id uuid
+) returns void
+language sql
+as $$
+  update challenge_participants
+  set webhook_call_count = webhook_call_count + 1,
+      last_webhook_at = now()
+  where id = p_participant_id;
+$$;
+
+-- Same self-tamper concern as is_site_admin above: challenge_participants'
+-- "self or host writes" policy is also `for all`, so without this a
+-- participant could zero out their own screenshot/webhook counters via a
+-- plain client update and erase the exact signal these columns exist to
+-- surface. screenshot_count/screenshot_bytes had this same gap already --
+-- closed here alongside the new columns rather than left inconsistent.
+revoke update (screenshot_count, screenshot_bytes, webhook_call_count, last_webhook_at) on challenge_participants from authenticated;

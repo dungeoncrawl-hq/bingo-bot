@@ -24,3 +24,9 @@ export function formatCompactNumber(n: number, options: { roundDown?: boolean } 
   const trimmed = rounded.toFixed(2).replace(/\.?0+$/, '');
   return `${sign}${trimmed}M`;
 }
+
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}

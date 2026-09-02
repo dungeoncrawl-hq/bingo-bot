@@ -9,6 +9,9 @@ import EditChallengePage from './pages/EditChallengePage';
 import BoardPage from './pages/BoardPage';
 import SetupGuidePage from './pages/SetupGuidePage';
 import AboutPage from './pages/AboutPage';
+import AdminDashboardPage from './pages/AdminDashboardPage';
+import AdminParticipantsPage from './pages/AdminParticipantsPage';
+import AdminGrowthPage from './pages/AdminGrowthPage';
 
 function App() {
   return (
@@ -25,6 +28,9 @@ function App() {
             <Route path="/c/:slug/edit" element={<EditChallengePage />} />
             <Route path="/c/:slug/setup" element={<SetupGuidePage />} />
             <Route path="/about" element={<AboutPage />} />
+            <Route path="/dungeon-master-admin" element={<AdminDashboardPage />} />
+            <Route path="/dungeon-master-admin/participants" element={<AdminParticipantsPage />} />
+            <Route path="/dungeon-master-admin/growth" element={<AdminGrowthPage />} />
           </Routes>
         </div>
         <Footer />

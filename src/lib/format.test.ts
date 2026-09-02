@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatCompactNumber } from './format';
+import { formatBytes, formatCompactNumber } from './format';
 
 describe('formatCompactNumber', () => {
   it('matches the exact examples given for this feature', () => {
@@ -36,5 +36,22 @@ describe('formatCompactNumber', () => {
   it('round-down still shows the exact value when it divides evenly (no false precision)', () => {
     expect(formatCompactNumber(12_000, { roundDown: true })).toBe('12K');
     expect(formatCompactNumber(1_500_000, { roundDown: true })).toBe('1.5M');
+  });
+});
+
+describe('formatBytes', () => {
+  it('stays in bytes below 1 KB', () => {
+    expect(formatBytes(0)).toBe('0 B');
+    expect(formatBytes(512)).toBe('512 B');
+  });
+
+  it('switches to KB with one decimal below 1 MB', () => {
+    expect(formatBytes(1024)).toBe('1.0 KB');
+    expect(formatBytes(50_000)).toBe('48.8 KB');
+  });
+
+  it('switches to MB with one decimal at 1 MB and above', () => {
+    expect(formatBytes(1024 * 1024)).toBe('1.0 MB');
+    expect(formatBytes(5 * 1024 * 1024)).toBe('5.0 MB');
   });
 });
