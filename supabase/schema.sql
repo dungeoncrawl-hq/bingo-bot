@@ -459,3 +459,13 @@ create policy "host writes own challenge's teams" on teams for all
 -- covers the host writing this column (the same path that already
 -- handles RSN edits) -- no new RLS needed.
 alter table challenge_participants add column if not exists team_id uuid references teams(id) on delete set null;
+
+-- Account/profile page (BACKLOG.md #9): a default RSN so a player
+-- doesn't have to retype their username every time they join a new
+-- challenge -- BoardPage.tsx's join form pre-fills from it. profiles'
+-- existing "own row write" policy already covers a user writing their
+-- own default_rsn, same as display_name -- no new RLS needed. Email
+-- itself has no column here -- it lives on Supabase's own auth.users,
+-- changed via supabase.auth.updateUser() from the client, not a table
+-- write.
+alter table profiles add column if not exists default_rsn text;

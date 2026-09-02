@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
@@ -48,7 +48,7 @@ interface CompletionRow {
 
 export default function BoardPage() {
   const { slug } = useParams<{ slug: string }>();
-  const { session } = useAuth();
+  const { session, profile } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [challenge, setChallenge] = useState<Challenge | null | 'not-found'>(null);
   const [tiles, setTiles] = useState<Tile[]>([]);
@@ -103,6 +103,18 @@ export default function BoardPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Pre-fills the join form from the signed-in viewer's saved default RSN
+  // (set on /account) exactly once, the first time it becomes available --
+  // guarded by a ref rather than "only when rsn is empty" so clearing the
+  // field afterward to type something else doesn't keep snapping it back.
+  const prefilledDefaultRsn = useRef(false);
+  useEffect(() => {
+    if (!prefilledDefaultRsn.current && profile?.default_rsn) {
+      setRsn(profile.default_rsn);
+      prefilledDefaultRsn.current = true;
+    }
+  }, [profile]);
 
   // Live progress (not just done/not-done) for every participant, not only
   // the one currently being viewed -- computed client-side by re-running the

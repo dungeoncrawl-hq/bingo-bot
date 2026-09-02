@@ -5,6 +5,10 @@ export interface Profile {
   display_name: string;
   created_at: string;
   is_site_admin: boolean;
+  // A player's usual OSRS username, pre-filled into a challenge's join
+  // form so they don't have to retype it every time. null until they set
+  // one on the account page.
+  default_rsn: string | null;
 }
 
 export interface Challenge {

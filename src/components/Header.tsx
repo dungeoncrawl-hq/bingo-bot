@@ -17,7 +17,9 @@ export default function Header() {
             <Link to="/dashboard" className="text-stone-300 hover:text-stone-100">
               My Dungeons
             </Link>
-            <span className="text-stone-500">{profile?.display_name ?? session.user.email}</span>
+            <Link to="/account" className="text-stone-500 hover:text-stone-300">
+              {profile?.display_name ?? session.user.email}
+            </Link>
             <button
               onClick={async () => {
                 await getSupabase().auth.signOut();
