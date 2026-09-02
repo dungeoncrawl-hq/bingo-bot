@@ -205,6 +205,12 @@ describe('checkTile', () => {
     const s = stats({ lowestSkillCandidates: ['Farming', 'Runecraft'], chosenLowestSkill: 'Mining' });
     expect(checkTile({ type: 'xpGainedLowestSkill', threshold: 1000 }, s).needsSkillChoice).toBe(true);
   });
+
+  it('does not ask for a skill choice when there are zero candidates -- no baseline snapshot, not a tie', () => {
+    const s = stats({ lowestSkillCandidates: [] });
+    expect(checkTile({ type: 'xpGainedLowestSkill', threshold: 1000 }, s)).toEqual({ done: false, progress: 0, goal: 1000 });
+    expect(checkTile({ type: 'levelsGainedLowestSkill', threshold: 1 }, s)).toEqual({ done: false, progress: 0, goal: 1 });
+  });
 });
 
 describe('formatTileProgress', () => {

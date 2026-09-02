@@ -221,15 +221,29 @@ export function checkTile(cond: TileCondition, stats: ParticipantStats): TileSta
       return { done: stats.petsObtained >= cond.threshold, progress: stats.petsObtained, goal: cond.threshold };
     case 'xpGainedLowestSkill': {
       const skill = resolveLowestSkill(stats);
-      if (!skill) return { done: false, progress: 0, goal: cond.threshold, needsSkillChoice: true, skillChoices: stats.lowestSkillCandidates };
-      const progress = stats.skillXpGained[skill] ?? 0;
-      return { done: progress >= cond.threshold, progress, goal: cond.threshold, resolvedSkill: skill };
+      if (skill) {
+        const progress = stats.skillXpGained[skill] ?? 0;
+        return { done: progress >= cond.threshold, progress, goal: cond.threshold, resolvedSkill: skill };
+      }
+      // A real tie (>1 candidate) needs the player to pick one -- no
+      // baseline snapshot at all yet (0 candidates) is just "no progress
+      // to show," same as any other condition with no data, not a choice
+      // to prompt for.
+      if (stats.lowestSkillCandidates.length > 1) {
+        return { done: false, progress: 0, goal: cond.threshold, needsSkillChoice: true, skillChoices: stats.lowestSkillCandidates };
+      }
+      return { done: false, progress: 0, goal: cond.threshold };
     }
     case 'levelsGainedLowestSkill': {
       const skill = resolveLowestSkill(stats);
-      if (!skill) return { done: false, progress: 0, goal: cond.threshold, needsSkillChoice: true, skillChoices: stats.lowestSkillCandidates };
-      const progress = stats.skillLevelsGained[skill] ?? 0;
-      return { done: progress >= cond.threshold, progress, goal: cond.threshold, resolvedSkill: skill };
+      if (skill) {
+        const progress = stats.skillLevelsGained[skill] ?? 0;
+        return { done: progress >= cond.threshold, progress, goal: cond.threshold, resolvedSkill: skill };
+      }
+      if (stats.lowestSkillCandidates.length > 1) {
+        return { done: false, progress: 0, goal: cond.threshold, needsSkillChoice: true, skillChoices: stats.lowestSkillCandidates };
+      }
+      return { done: false, progress: 0, goal: cond.threshold };
     }
     case 'freeSpace':
       return { done: true, progress: 1, goal: 1 };
