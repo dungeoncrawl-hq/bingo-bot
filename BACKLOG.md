@@ -111,3 +111,30 @@ forward, not just tiles, once those exist to copy.
    screenshot/webhook-volume visibility) was the planned prerequisite for
    deciding this with real aggregate data instead of a guess -- now that
    it exists, this question is actually ready to resolve.
+
+## Site administration
+9. A page under `/dungeon-master-admin` to manage Discord messaging
+   templates -- today's completion-embed titles/flavor text are hardcoded
+   across `discordEmbeds.ts` and `discordBanter.ts`'s banter pools, so
+   changing any wording needs a code change and a deploy. Scope TBD: at
+   minimum, editing the banter pools' text without touching code;
+   possibly also the fixed (non-randomized) title templates. Needs
+   design work on where the editable content actually lives (a new DB
+   table the banter pools read from at request time, vs. some other
+   store) before this is buildable.
+
+## Infrastructure research
+10. Research: build a first-party RuneLite plugin instead of depending
+    on the third-party Dink plugin for every game event this site
+    relies on (`KILL_COUNT`/`LOOT`/`SLAYER`/`DEATH`/`COLLECTION`/`PET`/
+    `LOGOUT`/`LEVEL`, plus the screenshot payloads `dinkPayload.ts`
+    already has to defensively discard). A real undertaking, not a
+    small research spike -- effectively re-implementing everything Dink
+    already does, plus RuneLite Plugin Hub review/approval, ongoing
+    maintenance against game updates, and asking every host's players
+    to install a second/different plugin instead of one many already
+    have. Purely exploratory for now: what would actually motivate this
+    (more event types than Dink exposes? faster/more precise event
+    timing, relevant to #4's logout-gated reset? less dependency risk on
+    a third party's plugin staying maintained?), not a committed
+    direction.
