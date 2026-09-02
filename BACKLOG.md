@@ -168,20 +168,110 @@ ordered -- just captured so they don't get lost.
 ## Game modes
 13. New game modes, applying to any dungeon type (orthogonal to #8's
     board *type* -- Standard/Adventure -- this is about how a board is
-    *scored*, not shaped). Today every participant has their own
-    private board/completions (`challenge_participants` ->
-    `tile_completions`, one row per participant). Two new modes:
-    - Cooperative: one shared board for the whole challenge -- every
-      participant's stat gains count toward the *same* tile's
-      condition, not just their own board.
-    - Team-based: participants are grouped into teams, each team has
-      its own shared board (same pooled-contribution idea as
-      Cooperative, but scoped per team instead of the whole challenge).
-      Needs a teams concept that doesn't exist yet (a team grouping for
-      `challenge_participants`, presumably a new table).
-    Both need real design work before implementation: how `checkTile`
-    (currently one participant's stats in, one status out) aggregates
-    multiple participants' contributions, how the leaderboard/points
-    model changes when scoring isn't 1 board = 1 person, and how
-    Discord completion embeds attribute credit when a tile completes
-    from pooled progress rather than one person's own gain.
+    *scored*, not shaped). New `challenges.game_mode` column (`'solo' |
+    'coop' | 'team'`, default `'solo'` = today's behavior). Scope for
+    both modes below is Standard boards only -- combining either with
+    Adventure (e.g. a team sharing one branching path) is real design
+    work of its own, deliberately deferred, not forgotten.
+
+    ### Cooperative
+    One shared board for the whole challenge -- every participant's
+    stat gains count toward the same tile's condition, not just their
+    own board.
+
+    **Storage stays as-is; only who gets credited changes.**
+    `tile_completions` keeps its current per-participant shape. When a
+    Coop tile's *pooled* condition is met, insert an identical
+    completion row for every participant at once. Consequence: since
+    everyone's completions are always identical, viewing any
+    participant's board (`?p=`) already shows the shared state
+    correctly -- `BoardPage.tsx`'s grid itself needs no changes, only
+    the leaderboard and notifications do.
+
+    **Pooling sums outputs, doesn't merge inputs.** Each participant's
+    `ParticipantStats` still computes exactly as today (unchanged --
+    including their own `hiscoresRecap`, since hiscores snapshots are
+    per-account and can't be merged). New afterward: a
+    `poolStats(statsList: ParticipantStats[]): ParticipantStats`
+    reducer -- sums the numeric fields (`xpGained`, `bossKcGained`,
+    `lootValueGained`...), merges the per-key maps
+    (`kcGainedByActivity`, `skillXpGained`, `itemCounts`...),
+    concatenates `dropValues`. Feed the pooled result into `checkTile`,
+    completely unchanged. So Coop is additive -- a new pooling function
+    plus new completion fanout -- not a rewrite of the scoring engine.
+
+    **Leaderboard is replaced with shared progress.** Everyone's points/
+    completions are always identical in Coop, so ranking participants
+    against each other is meaningless -- show one shared readout
+    ("14/25 tiles") instead of a ranked list.
+
+    **First-completer bonus is forced off**, same mechanism as
+    `freeSpace` forcing points to 0 -- there's no "first" when credit
+    lands on everyone simultaneously from one pooled event.
+
+    **Discord embeds go anonymous to the group**: "The group completed
+    the Y task!" instead of naming a participant -- same swapped-subject
+    pattern as Adventure's boss-tile flavor text, reusing
+    `buildTileCompletionEmbed` as-is.
+
+    **`xpGainedLowestSkill`/`levelsGainedLowestSkill` are excluded**
+    from the condition picker on Coop tiles -- "the group's lowest
+    skill" isn't a coherent pooled concept the way "the group's total
+    XP" is.
+
+    **Every Dink event gets pricier to process.**
+    `checkChallengeProgress` today re-aggregates one participant's raw
+    data per event. Coop means any participant's event has to re-fetch
+    and re-pool *everyone's* raw data, since anyone's contribution
+    could tip a pooled threshold -- more expensive per event, but the
+    same bulk-fetch-by-`.in(participant_id, ...)` pattern already
+    exists (`BoardPage.tsx`'s `tileStatusesByParticipant` effect), just
+    needs to run server-side per event instead of client-side on page
+    load.
+
+    ### Team-based
+    Same pooled-contribution idea as Cooperative, scoped per team
+    instead of the whole challenge -- reuses Coop's `poolStats` and
+    completion-fanout logic unchanged, just partitioned by `team_id`
+    first (pool each team's roster separately; fan out a completion to
+    that team's members only, not the whole challenge).
+
+    **New teams concept.** A `teams` table (`id, challenge_id, name` --
+    scoped to one challenge, not reusable across challenges, matching
+    every other host-owned entity here) plus
+    `challenge_participants.team_id` (nullable).
+
+    **Host manages all team details and assignments** -- no
+    participant self-selection. Host creates/names teams (a small
+    management UI in `EditChallengePage.tsx`, similar to how Players/
+    Discord webhook are managed today) and assigns each participant to
+    one from the Players list (a team-select dropdown per row, same
+    interaction shape as the existing RSN edit). A participant can join
+    the challenge before being assigned (sits with `team_id: null`
+    until the host sorts them) -- their raw Dink events still record
+    normally in the meantime and count retroactively from challenge
+    start the moment they're assigned, no special "since assignment"
+    windowing needed.
+
+    **Joining is blocked until the host has created at least one
+    team** -- same reasoning as there being nothing to sync without
+    tiles. The join form itself doesn't change otherwise (still just
+    RSN) since assignment is host-driven, not chosen at join time.
+
+    **Unlike Coop, the leaderboard comes back** -- teams compete
+    against each other, so ranking is meaningful again even though
+    ranking *within* a team isn't. Since every teammate's completions
+    are identical (fanout), run the existing `computeLeaderboard` on
+    one representative participant per team and label rows by team name
+    instead of RSN -- no new leaderboard algorithm needed.
+
+    **First-completer bonus comes back too, scoped to "first team."**
+    `computeFirstCompleters` already finds the earliest completion
+    timestamp per tile; since a team's members complete simultaneously,
+    whichever participant "wins" that lookup identifies the winning
+    team. Just needs mapping that participant back to their `team_id`
+    for display -- "Team Red was first!"
+
+    **Discord embeds name the team**: "Team Red completed the Y task!"
+    -- same swapped-subject pattern as Coop's "the group," naming the
+    team instead.
