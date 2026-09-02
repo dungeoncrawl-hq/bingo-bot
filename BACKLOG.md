@@ -93,9 +93,85 @@ board's "random tile" needs different pools per lane/boss, and copying
 a challenge needs to carry `board_type`/`board_size`/`game_mode`
 forward, not just tiles, once those exist to copy.
 
-5. "Randomize a board" starting point -- host picks random tiles/
-   conditions to seed a new board, then edits/tweaks from there instead
-   of starting from a fully blank grid.
+5. **"Randomize a board" starting point.** Resolved design below --
+   scoped to Standard/solo only (grid5x5, `game_mode: 'solo'`), same
+   deferral as the section intro above. Fills empty slots with random
+   tiles a host then tweaks/replaces by hand, rather than starting from
+   a fully blank 25-cell grid.
+
+   **Where it lives**: a "Randomize" button/flow on `EditChallengePage.tsx`,
+   next to the grid -- tile authoring only ever happens there today
+   (`NewChallengePage.tsx` just creates the `challenges` row and
+   redirects), so there's no separate new-vs-existing path to design
+   around.
+
+   **Fill scope**: only ever fills currently-empty slots, never
+   overwrites a tile the host (or a prior randomize pass) already
+   placed. Rerolling one tile is just delete-then-randomize, no
+   "was this auto-generated" tracking needed. Consistent with
+   `EditChallengePage.tsx`'s existing rule that adding a new tile to an
+   empty slot stays allowed even after a challenge has started (only
+   editing an *existing* tile's condition locks) -- randomize needs no
+   special-casing there.
+
+   **Condition pool**: every `TileCondition` type except `freeSpace`/
+   `tbd` (placeholders, not real content -- never auto-generated). No
+   center-square free space special case; all 25 slots are treated
+   identically. To avoid the pool accidentally skewing (7 of ~15 raw
+   types are clue-tier variants alone), a fill picks the *condition
+   group* uniformly first (`TileEditorForm.tsx`'s own `CONDITION_GROUPS`
+   -- Experience & Levels / Combat / Loot / Clue Scrolls / Collection
+   Log / Pets), then a type within that group, then a skill/boss/
+   item-set param -- matches how a host naturally spreads a board
+   across categories rather than flat-uniform sampling. No exact
+   duplicate (type + skill/boss/item-set) combo on one board. Label and
+   icon need no new logic at all -- both are already pure functions of
+   a tile's condition (`defaultLabelFor`/`defaultIconFor`).
+
+   **The hard part: thresholds.** Nothing in the codebase has ever
+   picked a tile's goal number automatically -- `TileEditorForm.tsx`
+   just defaults every threshold to `1` and leaves it to the host.
+   Resolved as a difficulty picker (Easy/Medium/Hard) at randomize-time,
+   each condition type carrying one Medium baseline that Easy/Hard
+   scale from. `maxDeaths` is inverted (a *lower* threshold is harder)
+   and handled as its own case, not a footnote every future reader has
+   to remember. `itemSetCollected`'s threshold is a *fraction* of the
+   chosen preset's item count (50% Medium/25% Easy/100% Hard), not a
+   flat number, so it stays sane as more item-set presets get added to
+   `itemSets.ts` beyond today's single "Barrows uniques" entry.
+
+   `kcGained` is the one type needing real per-item curation: 79 bosses
+   in `bossActivities.ts` span wildly different farm rates (50 Giant
+   Mole KC is trivial, 50 TzKal-Zuk KC is absurd), so it can't share one
+   flat number. Bucketed into 3 farm-rate tiers instead -- fast (GWD,
+   Zulrah/Vorkath, Barrows, Mole, etc., Medium 30 KC), slow (Nex, ToB,
+   ToA, Whisperer, Leviathan, etc., Medium 10 KC), very slow (Inferno/
+   Colosseum/Hard-Mode-raid tier -- Jad, Zuk, Sol Heredit, Phosani's,
+   ToB HM, ToA Expert, Medium 2 KC).
+
+   Points scale with difficulty (Easy 1pt / Medium 2pt / Hard 3pt);
+   `first_completer_bonus` always starts at 0, same as a host manually
+   adding a tile today -- added by hand afterward if wanted.
+
+   **Site-admin-editable, not hardcoded.** These numbers will need
+   real-world tuning after launch, so they don't live as TS constants --
+   new table `randomize_settings`: a single settings row (`settings
+   jsonb`, `updated_at`), holding the whole config as one document --
+   per-type Easy/Medium/Hard thresholds, the boss-name-to-tier map plus
+   per-tier KC thresholds, and the points-by-difficulty table. RLS:
+   public read (the randomize flow needs to read it client-side, same
+   as every other tile-authoring write today -- no new server
+   endpoint), write restricted to `is_site_admin`. New page
+   `/dungeon-master-admin/randomize-settings`, gated by the same
+   `is_site_admin` check `AdminLayout.tsx` already enforces for every
+   other admin route -- no new auth pattern. `bossActivities.ts`'s
+   catalog itself (names/icons) stays a hardcoded TS list, since that's
+   static OSRS content that essentially never changes; only the *tier
+   assignment* becomes admin-editable, referencing that static list by
+   name. The migration seeds the table with the exact values worked out
+   above, so admins start tuning from a populated, sensible baseline,
+   not an empty one.
+
 6. A library of pre-made boards hosts can pick from to start a challenge.
 7. "Copy a past challenge" -- start a new challenge that mirrors an
    existing/past board's tiles instead of rebuilding it from scratch.
