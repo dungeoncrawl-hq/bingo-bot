@@ -6,6 +6,7 @@ import { getSupabase } from '../db/supabaseClient';
 import type { Challenge, Tile, TileLayout } from '../db/types';
 import TileEditorForm from '../components/TileEditorForm';
 import { formatTileGoal, type TileCondition } from '../lib/tileConditions';
+import { displayStatus } from '../lib/dungeonStatus';
 
 const GRID_SIZE = 5;
 
@@ -98,6 +99,16 @@ export default function EditChallengePage() {
   async function togglePublish() {
     if (!challenge || challenge === 'not-found') return;
     const nextStatus = challenge.status === 'draft' ? 'active' : 'draft';
+    if (
+      nextStatus === 'active' &&
+      !window.confirm(
+        "Publish this challenge? It'll become visible and joinable. Once its start date arrives, tile " +
+          "conditions can no longer be changed -- only points, the first-completer bonus, and adding new tiles " +
+          'stay editable after that.',
+      )
+    ) {
+      return;
+    }
     await getSupabase().from('challenges').update({ status: nextStatus }).eq('id', challenge.id);
     await load();
   }
@@ -136,6 +147,14 @@ export default function EditChallengePage() {
 
   const editingTile = editingCell ? tileAt(editingCell.row, editingCell.col) : null;
   const inviteMessage = `Come join my Dungeon Crawl challenge, "${challenge.name}"! Jump in here: ${window.location.origin}/c/${challenge.slug}`;
+  // "Started" = published and its start_date has arrived -- matches
+  // displayStatus's 'active'/'past', not just "not a draft," so a
+  // published-but-not-yet-started challenge stays fully editable (nothing
+  // can have counted toward any tile yet, so there's no progress to
+  // protect).
+  const today = new Date().toISOString().slice(0, 10);
+  const status = displayStatus(challenge, today);
+  const tilesLocked = status === 'active' || status === 'past';
 
   return (
     <div className="mx-auto max-w-2xl py-12">
@@ -262,6 +281,7 @@ export default function EditChallengePage() {
       {editingCell && (
         <TileEditorForm
           existing={editingTile}
+          locked={tilesLocked}
           onSave={handleSave}
           onDelete={editingTile ? handleDelete : undefined}
           onClose={() => setEditingCell(null)}

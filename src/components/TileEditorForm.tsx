@@ -172,6 +172,13 @@ function formFromCondition(cond: TileCondition) {
 
 interface Props {
   existing: Tile | null;
+  // Once a challenge has started, its tiles' conditions can no longer be
+  // changed -- editing one out from under in-progress players could
+  // invalidate progress they've already made toward it (see BACKLOG.md).
+  // Only meaningful alongside `existing`: a brand-new tile in a still-empty
+  // slot has no progress to protect, so adding one stays allowed even on a
+  // started challenge.
+  locked: boolean;
   onSave: (fields: {
     label: string;
     icon: string | null;
@@ -184,9 +191,10 @@ interface Props {
 }
 
 const inputClass =
-  'mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none';
+  'mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50';
 
-export default function TileEditorForm({ existing, onSave, onDelete, onClose }: Props) {
+export default function TileEditorForm({ existing, locked, onSave, onDelete, onClose }: Props) {
+  const fieldsLocked = locked && existing != null;
   const [type, setType] = useState<TileCondition['type']>(existing?.condition.type ?? 'xpGained');
   const initial = existing
     ? formFromCondition(existing.condition)
@@ -262,11 +270,18 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
         className="w-full max-w-md space-y-4 rounded-xl border border-stone-800 bg-stone-950 p-6"
       >
         <h2 className="text-lg font-semibold">{existing ? 'Edit tile' : 'Add tile'}</h2>
+        {fieldsLocked && (
+          <p className="rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-xs text-stone-400">
+            This challenge has started, so this tile's condition can't be changed anymore -- it might invalidate
+            progress players already made toward it. Points and the first-completer bonus can still be adjusted.
+          </p>
+        )}
         <div>
           <label className="block text-sm text-stone-400">Condition</label>
           <select
             value={type}
             onChange={(e) => setType(e.target.value as TileCondition['type'])}
+            disabled={fieldsLocked}
             className={inputClass}
           >
             {CONDITION_GROUPS.map((g) => (
@@ -291,7 +306,7 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
         {type === 'kcGained' && (
           <div>
             <label className="block text-sm text-stone-400">Boss / minigame / raid</label>
-            <select value={activity} onChange={(e) => setActivity(e.target.value)} className={inputClass}>
+            <select value={activity} onChange={(e) => setActivity(e.target.value)} disabled={fieldsLocked} className={inputClass}>
               {BOSS_ACTIVITIES.map((b) => (
                 <option key={b.name} value={b.name}>
                   {b.name}
@@ -303,7 +318,7 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
         {(type === 'skillLevelGained' || type === 'skillXpGained') && (
           <div>
             <label className="block text-sm text-stone-400">Skill</label>
-            <select value={skill} onChange={(e) => setSkill(e.target.value)} className={inputClass}>
+            <select value={skill} onChange={(e) => setSkill(e.target.value)} disabled={fieldsLocked} className={inputClass}>
               {SKILL_ORDER.map((s) => (
                 <option key={s} value={s}>
                   {s}
@@ -320,6 +335,7 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
               min={MIN_DROP_VALUE_THRESHOLD}
               value={dropValueThreshold}
               onChange={(e) => setDropValueThreshold(Number(e.target.value))}
+              disabled={fieldsLocked}
               className={inputClass}
             />
           </div>
@@ -327,7 +343,12 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
         {(type === 'itemCount' || type === 'itemSetCollected') && (
           <div>
             <label className="block text-sm text-stone-400">Item catalog</label>
-            <select value={selectedItemSet} onChange={(e) => selectItemSet(e.target.value)} className={inputClass}>
+            <select
+              value={selectedItemSet}
+              onChange={(e) => selectItemSet(e.target.value)}
+              disabled={fieldsLocked}
+              className={inputClass}
+            >
               {PRESET_ITEM_SETS.map((p) => (
                 <option key={p.name} value={p.name}>
                   {p.name} ({p.items.length})
@@ -349,6 +370,7 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
               min={0}
               value={threshold}
               onChange={(e) => setThreshold(Number(e.target.value))}
+              disabled={fieldsLocked}
               className={inputClass}
             />
             {type !== 'maxDeaths' && type !== 'bigDropsCount' && (
@@ -405,7 +427,7 @@ export default function TileEditorForm({ existing, onSave, onDelete, onClose }: 
               Cancel
             </button>
           </div>
-          {existing && onDelete && (
+          {existing && onDelete && !locked && (
             <button
               type="button"
               onClick={async () => {

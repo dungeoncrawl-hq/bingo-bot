@@ -7,7 +7,7 @@ ordered -- just captured so they don't get lost.
 1. Hidden/mystery tiles -- a tile that doesn't reveal itself until some
    trigger happens. Needs further design (what triggers it? does it show
    as a blank slot, a "?" placeholder, or not appear in the grid at
-   all?). Worth a look at #8's Adventure gating for a ready-made answer
+   all?). Worth a look at #7's Adventure gating for a ready-made answer
    to "what triggers it": a tile past a participant's current frontier
    is already conceptually hidden (not yet relevant) purely by
    sequence -- may not need its own new trigger concept at all, at
@@ -24,7 +24,7 @@ ordered -- just captured so they don't get lost.
    typing the full number by hand.
 
 ## Host tooling
-Items 4-6 were scoped before board types (#8) or game modes (#12)
+Items 4-6 were scoped before board types (#7) or game modes (#11)
 existed -- none of them currently say what "randomize"/"library"/"copy"
 means for anything but a Standard/solo board. Simplest path: scope all
 three to Standard + solo only for v1, same deferral already applied to
@@ -39,22 +39,9 @@ forward, not just tiles, once those exist to copy.
 5. A library of pre-made boards hosts can pick from to start a challenge.
 6. "Copy a past challenge" -- start a new challenge that mirrors an
    existing/past board's tiles instead of rebuilding it from scratch.
-7. Once a challenge has started, its tile conditions should no longer be
-   editable from `EditChallengePage.tsx` -- changing a condition
-   mid-challenge could invalidate progress players have already made
-   toward it. (Tile *metadata* like label/icon presumably still fine to
-   edit; scope of what counts as "started" and what stays editable
-   needs a closer look.) The underlying mechanism doesn't need to
-   special-case board type or game mode -- editing a tile's condition
-   out from under in-progress players is the same risk whether it's a
-   Standard tile, an Adventure boss, or a pooled Coop/Team tile, so one
-   guard covers all of them. **Stale deferral, worth revisiting:** this
-   was deferred as "every current challenge is still a test board, so
-   there's no live risk yet" -- that stopped being true this session
-   (Bingo Time!, September Challenge 1 both have real participants).
 
 ## Dungeon types
-8. Support more than one board shape/ruleset ("dungeon type"), building
+7. Support more than one board shape/ruleset ("dungeon type"), building
    on `challenges.board_type` (already unconstrained text specifically
    so a new type needs no migration -- see its own comment in
    `supabase/schema.sql`). The current 5x5 grid becomes the "Standard"
@@ -143,33 +130,35 @@ forward, not just tiles, once those exist to copy.
    states, mobile layout, whole-column click targets. Probably faster
    to hash out while building than in the abstract.
 
-   Combining Adventure with a Coop/Team game mode (#12) is explicitly
+   Combining Adventure with a Coop/Team game mode (#11) is explicitly
    deferred, not forgotten -- see that item.
 
 ## Anti-abuse
-9. Whether/who to email when a participant's screenshot count crosses a
+8. Whether/who to email when a participant's screenshot count crosses a
    concerning threshold -- detection itself already shipped
    (`increment_screenshot_stats`, the ⚠ badge on `EditChallengePage.tsx`'s
    Players list, a console.warn every 10th screenshot), this is just the
    open notification-behavior question: email the player, the host, both,
-   or leave it at the badge/log the host already has?
+   or leave it at the badge/log the host already has? A site-admin
+   dashboard (see #12) is the planned first step here -- aggregate,
+   site-wide visibility before deciding who gets a targeted email.
 
 ## Notifications
-10. Full rewrite of Discord notification content (`discordEmbeds.ts`) --
-    keep the current embed structure (title/description/fields/image),
-    but replace the fixed flavor-text lines (e.g. "Aren't they just
-    showing off at this point?") with randomized joke/banter variants
-    pulled from a pool, to lean into the site's ".lol" branding. Design
-    this aware of the other things already reshaping the same flavor
-    text: #8's boss-vs-regular-tile swap and #12's solo/"the group"/
-    "Team X" subject swap. Those are two independent dimensions
-    (is-boss x who's-the-subject) that'll both exist by the time this
-    gets built -- the banter pool should be parameterized by both from
-    the start, not bolted on after, or this needs redoing once
-    Adventure/Coop/Team ship.
+9. Full rewrite of Discord notification content (`discordEmbeds.ts`) --
+   keep the current embed structure (title/description/fields/image),
+   but replace the fixed flavor-text lines (e.g. "Aren't they just
+   showing off at this point?") with randomized joke/banter variants
+   pulled from a pool, to lean into the site's ".lol" branding. Design
+   this aware of the other things already reshaping the same flavor
+   text: #7's boss-vs-regular-tile swap and #11's solo/"the group"/
+   "Team X" subject swap. Those are two independent dimensions
+   (is-boss x who's-the-subject) that'll both exist by the time this
+   gets built -- the banter pool should be parameterized by both from
+   the start, not bolted on after, or this needs redoing once
+   Adventure/Coop/Team ship.
 
 ## Account / profile
-11. A user profile page letting someone change their email and set a
+10. A user profile page letting someone change their email and set a
     default RSN, so they don't have to retype it every time they join a
     new challenge. Two different underlying mechanisms: email lives on
     Supabase's own `auth.users` (changing it goes through
@@ -180,7 +169,7 @@ forward, not just tiles, once those exist to copy.
     join form pre-filling from it instead of starting blank.
 
 ## Game modes
-12. New game modes, applying to any dungeon type (orthogonal to #8's
+11. New game modes, applying to any dungeon type (orthogonal to #7's
     board *type* -- Standard/Adventure -- this is about how a board is
     *scored*, not shaped). New `challenges.game_mode` column (`'solo' |
     'coop' | 'team'`, default `'solo'` = today's behavior). Scope for
@@ -315,10 +304,11 @@ forward, not just tiles, once those exist to copy.
     stays past" -- moving teams doesn't retroactively strip credit from
     the old team or grant it to the new one, only future pooled
     progress follows the move -- but this is a real fairness question
-    for the host to weigh in on, not just an implementation detail. Ties
-    to #7: the same "don't let host actions invalidate progress players
-    already made" concern that item raises for tile conditions applies
-    here too.
+    for the host to weigh in on, not just an implementation detail.
+    Same "don't let host actions invalidate progress players already
+    made" reasoning behind the tile-condition lock (`EditChallengePage.tsx`
+    already refuses to edit a started challenge's tile conditions)
+    applies here too.
 
     **Unlike Coop, the leaderboard comes back** -- teams compete
     against each other, so ranking is meaningful again even though
@@ -337,3 +327,18 @@ forward, not just tiles, once those exist to copy.
     **Discord embeds name the team**: "Team Red completed the Y task!"
     -- same swapped-subject pattern as Coop's "the group," naming the
     team instead.
+
+## Site administration
+12. A site-administrator role, for the site owner only -- not a
+    per-challenge host permission, a whole-site one. Surfaces at an
+    unpublished/unlinked URL (not in any nav), showing aggregate stats
+    across every challenge: total challenges/participants, screenshot-
+    flood offenders site-wide (today's ⚠ badge is scoped to one host's
+    own `EditChallengePage.tsx`, with no cross-challenge view at all),
+    growth over time, error rates. Directly unblocks #8's "who to
+    email" question -- decide that with real aggregate data in front
+    of you, not a guess. Scoping still to do: how "site admin" is
+    granted (a flag on one specific `profiles` row, presumably, rather
+    than a new role system), what the unpublished URL actually needs
+    to show first, and whether it's read-only or also lets the admin
+    act (e.g. force-close an abusive challenge) from day one.
