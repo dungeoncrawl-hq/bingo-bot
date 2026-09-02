@@ -7,7 +7,11 @@ ordered -- just captured so they don't get lost.
 1. Hidden/mystery tiles -- a tile that doesn't reveal itself until some
    trigger happens. Needs further design (what triggers it? does it show
    as a blank slot, a "?" placeholder, or not appear in the grid at
-   all?).
+   all?). Worth a look at #8's Adventure gating for a ready-made answer
+   to "what triggers it": a tile past a participant's current frontier
+   is already conceptually hidden (not yet relevant) purely by
+   sequence -- may not need its own new trigger concept at all, at
+   least for Adventure boards.
 2. Improve the logic around the "Obtain a set of items" (`itemCount`)
    condition -- currently just a flat comma-separated item-name list
    matched case-insensitively against loot; needs a closer look (exact
@@ -20,6 +24,15 @@ ordered -- just captured so they don't get lost.
    typing the full number by hand.
 
 ## Host tooling
+Items 4-6 were scoped before board types (#8) or game modes (#13)
+existed -- none of them currently say what "randomize"/"library"/"copy"
+means for anything but a Standard/solo board. Simplest path: scope all
+three to Standard + solo only for v1, same deferral already applied to
+Coop/Team and to combining Adventure with a game mode -- an Adventure
+board's "random tile" needs different pools per lane/boss, and copying
+a challenge needs to carry `board_type`/`board_size`/`game_mode`
+forward, not just tiles, once those exist to copy.
+
 4. "Randomize a board" starting point -- host picks random tiles/
    conditions to seed a new board, then edits/tweaks from there instead
    of starting from a fully blank grid.
@@ -31,8 +44,14 @@ ordered -- just captured so they don't get lost.
    mid-challenge could invalidate progress players have already made
    toward it. (Tile *metadata* like label/icon presumably still fine to
    edit; scope of what counts as "started" and what stays editable
-   needs a closer look.) Deferred for now -- every current challenge is
-   still a test board, so there's no live risk yet.
+   needs a closer look.) The underlying mechanism doesn't need to
+   special-case board type or game mode -- editing a tile's condition
+   out from under in-progress players is the same risk whether it's a
+   Standard tile, an Adventure boss, or a pooled Coop/Team tile, so one
+   guard covers all of them. **Stale deferral, worth revisiting:** this
+   was deferred as "every current challenge is still a test board, so
+   there's no live risk yet" -- that stopped being true this session
+   (Bingo Time!, September Challenge 1 both have real participants).
 
 ## Dungeon types
 8. Support more than one board shape/ruleset ("dungeon type"), building
@@ -124,6 +143,9 @@ ordered -- just captured so they don't get lost.
    states, mobile layout, whole-column click targets. Probably faster
    to hash out while building than in the abstract.
 
+   Combining Adventure with a Coop/Team game mode (#13) is explicitly
+   deferred, not forgotten -- see that item.
+
 ## Anti-abuse
 9. Whether/who to email when a participant's screenshot count crosses a
    concerning threshold -- detection itself already shipped
@@ -152,7 +174,14 @@ ordered -- just captured so they don't get lost.
     keep the current embed structure (title/description/fields/image),
     but replace the fixed flavor-text lines (e.g. "Aren't they just
     showing off at this point?") with randomized joke/banter variants
-    pulled from a pool, to lean into the site's ".lol" branding.
+    pulled from a pool, to lean into the site's ".lol" branding. Design
+    this aware of the other things already reshaping the same flavor
+    text: #8's boss-vs-regular-tile swap and #13's solo/"the group"/
+    "Team X" subject swap. Those are two independent dimensions
+    (is-boss x who's-the-subject) that'll both exist by the time this
+    gets built -- the banter pool should be parameterized by both from
+    the start, not bolted on after, or this needs redoing once
+    Adventure/Coop/Team ship.
 
 ## Account / profile
 12. A user profile page letting someone change their email and set a
@@ -174,6 +203,14 @@ ordered -- just captured so they don't get lost.
     Adventure (e.g. a team sharing one branching path) is real design
     work of its own, deliberately deferred, not forgotten.
 
+    **Open question that applies to both modes: threshold balance.** A
+    condition tuned for one solo player (e.g. "1M GP looted") becomes
+    trivial once pooled across 5 Coop/Team participants -- their
+    combined throughput is ~5x what the host was picturing when they
+    set the number. Worth a host-facing hint in `TileEditorForm.tsx`
+    when `game_mode` isn't `'solo'` ("this will be pooled across N
+    participants"), rather than leaving it a silent trap.
+
     ### Cooperative
     One shared board for the whole challenge -- every participant's
     stat gains count toward the same tile's condition, not just their
@@ -186,7 +223,12 @@ ordered -- just captured so they don't get lost.
     everyone's completions are always identical, viewing any
     participant's board (`?p=`) already shows the shared state
     correctly -- `BoardPage.tsx`'s grid itself needs no changes, only
-    the leaderboard and notifications do.
+    the leaderboard and notifications do. Bingo line/board completions
+    (`tile_completions.kind = 'line'/'board'`) need no changes either
+    -- `challengeProgress.ts`'s `gridLines` check already just asks "does
+    this participant have every tile in the line done," which stays
+    correct since pooled completions are identical across everyone in
+    the pool.
 
     **Pooling sums outputs, doesn't merge inputs.** Each participant's
     `ParticipantStats` still computes exactly as today (unchanged --
@@ -211,8 +253,19 @@ ordered -- just captured so they don't get lost.
 
     **Discord embeds go anonymous to the group**: "The group completed
     the Y task!" instead of naming a participant -- same swapped-subject
-    pattern as Adventure's boss-tile flavor text, reusing
-    `buildTileCompletionEmbed` as-is.
+    pattern as Adventure's boss-tile flavor text. Applies to all three
+    embed builders, not just `buildTileCompletionEmbed` --
+    `buildLineCompletionEmbed`/`buildBoardCompletionEmbed` also name an
+    individual today ("X completed a line!"/"X completed the whole
+    board!") and need the identical swap.
+
+    **`TileDetailModal` doesn't fit as-is, same root problem as the
+    leaderboard.** Ranking participants who all have identical pooled
+    progress is just noise -- N rows all showing the same number. For
+    Coop this probably wants to become one aggregate view (pooled
+    progress toward the tile) rather than a per-participant list, and
+    could optionally show a contribution breakdown (how much did each
+    person add to the pool) as a nice-to-have rather than the default.
 
     **`xpGainedLowestSkill`/`levelsGainedLowestSkill` are excluded**
     from the condition picker on Coop tiles -- "the group's lowest
@@ -234,7 +287,19 @@ ordered -- just captured so they don't get lost.
     instead of the whole challenge -- reuses Coop's `poolStats` and
     completion-fanout logic unchanged, just partitioned by `team_id`
     first (pool each team's roster separately; fan out a completion to
-    that team's members only, not the whole challenge).
+    that team's members only, not the whole challenge). Also inherits
+    Coop's line/board-completion reassurance, and needs the same
+    `buildLineCompletionEmbed`/`buildBoardCompletionEmbed` subject-swap
+    and `TileDetailModal` rework -- for Team, the modal's natural shape
+    is one row per *team* instead of per participant (same "collapse to
+    one representative" trick the leaderboard uses), rather than Coop's
+    single aggregate view.
+
+    **Scales better than Coop per event.** Coop has to re-fetch and
+    re-pool literally every participant's raw data on every single
+    Dink event, regardless of challenge size. Team only needs that
+    event's *sender's team* -- a smaller, bounded fetch no matter how
+    many teams or how large the overall roster gets.
 
     **New teams concept.** A `teams` table (`id, challenge_id, name` --
     scoped to one challenge, not reusable across challenges, matching
@@ -257,6 +322,18 @@ ordered -- just captured so they don't get lost.
     team** -- same reasoning as there being nothing to sync without
     tiles. The join form itself doesn't change otherwise (still just
     RSN) since assignment is host-driven, not chosen at join time.
+
+    **Open question: mid-challenge reassignment.** Since host-driven
+    assignment (above) implies the host can also *re*assign someone
+    later, what happens to completions their old team already earned
+    with their contribution baked in? Simplest rule is probably "past
+    stays past" -- moving teams doesn't retroactively strip credit from
+    the old team or grant it to the new one, only future pooled
+    progress follows the move -- but this is a real fairness question
+    for the host to weigh in on, not just an implementation detail. Ties
+    to #7: the same "don't let host actions invalidate progress players
+    already made" concern that item raises for tile conditions applies
+    here too.
 
     **Unlike Coop, the leaderboard comes back** -- teams compete
     against each other, so ranking is meaningful again even though
