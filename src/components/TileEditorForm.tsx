@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import type { TileCondition } from '../lib/tileConditions';
 import type { Tile } from '../db/types';
-import { SKILL_ORDER, defaultIconFor } from '../lib/tileIcons';
+import { SKILL_ORDER, defaultIconFor, defaultLabelFor } from '../lib/tileIcons';
 import { PRESET_ITEM_SETS, type PresetItemSet } from '../lib/itemSets';
 import { BOSS_ACTIVITIES } from '../lib/bossActivities';
 
@@ -100,67 +100,6 @@ function conditionFromForm(
       return { type: 'tbd' };
     default:
       return { type, threshold };
-  }
-}
-
-// The label is entirely derived from the condition (and its skill/activity/
-// item-catalog parameters) -- not a separate host-editable field. Every
-// branch is deterministic, so there's nothing for a host to choose here
-// either.
-function defaultLabelFor(type: TileCondition['type'], skill: string, activity: string, setName: string): string {
-  switch (type) {
-    case 'xpGained':
-      return 'Total XP';
-    case 'skillXpGained':
-      return `${skill} XP`;
-    case 'skillLevelGained':
-      return `${skill} Level`;
-    case 'bossKcGained':
-      return 'Boss KC';
-    case 'kcGained':
-      // activity is always a catalog value once the dropdown below has
-      // ever been touched -- the empty-string fallback only matters for a
-      // tile saved before this catalog existed.
-      return activity ? `${activity} KC` : 'Boss KC';
-    case 'slayerTasksCompleted':
-      return 'Slayer Tasks';
-    case 'maxDeaths':
-      return 'Max Deaths';
-    case 'lootValueGained':
-      return 'Loot Value';
-    case 'singleDropValue':
-      return 'Big Drop';
-    case 'bigDropsCount':
-      return 'Big Drops';
-    case 'itemCount':
-    case 'itemSetCollected':
-      return setName;
-    case 'cluesCompleted':
-      return 'Clue Scrolls';
-    case 'beginnerCluesCompleted':
-      return 'Beginner Clues';
-    case 'easyCluesCompleted':
-      return 'Easy Clues';
-    case 'mediumCluesCompleted':
-      return 'Medium Clues';
-    case 'hardCluesCompleted':
-      return 'Hard Clues';
-    case 'eliteCluesCompleted':
-      return 'Elite Clues';
-    case 'masterCluesCompleted':
-      return 'Master Clues';
-    case 'collectionLogGained':
-      return 'Collection Log';
-    case 'petsObtained':
-      return 'Pet';
-    case 'xpGainedLowestSkill':
-      return 'Lowest Skill XP';
-    case 'levelsGainedLowestSkill':
-      return 'Lowest Skill Levels';
-    case 'freeSpace':
-      return 'Free Space';
-    case 'tbd':
-      return 'TBD';
   }
 }
 

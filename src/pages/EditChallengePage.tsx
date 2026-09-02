@@ -3,12 +3,14 @@ import type { FormEvent } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { getSupabase } from '../db/supabaseClient';
-import type { Challenge, Team, Tile, TileLayout } from '../db/types';
+import type { Challenge, GridLayout, Team, Tile, TileLayout } from '../db/types';
 import TileEditorForm from '../components/TileEditorForm';
 import { formatTileGoal, type TileCondition } from '../lib/tileConditions';
 import { displayStatus } from '../lib/dungeonStatus';
 import { formatBytes } from '../lib/format';
 import { ADVENTURE_SMALL_COLUMNS, isBossColumn } from '../lib/adventureProgress';
+import { randomizeBoard } from '../lib/randomizeBoard';
+import { DEFAULT_RANDOMIZE_SETTINGS, type Difficulty, type RandomizeSettings } from '../lib/randomizeSettings';
 
 const GRID_SIZE = 5;
 
@@ -35,6 +37,8 @@ export default function EditChallengePage() {
   const [savingWebhook, setSavingWebhook] = useState(false);
   const [webhookSaved, setWebhookSaved] = useState(false);
   const [inviteCopied, setInviteCopied] = useState(false);
+  const [difficulty, setDifficulty] = useState<Difficulty>('medium');
+  const [randomizing, setRandomizing] = useState(false);
 
   const load = useCallback(async () => {
     if (!slug) return;
@@ -104,6 +108,53 @@ export default function EditChallengePage() {
     await getSupabase().from('tiles').delete().eq('id', existing.id);
     setEditingCell(null);
     await load();
+  }
+
+  // BACKLOG.md #5 -- fills only empty grid slots with real, sensibly-sized
+  // tiles; never touches one the host (or a prior randomize pass) already
+  // placed. Scoped to Standard/solo boards only -- Adventure/Coop/Team need
+  // different pooling logic no one's designed yet (see the Host tooling
+  // section intro in BACKLOG.md).
+  async function handleRandomize() {
+    if (!challenge || challenge === 'not-found') return;
+    const emptySlots: GridLayout[] = [];
+    for (let i = 0; i < GRID_SIZE * GRID_SIZE; i++) {
+      const row = Math.floor(i / GRID_SIZE);
+      const col = i % GRID_SIZE;
+      if (!tileAt({ row, col })) emptySlots.push({ row, col });
+    }
+    if (emptySlots.length === 0) return;
+
+    setRandomizing(true);
+    try {
+      const supabase = getSupabase();
+      // Falls back to the same defaults the migration seeds this table
+      // with, if the row is somehow missing (migration not run yet, or a
+      // fetch error) -- degrades gracefully rather than hard-failing.
+      const { data: settingsRow } = await supabase.from('randomize_settings').select('settings').eq('id', true).maybeSingle();
+      const settings = (settingsRow?.settings as RandomizeSettings | undefined) ?? DEFAULT_RANDOMIZE_SETTINGS;
+
+      const generated = randomizeBoard({
+        emptySlots,
+        existingConditions: tiles.map((t) => t.condition),
+        difficulty,
+        settings,
+      });
+      await supabase.from('tiles').insert(
+        generated.map((g) => ({
+          challenge_id: challenge.id,
+          layout: g.layout,
+          label: g.label,
+          icon: g.icon,
+          condition: g.condition,
+          points: g.points,
+          first_completer_bonus: g.first_completer_bonus,
+        })),
+      );
+      await load();
+    } finally {
+      setRandomizing(false);
+    }
   }
 
   async function togglePublish() {
@@ -220,6 +271,44 @@ export default function EditChallengePage() {
           </button>
         </div>
       </div>
+
+      {challenge.board_type === 'grid5x5' && challenge.game_mode === 'solo' && (
+        <div className="mt-8 max-w-md">
+          <h2 className="text-sm font-semibold text-stone-300">Randomize</h2>
+          <p className="mt-1 text-xs text-stone-500">
+            Fill empty tiles with real, ready-to-tweak goals instead of adding all 25 by hand. Never touches a tile
+            you've already placed.
+          </p>
+          <div className="mt-2 flex items-center gap-2">
+            <div className="flex gap-1 rounded-lg border border-stone-700 bg-stone-900 p-1">
+              {(['easy', 'medium', 'hard'] as const).map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setDifficulty(d)}
+                  className={`rounded-md px-3 py-1 text-xs capitalize transition-colors ${
+                    difficulty === d ? 'bg-amber-500 text-stone-950' : 'text-stone-400 hover:text-stone-200'
+                  }`}
+                >
+                  {d}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={handleRandomize}
+              disabled={randomizing || GRID_SIZE * GRID_SIZE - tiles.length === 0}
+              className="rounded-lg border border-stone-700 px-4 py-2 text-sm text-stone-300 disabled:opacity-40"
+            >
+              {randomizing
+                ? 'Randomizing…'
+                : GRID_SIZE * GRID_SIZE - tiles.length === 0
+                  ? 'Board full'
+                  : `Randomize ${GRID_SIZE * GRID_SIZE - tiles.length} empty tile${GRID_SIZE * GRID_SIZE - tiles.length === 1 ? '' : 's'}`}
+            </button>
+          </div>
+        </div>
+      )}
 
       {challenge.board_type === 'adventure' ? (
         <div className="mt-8 overflow-x-auto pb-2">

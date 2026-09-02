@@ -29,6 +29,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         <NavLink to="/dungeon-master-admin/growth" className={tabClass}>
           Growth
         </NavLink>
+        <NavLink to="/dungeon-master-admin/randomize-settings" className={tabClass}>
+          Randomize settings
+        </NavLink>
       </div>
       <div className="mt-8">{children}</div>
     </div>

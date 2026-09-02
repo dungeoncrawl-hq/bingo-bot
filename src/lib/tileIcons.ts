@@ -33,6 +33,68 @@ const DEATH_ICON_URL = 'https://oldschool.runescape.wiki/images/Items_kept_on_de
 // "a pet" generically since the wiki has no single generic pet icon.
 const PETS_ICON_URL = 'https://oldschool.runescape.wiki/images/Baby_Mole.png';
 
+// The label is entirely derived from the condition (and its skill/activity/
+// item-catalog parameters) -- not a separate host-editable field in
+// TileEditorForm.tsx, and reused as-is by randomizeBoard.ts's auto-generated
+// tiles. Every branch is deterministic, so there's nothing for a host (or
+// the randomizer) to choose here either.
+export function defaultLabelFor(type: TileCondition['type'], skill: string, activity: string, setName: string): string {
+  switch (type) {
+    case 'xpGained':
+      return 'Total XP';
+    case 'skillXpGained':
+      return `${skill} XP`;
+    case 'skillLevelGained':
+      return `${skill} Level`;
+    case 'bossKcGained':
+      return 'Boss KC';
+    case 'kcGained':
+      // activity is always a catalog value once the dropdown below has
+      // ever been touched -- the empty-string fallback only matters for a
+      // tile saved before this catalog existed.
+      return activity ? `${activity} KC` : 'Boss KC';
+    case 'slayerTasksCompleted':
+      return 'Slayer Tasks';
+    case 'maxDeaths':
+      return 'Max Deaths';
+    case 'lootValueGained':
+      return 'Loot Value';
+    case 'singleDropValue':
+      return 'Big Drop';
+    case 'bigDropsCount':
+      return 'Big Drops';
+    case 'itemCount':
+    case 'itemSetCollected':
+      return setName;
+    case 'cluesCompleted':
+      return 'Clue Scrolls';
+    case 'beginnerCluesCompleted':
+      return 'Beginner Clues';
+    case 'easyCluesCompleted':
+      return 'Easy Clues';
+    case 'mediumCluesCompleted':
+      return 'Medium Clues';
+    case 'hardCluesCompleted':
+      return 'Hard Clues';
+    case 'eliteCluesCompleted':
+      return 'Elite Clues';
+    case 'masterCluesCompleted':
+      return 'Master Clues';
+    case 'collectionLogGained':
+      return 'Collection Log';
+    case 'petsObtained':
+      return 'Pet';
+    case 'xpGainedLowestSkill':
+      return 'Lowest Skill XP';
+    case 'levelsGainedLowestSkill':
+      return 'Lowest Skill Levels';
+    case 'freeSpace':
+      return 'Free Space';
+    case 'tbd':
+      return 'TBD';
+  }
+}
+
 // Every condition maps to exactly one icon -- hosts can't pick their own
 // (no hotlinking/embedding arbitrary images), and there's nothing left to
 // choose: the icon is entirely determined by the condition itself (and its

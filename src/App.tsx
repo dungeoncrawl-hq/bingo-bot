@@ -13,6 +13,7 @@ import AccountPage from './pages/AccountPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import AdminParticipantsPage from './pages/AdminParticipantsPage';
 import AdminGrowthPage from './pages/AdminGrowthPage';
+import AdminRandomizeSettingsPage from './pages/AdminRandomizeSettingsPage';
 
 function App() {
   return (
@@ -33,6 +34,7 @@ function App() {
             <Route path="/dungeon-master-admin" element={<AdminDashboardPage />} />
             <Route path="/dungeon-master-admin/participants" element={<AdminParticipantsPage />} />
             <Route path="/dungeon-master-admin/growth" element={<AdminGrowthPage />} />
+            <Route path="/dungeon-master-admin/randomize-settings" element={<AdminRandomizeSettingsPage />} />
           </Routes>
         </div>
         <Footer />

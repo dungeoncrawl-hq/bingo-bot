@@ -508,3 +508,37 @@ $$;
 -- `for all`). Same anti-tamper precedent as is_site_admin/
 -- webhook_call_count earlier this session.
 revoke update (adventure_baseline_at, adventure_baseline_snapshot) on challenge_participants from authenticated;
+
+-- BACKLOG.md #5 -- "Randomize a board" goal numbers, site-admin-editable
+-- via /dungeon-master-admin/randomize-settings instead of hardcoded TS,
+-- since they'll need real-world tuning after actual boards get built with
+-- them. Singleton-row pattern (`id boolean primary key default true check
+-- (id)`) -- only one row can ever exist, no UUID-guessing needed.
+create table if not exists randomize_settings (
+  id boolean primary key default true check (id),
+  settings jsonb not null,
+  updated_at timestamptz not null default now()
+);
+
+alter table randomize_settings enable row level security;
+drop policy if exists "public read" on randomize_settings;
+create policy "public read" on randomize_settings for select using (true);
+-- The first RLS policy in this schema that checks is_site_admin directly
+-- (every prior use is client-side gating in AdminLayout.tsx, or the
+-- anti-tamper revoke-update-on-profiles pattern) -- same exists(...) shape
+-- already used for challenges' "host writes own" policy, just checking
+-- is_site_admin instead of host_id = auth.uid().
+drop policy if exists "site admin writes" on randomize_settings;
+create policy "site admin writes" on randomize_settings for all
+  to authenticated using (
+    exists (select 1 from profiles p where p.id = auth.uid() and p.is_site_admin)
+  ) with check (
+    exists (select 1 from profiles p where p.id = auth.uid() and p.is_site_admin)
+  );
+
+-- Must match src/lib/randomizeSettings.ts's DEFAULT_RANDOMIZE_SETTINGS
+-- exactly -- SQL can't import a TS constant, so keep the two in sync by
+-- hand (generated from that constant via a one-off script, not typed by
+-- hand, to avoid a transcription mismatch).
+insert into randomize_settings (id, settings) values (true, '{"thresholds":{"xpGained":{"easy":200000,"medium":500000,"hard":1500000},"bossKcGained":{"easy":20,"medium":50,"hard":150},"slayerTasksCompleted":{"easy":5,"medium":15,"hard":40},"lootValueGained":{"easy":1000000,"medium":5000000,"hard":20000000},"singleDropValue":{"easy":250000,"medium":1000000,"hard":5000000},"cluesCompleted":{"easy":3,"medium":10,"hard":25},"beginnerCluesCompleted":{"easy":2,"medium":5,"hard":15},"easyCluesCompleted":{"easy":2,"medium":5,"hard":15},"mediumCluesCompleted":{"easy":2,"medium":5,"hard":12},"hardCluesCompleted":{"easy":1,"medium":3,"hard":8},"eliteCluesCompleted":{"easy":1,"medium":2,"hard":5},"masterCluesCompleted":{"easy":1,"medium":1,"hard":3},"collectionLogGained":{"easy":2,"medium":5,"hard":15},"skillLevelGained":{"easy":1,"medium":3,"hard":8},"skillXpGained":{"easy":100000,"medium":300000,"hard":1000000},"xpGainedLowestSkill":{"easy":100000,"medium":300000,"hard":1000000},"levelsGainedLowestSkill":{"easy":1,"medium":3,"hard":8},"itemCount":{"easy":1,"medium":4,"hard":10},"bigDropsCount":{"easy":1,"medium":3,"hard":6},"maxDeaths":{"easy":20,"medium":10,"hard":3},"petsObtained":{"easy":1,"medium":1,"hard":2}},"itemSetCollectedPercent":{"easy":25,"medium":50,"hard":100},"bigDropsCountDropValueThreshold":{"easy":1000000,"medium":1000000,"hard":2000000},"kcTiers":{"tierThresholds":{"fast":{"easy":10,"medium":30,"hard":75},"slow":{"easy":3,"medium":10,"hard":25},"verySlow":{"easy":1,"medium":2,"hard":5}},"bossToTier":{"Abyssal Sire":"fast","Amoxliatl":"fast","Artio":"fast","Barrows Chests":"fast","Brutus":"fast","Bryophyta":"fast","Callisto":"fast","Calvar''ion":"fast","Cerberus":"fast","Chaos Elemental":"fast","Chaos Fanatic":"fast","Commander Zilyana":"fast","Crazy Archaeologist":"fast","Dagannoth Prime":"fast","Dagannoth Rex":"fast","Dagannoth Supreme":"fast","Deranged Archaeologist":"fast","General Graardor":"fast","Giant Mole":"fast","Grotesque Guardians":"fast","Hespori":"fast","Kalphite Queen":"fast","King Black Dragon":"fast","Kraken":"fast","Kree''Arra":"fast","K''ril Tsutsaroth":"fast","Lunar Chests":"fast","Mimic":"fast","Obor":"fast","Rifts closed":"fast","Sarachnis":"fast","Scorpia":"fast","Scurrius":"fast","Skotizo":"fast","Spindel":"fast","Tempoross":"fast","The Gauntlet":"fast","Thermonuclear Smoke Devil":"fast","Venenatis":"fast","Vet''ion":"fast","Vorkath":"fast","Wintertodt":"fast","Zalcano":"fast","Zulrah":"fast","Alchemical Hydra":"slow","Corporeal Beast":"slow","Nex":"slow","Nightmare":"slow","Phantom Muspah":"slow","The Corrupted Gauntlet":"slow","Duke Sucellus":"slow","The Leviathan":"slow","The Whisperer":"slow","Vardorvis":"slow","Araxxor":"slow","Doom of Mokhaiotl":"slow","The Hueycoatl":"slow","The Royal Titans":"slow","Yama":"slow","Chambers of Xeric":"slow","Theatre of Blood":"slow","Tombs of Amascut":"slow","Shellbane Gryphon":"slow","Mad Angel":"slow","Maggot King":"slow","TzTok-Jad":"verySlow","TzKal-Zuk":"verySlow","Sol Heredit":"verySlow","Phosani''s Nightmare":"verySlow","Theatre of Blood: Hard Mode":"verySlow","Tombs of Amascut: Expert Mode":"verySlow","Chambers of Xeric: Challenge Mode":"verySlow"}},"pointsByDifficulty":{"easy":1,"medium":2,"hard":3}}'::jsonb)
+  on conflict (id) do nothing;
