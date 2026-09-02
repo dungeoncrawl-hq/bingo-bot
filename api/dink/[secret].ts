@@ -34,7 +34,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const parsed = contentType.includes('multipart/form-data')
       ? await parseDinkPayload(contentType, await readRawBody(req))
       : { data: req.body, image: null };
-    const { status, body } = await processDinkWebhook(challenge, parsed.data);
+    const { status, body } = await processDinkWebhook(challenge, parsed.data, parsed.image);
     res.status(status).json(body);
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Webhook processing failed' });

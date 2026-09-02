@@ -2,11 +2,12 @@
 // rs/src/server/dinkWebhook.ts. The challenge is already resolved (by
 // dink_secret) before this runs; everything here is scoped to that one
 // challenge and the participant the event's playerName matches within it.
-import { selectRows, upsertRow, insertRowUnlessRecentDuplicate, callRpc } from './supabaseAdmin.js';
+import { selectRows, upsertRow, insertRowUnlessRecentDuplicate, callRpc, callRpcReturning } from './supabaseAdmin.js';
 import { checkChallengeProgress } from './challengeProgress.js';
 import { syncOneParticipant } from './participantSync.js';
 import { isNotableLootItem } from '../lib/itemSets.js';
 import type { Challenge, Tile } from '../db/types.js';
+import type { DinkImage } from './dinkPayload.js';
 
 export interface WebhookResult {
   status: number;
@@ -208,7 +209,31 @@ async function handlePet(challengeId: string, participantId: string, extra: Reco
   return { status: 200, body: { ok: true } };
 }
 
-export async function processDinkWebhook(challenge: Challenge, payload: unknown): Promise<WebhookResult> {
+// A repeat-offender warning that shows up in ordinary server logs -- not a
+// player/host email (that notification behavior is still an open question,
+// see BACKLOG.md), just enough for whoever's watching the logs to notice.
+// Every 10th screenshot, not every single one, so a player who never turns
+// it off doesn't spam the logs into uselessness.
+const SCREENSHOT_LOG_INTERVAL = 10;
+
+async function recordScreenshot(participantId: string, rsn: string, image: DinkImage): Promise<void> {
+  try {
+    const newCount = await callRpcReturning<number>('increment_screenshot_stats', {
+      p_participant_id: participantId,
+      p_bytes: image.buffer.length,
+    });
+    if (newCount % SCREENSHOT_LOG_INTERVAL === 0) {
+      console.warn(
+        `Dink screenshot #${newCount} from ${rsn} (participant ${participantId}) -- "Send screenshot" is still on in their Dink settings.`,
+      );
+    }
+  } catch (err) {
+    // Never let tracking a screenshot break the actual event it rode in on.
+    console.error('Failed to record screenshot stats:', err);
+  }
+}
+
+export async function processDinkWebhook(challenge: Challenge, payload: unknown, image: DinkImage | null = null): Promise<WebhookResult> {
   if (typeof payload !== 'object' || payload === null) {
     return { status: 400, body: { error: 'Invalid payload' } };
   }
@@ -220,6 +245,8 @@ export async function processDinkWebhook(challenge: Challenge, payload: unknown)
     if (!participant) {
       return { status: 400, body: { error: `Unrecognized playerName "${playerName}"` } };
     }
+
+    if (image) await recordScreenshot(participant.id, participant.rsn, image);
 
     let result: WebhookResult;
     switch (type) {

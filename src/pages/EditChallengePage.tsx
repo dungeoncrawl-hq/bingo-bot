@@ -9,10 +9,18 @@ import { formatTileGoal, type TileCondition } from '../lib/tileConditions';
 
 const GRID_SIZE = 5;
 
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 interface ParticipantRow {
   id: string;
   rsn: string;
   profiles: { display_name: string } | null;
+  screenshot_count: number;
+  screenshot_bytes: number;
 }
 
 export default function EditChallengePage() {
@@ -40,7 +48,7 @@ export default function EditChallengePage() {
       supabase.from('tiles').select('*').eq('challenge_id', challengeData.id),
       supabase
         .from('challenge_participants')
-        .select('id, rsn, profiles(display_name)')
+        .select('id, rsn, profiles(display_name), screenshot_count, screenshot_bytes')
         .eq('challenge_id', challengeData.id),
     ]);
     setTiles((tilesData as Tile[]) ?? []);
@@ -203,7 +211,17 @@ export default function EditChallengePage() {
         <ul className="mt-3 space-y-2 text-sm text-stone-300">
           {participants.map((p) => (
             <li key={p.id} className="flex items-center justify-between gap-2">
-              <span>{p.rsn}</span>
+              <span className="flex items-center gap-2">
+                {p.rsn}
+                {p.screenshot_count > 0 && (
+                  <span
+                    title={`${p.screenshot_count} Dink screenshots sent (${formatBytes(p.screenshot_bytes)}) -- their "Send screenshot" setting is still on. Ask them to turn it off in Dink's settings.`}
+                    className="shrink-0 rounded-full border border-amber-800 bg-amber-950/40 px-1.5 py-0.5 text-[10px] text-amber-400"
+                  >
+                    ⚠ {p.screenshot_count} screenshots
+                  </span>
+                )}
+              </span>
               <button
                 type="button"
                 onClick={() => handleRemoveParticipant(p)}

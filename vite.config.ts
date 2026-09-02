@@ -46,7 +46,7 @@ function devApi(): Plugin {
           }
           const contentType = req.headers['content-type'] ?? ''
           const parsed = await parseDinkPayload(contentType, await readRawBody(req))
-          const { status, body } = await processDinkWebhook(challenge, parsed.data)
+          const { status, body } = await processDinkWebhook(challenge, parsed.data, parsed.image)
           res.statusCode = status
           res.setHeader('Content-Type', 'application/json')
           res.end(JSON.stringify(body))

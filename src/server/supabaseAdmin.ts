@@ -45,6 +45,16 @@ export async function callRpc(name: string, args: Record<string, unknown>): Prom
   if (!res.ok) throw new Error(`RPC ${name} failed: ${res.status} ${await res.text()}`);
 }
 
+// Same as callRpc, but for a SQL function that returns a scalar/row instead
+// of void (e.g. increment_screenshot_stats returning the new running
+// count) -- PostgREST hands the function's return value back as the
+// response body directly.
+export async function callRpcReturning<T>(name: string, args: Record<string, unknown>): Promise<T> {
+  const res = await rest(`rpc/${name}`, { method: 'POST', body: JSON.stringify(args) });
+  if (!res.ok) throw new Error(`RPC ${name} failed: ${res.status} ${await res.text()}`);
+  return (await res.json()) as T;
+}
+
 // resolution=ignore-duplicates silently no-ops the write on a conflict
 // (append-only event logs with a natural idempotency key); merge-duplicates
 // updates the conflicting row instead (pet_obtains, so a re-fired PET event
