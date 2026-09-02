@@ -23,9 +23,31 @@ ordered -- just captured so they don't get lost.
    number with a denomination selector (K/M) plus a value, so the host
    picks e.g. "100" + "M" to form a 100,000,000 threshold instead of
    typing the full number by hand.
+4. **Open question: does a newly-unlocked Adventure tile start at 0, or
+   can earlier progress already count?** Current actual behavior
+   (confirmed against the shipped code, not a guess): every tile's
+   condition is checked against the participant's *cumulative stats
+   since the challenge's start date* -- not "since this tile became
+   reachable." So a tile several columns into the path can complete
+   the instant it unlocks, off stat gains the player racked up earlier
+   in the dungeon (or even before reaching that fork at all) -- nothing
+   resets at unlock. This was a deliberate simplification when Adventure
+   shipped (`checkTile`/`ParticipantStats` reused completely unchanged,
+   no per-tile "gains since unlock" tracking), called out in its own
+   code comment (`src/lib/adventureProgress.ts`) but never actually
+   weighed as a design choice against the alternative. Real consequence
+   worth deciding on purpose: two tiles sharing the same condition type
+   at different points in the path (e.g. two "Slayer XP" tiles) can
+   both complete back to back off one pool of cumulative progress,
+   without the player doing anything new between them -- may or may not
+   match the intended "earn each room as you reach it" feel. If a
+   per-tile "gains since unlock" model is wanted instead, it needs a
+   stored baseline (stats snapshot, or simply `frontier reached at`
+   timestamp) per participant per tile to diff against, which is a real
+   scope increase over today's stateless-recompute approach.
 
 ## Host tooling
-Items 4-6 were scoped before board types (Adventure mode, shipped) or
+Items 5-7 were scoped before board types (Adventure mode, shipped) or
 game modes (Coop/Team, also shipped) existed -- none of them currently
 say what "randomize"/"library"/"copy" means for anything but a Standard/
 solo board. Simplest path: scope all three to Standard + solo only for
@@ -35,15 +57,15 @@ board's "random tile" needs different pools per lane/boss, and copying
 a challenge needs to carry `board_type`/`board_size`/`game_mode`
 forward, not just tiles, once those exist to copy.
 
-4. "Randomize a board" starting point -- host picks random tiles/
+5. "Randomize a board" starting point -- host picks random tiles/
    conditions to seed a new board, then edits/tweaks from there instead
    of starting from a fully blank grid.
-5. A library of pre-made boards hosts can pick from to start a challenge.
-6. "Copy a past challenge" -- start a new challenge that mirrors an
+6. A library of pre-made boards hosts can pick from to start a challenge.
+7. "Copy a past challenge" -- start a new challenge that mirrors an
    existing/past board's tiles instead of rebuilding it from scratch.
 
 ## Anti-abuse
-7. Whether/who to email when a participant's screenshot count crosses a
+8. Whether/who to email when a participant's screenshot count crosses a
    concerning threshold -- detection itself already shipped
    (`increment_screenshot_stats`, the ⚠ badge on `EditChallengePage.tsx`'s
    Players list, a console.warn every 10th screenshot), this is just the
@@ -53,27 +75,3 @@ forward, not just tiles, once those exist to copy.
    screenshot/webhook-volume visibility) was the planned prerequisite for
    deciding this with real aggregate data instead of a guess -- now that
    it exists, this question is actually ready to resolve.
-
-## Notifications
-8. Full rewrite of Discord notification content (`discordEmbeds.ts`) --
-   keep the current embed structure (title/description/fields/image),
-   but replace the fixed flavor-text lines (e.g. "Aren't they just
-   showing off at this point?") with randomized joke/banter variants
-   pulled from a pool, to lean into the site's ".lol" branding. Design
-   this aware of the other things already reshaping the same flavor
-   text: Adventure's boss-vs-regular-tile swap and Coop/Team's solo/
-   "the group"/"Team X" subject swap -- both shipped. Two independent
-   dimensions (is-boss x who's-the-subject) that both already exist --
-   the banter pool needs to be parameterized by both, not bolted on
-   after.
-
-## Account / profile
-9. A user profile page letting someone change their email and set a
-   default RSN, so they don't have to retype it every time they join a
-   new challenge. Two different underlying mechanisms: email lives on
-   Supabase's own `auth.users` (changing it goes through
-   `supabase.auth.updateUser()`, which re-sends a confirmation email --
-   not a plain field update), while a default RSN would need a new
-   column on `profiles` (today just `id`, `display_name`,
-   `created_at` -- see `supabase/schema.sql`), then `BoardPage.tsx`'s
-   join form pre-filling from it instead of starting blank.
