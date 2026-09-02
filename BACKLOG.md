@@ -137,6 +137,19 @@ forward, not just tiles, once those exist to copy.
     payload; there's no setting to misconfigure. Nothing short of
     owning the plugin closes this gap.
 
+    **Checked whether an existing alternative plugin already solves
+    this** -- surveyed every Discord/webhook notifier plugin broad
+    enough to plausibly replace Dink (DropTracker, Discord
+    Notifications, Discord Collection/Loot Logger, Universal Discord
+    Notifications, others). None thread the needle: the ones that skip
+    screenshots entirely are single-purpose or abandoned 2-4+ years;
+    the ones broad enough to matter (DropTracker, updated 2026-08-28;
+    Discord Notifications, updated 2026-09-02) still bundle an
+    optional per-player screenshot setting, the same structural problem
+    as Dink. None of them fire on logout at all -- we'd lose both the
+    daily hiscores-resync trigger and #4's baseline reset. "Just switch
+    plugins" isn't actually a cheaper option than building.
+
     **Not a blocker, found during research**: RuneLite Plugin Hub
     review is security/Jagex-rules compliance only (not a functionality
     review), and as of April 2026 an automated bot can auto-approve

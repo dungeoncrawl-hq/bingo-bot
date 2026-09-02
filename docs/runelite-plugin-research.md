@@ -85,6 +85,51 @@ capability entirely. This is the one motivation in this document that
 a first-party plugin actually and fully resolves, with no workaround
 available any other way.
 
+## Could an existing alternative plugin solve this instead?
+
+Checked every Discord/webhook notification plugin listed in
+[Dink's own comparison doc](https://github.com/pajlads/DinkPlugin/blob/master/docs/comparison.md)
+that plausibly covers a meaningful chunk of our event set (`KILL_COUNT`/
+`LOOT`/`SLAYER`/`DEATH`/`COLLECTION`/`PET`/`LOGOUT`). Install counts
+and last-updated dates are from [runelite.phyce.dev](https://runelite.phyce.dev)
+(Plugin Hub manifest stats) cross-checked against each repo's actual
+last commit via the GitHub API where the two disagreed.
+
+| Plugin | Installs | Code last touched | Screenshots? | Our events covered | Logout event? |
+|---|---|---|---|---|---|
+| **Dink** (pajlads) | 70,696 | 2026-08-31 | Yes, per-notifier, we can't disable it | KC/loot/slayer/death/clog/pet/logout -- all of it | Yes |
+| [DropTracker](https://github.com/joelhalen/droptracker-plugin) (joelhalen) | -- (Plugin Hub, growing) | 2026-08-28 | Yes -- configurable per-event, same structural problem (player-side setting, not our control) | loot, clog, combat achievements, PBs, pets, XP/levels, quests -- **no explicit KC or slayer**, no logout | No |
+| [Discord Notifications](https://github.com/ThatOhio/RuneLite-Discord-Notifications) (WintZ) | 18,994 | 2026-09-02 | Yes, optional | level, quest, death only | No |
+| [Discord Collection Logger](https://github.com/PJGJ210/Discord-Collection-Logger) (Paul) | 22,594 | 2024-12-19 | No | collection log only | No |
+| [Discord Loot Logger](https://github.com/Adam-/runelite-plugins) (Adam) | 27,890 | 2021-01-24 (abandoned) | No | loot only | No |
+| [Universal Discord Notifications](https://github.com/MidgetJake/UniversalDiscordNotifier) (MidgetJake) | 3,277 | 2022-11-11 (abandoned) | No | loot, level, clog, slayer, quest, clues -- **no death, no pets, no KC, no logout** | No |
+| Better Discord Loot Logger / Split Tracker (skyhawkgaming) | 1,515 | 2023-01-09 (abandoned) | Not documented | loot, clue, pet | No |
+
+**Nothing threads the needle.** Every plugin that avoids screenshots
+entirely is either single-purpose (collection log only, loot only) or
+abandoned for 2-4+ years -- switching to one would mean losing
+coverage on most of our event set and gluing together several
+plugins per host, not a clean swap. Every plugin broad enough to
+plausibly replace Dink's coverage (DropTracker, Discord Notifications)
+still bundles an optional screenshot capability the same way Dink
+does -- a per-player setting we still couldn't control from our side,
+so it wouldn't actually solve the problem that motivated this search.
+
+**Nobody but Dink fires on logout.** That's not surprising in
+hindsight -- "player logged out" isn't something a Discord-notification
+plugin has any reason to post about, so none of the narrower
+alternatives implement it. We depend on it twice now: the daily
+hiscores-resync trigger, and BACKLOG.md #4's Adventure baseline reset.
+Losing it isn't an option regardless of the screenshot question.
+
+**Conclusion**: switching to an existing alternative doesn't get us
+out of the maintenance/review cost documented below -- it just trades
+Dink's maintenance for a differently-scoped plugin's maintenance (or
+several), without actually solving the screenshot problem in most
+cases, and without logout support in any case. This doesn't change the
+recommendation, but it does close off "just switch plugins" as a
+cheaper alternative to building -- that door isn't actually open.
+
 ## Plugin Hub: review and submission process
 
 Source: [runelite/runelite wiki, "Plugin Hub Review"](https://github.com/runelite/runelite/wiki/Plugin-Hub-Review)
@@ -154,12 +199,14 @@ and [pull requests on runelite/plugin-hub](https://github.com/runelite/plugin-hu
 
 Not urgent, but no longer "purely exploratory" either -- there's now
 one concrete, well-defined win (screenshot elimination at the source)
-that nothing short of owning the plugin can deliver, and the review
-process isn't the blocker it might have seemed (security/compliance
-gate only, automated for routine updates, precedent already exists for
-our exact webhook shape). The XP-precision motivation that originally
-prompted this research turned out to be a red herring -- solvable for
-free by consuming Dink's existing `LOGIN` event instead.
+that nothing short of owning the plugin can deliver, confirmed against
+every existing alternative (none combine our full event coverage,
+logout support, and zero screenshots), and the review process isn't
+the blocker it might have seemed (security/compliance gate only,
+automated for routine updates, precedent already exists for our exact
+webhook shape). The XP-precision motivation that originally prompted
+this research turned out to be a red herring -- solvable for free by
+consuming Dink's existing `LOGIN` event instead.
 
 If/when this gets prioritized, scope it as "author + submit a
 minimal notifier-only plugin covering just the 7 event types we
