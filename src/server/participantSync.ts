@@ -58,7 +58,11 @@ export async function syncAllParticipants(): Promise<{ synced: number; failed: n
       continue;
     }
     try {
-      await checkChallengeProgress(participant.id);
+      // The daily cron sweep refreshes participant_snapshots the same
+      // way a real logout does, but it must never itself count as the
+      // qualifying LOGOUT event for Adventure's baseline reset
+      // (BACKLOG.md #4) -- only an actual Dink LOGOUT does.
+      await checkChallengeProgress(participant.id, false);
     } catch (err) {
       console.error(`Progress check failed for participant ${participant.id}:`, err);
     }

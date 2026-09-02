@@ -81,6 +81,31 @@ describe('computeParticipantStats', () => {
     expect(computeParticipantStats(raw, WINDOW, null).deathsInPeriod).toBe(2);
   });
 
+  it('accepts a full ISO timestamp as window.start for instant precision, not just a bare date (BACKLOG.md #4)', () => {
+    const instantWindow = { start: '2026-09-01T14:00:00.000Z', end: WINDOW.end };
+    const raw: RawParticipantData = {
+      ...EMPTY_RAW,
+      deaths: [
+        { created_at: '2026-09-01T13:59:59.999Z' }, // 1ms before the boundary -- excluded
+        { created_at: '2026-09-01T14:00:00.000Z' }, // exactly at the boundary -- included
+        { created_at: '2026-09-01T14:00:00.001Z' }, // 1ms after -- included
+      ],
+    };
+    expect(computeParticipantStats(raw, instantWindow, null).deathsInPeriod).toBe(2);
+  });
+
+  it('gives kcGainedByBoss the same instant precision via a full ISO timestamp window.start', () => {
+    const instantWindow = { start: '2026-09-01T14:00:00.000Z', end: WINDOW.end };
+    const raw: RawParticipantData = {
+      ...EMPTY_RAW,
+      bossKills: [
+        { boss: 'Vorkath', kc: 10, created_at: '2026-09-01T13:59:59.999Z' }, // baseline, just before the boundary
+        { boss: 'Vorkath', kc: 13, created_at: '2026-09-02T00:00:00.000Z' }, // 3 KC gained after
+      ],
+    };
+    expect(computeParticipantStats(raw, instantWindow, null).kcGainedByActivity.Vorkath).toBe(3);
+  });
+
   it('sums loot value and tracks the single biggest drop, in-window only', () => {
     const raw: RawParticipantData = {
       ...EMPTY_RAW,

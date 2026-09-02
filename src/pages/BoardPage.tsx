@@ -13,7 +13,7 @@ import {
   type TileStatus,
 } from '../lib/tileConditions';
 import { computeParticipantStats, type RawParticipantData } from '../lib/participantStats';
-import { computeHiscoresRecap, type SnapshotRow } from '../lib/hiscoresRecap';
+import { computeHiscoresRecap, computeHiscoresRecapFromBaseline, type SnapshotRow } from '../lib/hiscoresRecap';
 import { computeLeaderboard } from '../lib/leaderboard';
 import { computeFirstCompleters } from '../lib/firstCompletions';
 import { progressColor } from '../lib/progressColor';
@@ -37,6 +37,11 @@ interface ParticipantRow {
   chosen_lowest_skill: string | null;
   adventure_path: Record<string, 'top' | 'bottom'>;
   team_id: string | null;
+  // Adventure logout-gated reset (BACKLOG.md #4) -- null means this
+  // participant's next tile is locked, awaiting a qualifying Dink
+  // LOGOUT event.
+  adventure_baseline_at: string | null;
+  adventure_baseline_snapshot: SnapshotRow | null;
 }
 
 interface CompletionRow {
@@ -86,7 +91,7 @@ export default function BoardPage() {
       supabase.from('tiles').select('*').eq('challenge_id', challengeData.id),
       supabase
         .from('challenge_participants')
-        .select('id, profile_id, rsn, chosen_lowest_skill, adventure_path, team_id')
+        .select('id, profile_id, rsn, chosen_lowest_skill, adventure_path, team_id, adventure_baseline_at, adventure_baseline_snapshot')
         .eq('challenge_id', challengeData.id),
       supabase
         .from('tile_completions')
@@ -194,10 +199,38 @@ export default function BoardPage() {
           tileStatuses[tile.id] = checkTile(tile.condition, stats);
         }
         statuses[pid] = tileStatuses;
+
+        // Adventure's logout-gated baseline reset (BACKLOG.md #4): once
+        // a participant is past their first tile, their frontier tile's
+        // live progress must reflect stats since their baseline, not
+        // since the challenge started -- mirrors
+        // challengeProgress.ts's own server-side distinction. Every
+        // other tile (done, locked, other-lane) keeps using the
+        // challenge-wide computation above, since only the frontier
+        // tile's number is ever actually shown. If no baseline is
+        // established yet, this is left alone -- the render below shows
+        // the "awaiting logout" state instead of any number for it.
+        if (challenge.board_type === 'adventure') {
+          const p = participants.find((pp) => pp.id === pid);
+          const doneIds = new Set(completions.filter((c) => c.kind === 'tile' && c.participant_id === pid).map((c) => c.ref));
+          const frontier = resolveFrontier(tiles, p?.adventure_path ?? {}, doneIds);
+          if (frontier.kind === 'tile' && doneIds.size > 0 && p?.adventure_baseline_at) {
+            const recap = p.adventure_baseline_snapshot
+              ? computeHiscoresRecapFromBaseline(p.adventure_baseline_snapshot, snapshotsByParticipant[pid] ?? [])
+              : null;
+            const sinceBaselineStats = computeParticipantStats(
+              rawByParticipant[pid],
+              { start: p.adventure_baseline_at, end: window.end },
+              recap,
+              chosenSkillByParticipant.get(pid) ?? null,
+            );
+            tileStatuses[frontier.tile.id] = checkTile(frontier.tile.condition, sinceBaselineStats);
+          }
+        }
       }
       setTileStatusesByParticipant(statuses);
     })();
-  }, [participants, tiles, challenge]);
+  }, [participants, tiles, challenge, completions]);
 
   async function handleJoin(e: FormEvent) {
     e.preventDefault();
@@ -307,6 +340,11 @@ export default function BoardPage() {
       ? resolveFrontier(tiles, myParticipant.adventure_path ?? {}, doneTileIdsFor(myParticipant.id))
       : null;
   const pendingLaneChoice = myFrontier && myFrontier.kind === 'needsLaneChoice' ? myFrontier : null;
+  // Reached a new room, but locked until a qualifying Dink LOGOUT event
+  // establishes a fresh baseline (BACKLOG.md #4) -- never true for a
+  // participant's very first tile ever, matching challengeProgress.ts.
+  const myAwaitingBaselineReset =
+    myFrontier?.kind === 'tile' && doneTileIdsFor(myParticipant?.id ?? '').size > 0 && !myParticipant?.adventure_baseline_at;
 
   // Any tile status of the signed-in participant's own (not the viewed
   // participant's -- the choice below is only actionable for your own
@@ -383,16 +421,28 @@ export default function BoardPage() {
                         const done = tile != null && isOnPath && viewedCompletedTileIds.has(tile.id);
                         const isFrontier =
                           tile != null && isOnPath && !done && viewedFrontier?.kind === 'tile' && viewedFrontier.tile.id === tile.id;
+                        // Reached, but locked until a qualifying Dink
+                        // LOGOUT event establishes a fresh baseline
+                        // (BACKLOG.md #4) -- distinct from "locked" below,
+                        // which means "not reached yet." Never true for a
+                        // participant's very first tile ever (nothing to
+                        // reset from), matching challengeProgress.ts.
+                        const awaitingBaselineReset = isFrontier && viewedCompletedTileIds.size > 0 && !viewedParticipant?.adventure_baseline_at;
                         const locked = tile != null && isOnPath && !done && !isFrontier;
                         const status = tile ? viewedTileStatuses[tile.id] : undefined;
-                        const percent = tile && status && isOnPath && !done ? progressPercent(tile.condition, status) : null;
+                        const percent =
+                          tile && status && isOnPath && !done && !awaitingBaselineReset ? progressPercent(tile.condition, status) : null;
                         const baseCaption =
-                          tile && isOnPath ? (status && formatTileProgress(tile.condition, status)) ?? formatTileGoal(tile.condition) : null;
-                        const caption = status?.resolvedSkill
-                          ? `${baseCaption} (${status.resolvedSkill})`
-                          : status?.needsSkillChoice
-                            ? 'Pick a skill below'
-                            : baseCaption;
+                          tile && isOnPath && !awaitingBaselineReset
+                            ? (status && formatTileProgress(tile.condition, status)) ?? formatTileGoal(tile.condition)
+                            : null;
+                        const caption = awaitingBaselineReset
+                          ? 'Log out to start'
+                          : status?.resolvedSkill
+                            ? `${baseCaption} (${status.resolvedSkill})`
+                            : status?.needsSkillChoice
+                              ? 'Pick a skill below'
+                              : baseCaption;
                         const isFirst =
                           tile != null && done && tile.condition.type !== 'freeSpace' && firstCompleters[tile.id] === viewedParticipantId;
 
@@ -405,13 +455,15 @@ export default function BoardPage() {
                                 ? 'border-stone-800/40 bg-stone-950/30 opacity-40'
                                 : done
                                   ? 'border-green-500 bg-green-950/40'
-                                  : isFrontier
-                                    ? 'border-amber-500 bg-stone-900'
-                                    : tile
-                                      ? locked
-                                        ? 'border-stone-800 bg-stone-950/60 opacity-60'
-                                        : 'border-stone-700 bg-stone-900'
-                                      : 'border-stone-800/60 bg-stone-950/50'
+                                  : awaitingBaselineReset
+                                    ? 'border-sky-600 bg-sky-950/20'
+                                    : isFrontier
+                                      ? 'border-amber-500 bg-stone-900'
+                                      : tile
+                                        ? locked
+                                          ? 'border-stone-800 bg-stone-950/60 opacity-60'
+                                          : 'border-stone-700 bg-stone-900'
+                                        : 'border-stone-800/60 bg-stone-950/50'
                             }`}
                           >
                             {percent !== null && (
@@ -728,6 +780,15 @@ export default function BoardPage() {
                     Bottom
                   </button>
                 </div>
+              </div>
+            )}
+
+            {myAwaitingBaselineReset && (
+              <div className="rounded-lg border border-sky-800 bg-sky-950/30 p-3">
+                <p className="text-sm text-stone-300">
+                  You've reached a new room. Log out in-game to start counting progress toward it -- nothing before
+                  that counts.
+                </p>
               </div>
             )}
 

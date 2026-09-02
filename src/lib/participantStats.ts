@@ -34,13 +34,32 @@ export interface RawParticipantData {
 }
 
 export interface DateWindow {
-  start: string; // "YYYY-MM-DD", inclusive
-  end: string; // "YYYY-MM-DD", inclusive
+  // Either a bare "YYYY-MM-DD" (every caller before BACKLOG.md #4 --
+  // anchors to midnight/end-of-day UTC, see boundaryMs) or a full ISO
+  // timestamp (Adventure's logout-gated baseline reset, which needs
+  // instant precision, not day precision, to actually close the
+  // same-day-progress-leak it exists to prevent).
+  start: string;
+  end: string; // same shape as start, inclusive
+}
+
+// A bare "YYYY-MM-DD" (10 chars) anchors to midnight UTC for a start
+// bound or end-of-day UTC for an end bound, exactly reproducing the
+// date-slice-comparison semantics every caller relied on before this
+// existed. A full ISO timestamp is used as-is, giving instant precision
+// instead of day precision -- verified against the full existing test
+// suite when introduced, since inWindow/kcGainedByBoss back every
+// board's every condition type, not just Adventure's.
+function boundaryMs(value: string, edge: 'start' | 'end'): number {
+  if (value.length === 10) {
+    return Date.parse(edge === 'start' ? `${value}T00:00:00.000Z` : `${value}T23:59:59.999Z`);
+  }
+  return Date.parse(value);
 }
 
 function inWindow(isoTimestamp: string, window: DateWindow): boolean {
-  const date = isoTimestamp.slice(0, 10);
-  return date >= window.start && date <= window.end;
+  const t = Date.parse(isoTimestamp);
+  return t >= boundaryMs(window.start, 'start') && t <= boundaryMs(window.end, 'end');
 }
 
 // KC gained in the window, per boss: Dink's KILL_COUNT notifier fires on
@@ -56,11 +75,13 @@ function kcGainedByBoss(bossKills: RawParticipantData['bossKills'], window: Date
     byBoss.set(kill.boss, list);
   }
 
+  const startMs = boundaryMs(window.start, 'start');
+  const endMs = boundaryMs(window.end, 'end');
   const result: Record<string, number> = {};
   for (const [boss, events] of byBoss) {
     const sorted = [...events].sort((a, b) => a.created_at.localeCompare(b.created_at));
-    const beforeStart = sorted.filter((e) => e.created_at.slice(0, 10) < window.start);
-    const atOrBeforeEnd = sorted.filter((e) => e.created_at.slice(0, 10) <= window.end);
+    const beforeStart = sorted.filter((e) => Date.parse(e.created_at) < startMs);
+    const atOrBeforeEnd = sorted.filter((e) => Date.parse(e.created_at) <= endMs);
     const kcBefore = beforeStart.length > 0 ? beforeStart[beforeStart.length - 1].kc : 0;
     const kcAtEnd = atOrBeforeEnd.length > 0 ? atOrBeforeEnd[atOrBeforeEnd.length - 1].kc : 0;
     const gained = Math.max(0, kcAtEnd - kcBefore);

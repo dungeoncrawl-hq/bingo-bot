@@ -5,7 +5,7 @@
 // tileConditions.ts, diffs against existing tile_completions, and inserts
 // any newly-completed tile/line/board rows (race-safe -- see
 // insertRowReturning's comment in supabaseAdmin.ts).
-import { selectRows, insertRowReturning } from './supabaseAdmin.js';
+import { selectRows, insertRowReturning, callRpc, callRpcReturning } from './supabaseAdmin.js';
 import { relayToDiscord } from './discordRelay.js';
 import { buildTileCompletionEmbed, buildLineCompletionEmbed, buildBoardCompletionEmbed } from './discordEmbeds.js';
 import type { ParticipantLite } from './discordEmbeds.js';
@@ -13,7 +13,7 @@ import { checkTile, gridLines } from '../lib/tileConditions.js';
 import { computeParticipantStats, poolStats } from '../lib/participantStats.js';
 import type { RawParticipantData } from '../lib/participantStats.js';
 import type { ParticipantStats } from '../lib/tileConditions.js';
-import { computeHiscoresRecap } from '../lib/hiscoresRecap.js';
+import { computeHiscoresRecap, computeHiscoresRecapFromBaseline } from '../lib/hiscoresRecap.js';
 import type { SnapshotRow } from '../lib/hiscoresRecap.js';
 import { computeLeaderboard } from '../lib/leaderboard.js';
 import { computeFirstCompleters } from '../lib/firstCompletions.js';
@@ -28,6 +28,8 @@ interface ParticipantRow {
   chosen_lowest_skill: string | null;
   adventure_path: AdventurePath | null;
   team_id: string | null;
+  adventure_baseline_at: string | null;
+  adventure_baseline_snapshot: SnapshotRow | null;
 }
 
 interface CompletionRow {
@@ -54,10 +56,22 @@ const GRID_SIZE = 5;
 // snapshots (hiscores are per-account, never merged) and their own
 // computeParticipantStats call -- only the results get pooled by the
 // caller.
+interface PoolStatsResult {
+  statsList: ParticipantStats[];
+  // Adventure's baseline-reset branch (BACKLOG.md #4) needs the
+  // triggering participant's own raw materials to recompute stats
+  // against a *different* window than the challenge-wide one used
+  // above -- Adventure is always solo (pool size 1), so this is simply
+  // that one member's data, kept alongside the already-reduced
+  // statsList rather than re-fetched a second time.
+  rawByMember: Map<string, RawParticipantData>;
+  snapshotsByMember: Map<string, SnapshotRow[]>;
+}
+
 async function fetchPoolStats(
   poolMembers: ParticipantRow[],
   window: { start: string; end: string },
-): Promise<ParticipantStats[]> {
+): Promise<PoolStatsResult> {
   const ids = poolMembers.map((m) => encodeURIComponent(m.id)).join(',');
   const [bossKills, slayerTasks, lootDrops, deaths, collectionLogEntries, petObtains, snapshots] = await Promise.all([
     selectRows<{ participant_id: string; boss: string; kc: number; created_at: string }>(
@@ -102,7 +116,9 @@ async function fetchPoolStats(
   const petsByP = groupBy(petObtains);
   const snapshotsByP = groupBy(snapshots);
 
-  return poolMembers.map((m) => {
+  const rawByMember = new Map<string, RawParticipantData>();
+  const snapshotsByMember = new Map<string, SnapshotRow[]>();
+  const statsList = poolMembers.map((m) => {
     const raw: RawParticipantData = {
       bossKills: bossKillsByP.get(m.id) ?? [],
       slayerTasks: slayerByP.get(m.id) ?? [],
@@ -111,15 +127,28 @@ async function fetchPoolStats(
       collectionLogEntries: clogByP.get(m.id) ?? [],
       petObtains: petsByP.get(m.id) ?? [],
     };
-    const hiscoresRecap = computeHiscoresRecap(snapshotsByP.get(m.id) ?? [], window);
+    rawByMember.set(m.id, raw);
+    const memberSnapshots = snapshotsByP.get(m.id) ?? [];
+    snapshotsByMember.set(m.id, memberSnapshots);
+    const hiscoresRecap = computeHiscoresRecap(memberSnapshots, window);
     return computeParticipantStats(raw, window, hiscoresRecap, m.chosen_lowest_skill);
   });
+  return { statsList, rawByMember, snapshotsByMember };
 }
 
-export async function checkChallengeProgress(participantId: string): Promise<void> {
+const PARTICIPANT_SELECT =
+  'id,challenge_id,rsn,chosen_lowest_skill,adventure_path,team_id,adventure_baseline_at,adventure_baseline_snapshot';
+
+// isLogout: whether the Dink event that triggered this check was
+// specifically a LOGOUT -- Adventure's baseline reset (BACKLOG.md #4)
+// only ever establishes a new baseline in response to one, never a
+// KILL_COUNT/LOOT/etc. completing a tile, and never the daily cron sync
+// or a join-time baseline sync either (both refresh hiscores the same
+// way a logout does, but neither IS one).
+export async function checkChallengeProgress(participantId: string, isLogout: boolean): Promise<void> {
   const [participant] = await selectRows<ParticipantRow>(
     'challenge_participants',
-    `id=eq.${encodeURIComponent(participantId)}&select=id,challenge_id,rsn,chosen_lowest_skill,adventure_path,team_id`,
+    `id=eq.${encodeURIComponent(participantId)}&select=${PARTICIPANT_SELECT}`,
   );
   if (!participant) return;
 
@@ -143,13 +172,13 @@ export async function checkChallengeProgress(participantId: string): Promise<voi
   if (challenge.game_mode === 'coop') {
     poolMembers = await selectRows<ParticipantRow>(
       'challenge_participants',
-      `challenge_id=eq.${encodeURIComponent(challenge.id)}&select=id,challenge_id,rsn,chosen_lowest_skill,adventure_path,team_id`,
+      `challenge_id=eq.${encodeURIComponent(challenge.id)}&select=${PARTICIPANT_SELECT}`,
     );
   } else if (challenge.game_mode === 'team') {
     if (!participant.team_id) return;
     poolMembers = await selectRows<ParticipantRow>(
       'challenge_participants',
-      `team_id=eq.${encodeURIComponent(participant.team_id)}&select=id,challenge_id,rsn,chosen_lowest_skill,adventure_path,team_id`,
+      `team_id=eq.${encodeURIComponent(participant.team_id)}&select=${PARTICIPANT_SELECT}`,
     );
   } else {
     poolMembers = [participant];
@@ -158,7 +187,7 @@ export async function checkChallengeProgress(participantId: string): Promise<voi
 
   const pid = encodeURIComponent(participantId);
   const window = { start: challenge.start_date, end: challenge.end_date };
-  const [statsList, existingCompletions] = await Promise.all([
+  const [{ statsList, rawByMember, snapshotsByMember }, existingCompletions] = await Promise.all([
     fetchPoolStats(poolMembers, window),
     selectRows<CompletionRow>('tile_completions', `participant_id=eq.${pid}&select=kind,ref`),
   ]);
@@ -223,19 +252,71 @@ export async function checkChallengeProgress(participantId: string): Promise<voi
     // tile's bar before an earlier one is even reached, so (unlike
     // grid5x5 above) completions are never driven by sweeping every tile
     // against `stats` at once. Only the participant's current frontier is
-    // ever checked, in a loop so one event can cascade through multiple
-    // already-satisfied tiles/bosses in a single pass (e.g. a big
-    // cumulative-XP tile that was already clear the moment it unlocked).
+    // ever checked.
+    //
+    // The participant's very first tile ever (done.size === 0 below)
+    // keeps today's behavior verbatim -- cumulative since the challenge
+    // started, using the same `stats` grid5x5 uses -- since there's no
+    // prior tile to reset from. From the second tile onward,
+    // BACKLOG.md #4's logout-gated baseline reset applies: the tile
+    // isn't even evaluated until a qualifying Dink LOGOUT event
+    // establishes a fresh baseline, which the loop then checks stats
+    // against instead of the challenge-wide `stats`.
     const path = participant.adventure_path ?? {};
     const done = new Set(alreadyTileIds);
+    // Adventure is always solo (Coop/Team combined with it is
+    // deliberately deferred), so poolMembers is always just this one
+    // participant -- rawByMember always has an entry for them.
+    const raw = rawByMember.get(participant.id)!;
+    const memberSnapshots = snapshotsByMember.get(participant.id) ?? [];
+    let baselineAt = participant.adventure_baseline_at;
+    let baselineSnapshot = participant.adventure_baseline_snapshot;
+
+    async function establishBaseline(): Promise<void> {
+      const latest = [...memberSnapshots].sort((a, b) => a.recorded_on.localeCompare(b.recorded_on)).at(-1) ?? null;
+      baselineAt = await callRpcReturning<string>('establish_adventure_baseline', {
+        p_participant_id: participant.id,
+        p_snapshot: latest,
+      });
+      baselineSnapshot = latest;
+    }
+
     while (true) {
       const frontier = resolveFrontier(tiles, path, done);
       if (frontier.kind !== 'tile') break;
-      if (!checkTile(frontier.tile.condition, stats).done) break;
+
+      let tileStats: ParticipantStats;
+      if (done.size === 0) {
+        tileStats = stats; // first tile ever -- unchanged behavior
+      } else {
+        if (!baselineAt) {
+          if (!isLogout) break; // still awaiting a qualifying logout
+          await establishBaseline();
+          break; // just reset -- nothing could have happened in this same instant
+        }
+        const recap = baselineSnapshot ? computeHiscoresRecapFromBaseline(baselineSnapshot, memberSnapshots) : null;
+        tileStats = computeParticipantStats(raw, { start: baselineAt, end: window.end }, recap, participant.chosen_lowest_skill);
+      }
+
+      if (!checkTile(frontier.tile.condition, tileStats).done) break;
       if (await insertCompletion(challenge.id, participant.id, 'tile', frontier.tile.id)) {
         insertedTileIds.push(frontier.tile.id);
       }
       done.add(frontier.tile.id);
+
+      if (isLogout) {
+        // This same logout immediately becomes the *next* tile's
+        // baseline too -- no need to wait for a second one. The loop
+        // continues, but a freshly-reset baseline means ~zero elapsed
+        // time, so only a freeSpace-style tile could complete
+        // immediately -- same as freeSpace already can everywhere else.
+        await establishBaseline();
+      } else {
+        await callRpc('clear_adventure_baseline', { p_participant_id: participant.id });
+        baselineAt = null;
+        baselineSnapshot = null;
+        break; // next tile now locked, awaiting a fresh logout
+      }
     }
 
     const alreadyBoard = existingCompletions.some((c) => c.kind === 'board');

@@ -305,7 +305,11 @@ export async function processDinkWebhook(challenge: Challenge, payload: unknown,
     // make Dink retry a call that already succeeded).
     if (result.status === 200) {
       try {
-        await checkChallengeProgress(participant.id);
+        // Adventure's logout-gated baseline reset (BACKLOG.md #4) needs
+        // to know whether THIS event is the qualifying LOGOUT -- a plain
+        // KILL_COUNT/LOOT/etc. completing a tile is not enough on its
+        // own to unlock the next one.
+        await checkChallengeProgress(participant.id, type === 'LOGOUT');
       } catch (err) {
         console.error('Challenge progress check failed:', err);
       }

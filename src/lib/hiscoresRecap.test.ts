@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeHiscoresRecap, type SnapshotRow } from './hiscoresRecap';
+import { computeHiscoresRecap, computeHiscoresRecapFromBaseline, type SnapshotRow } from './hiscoresRecap';
 
 const WINDOW = { start: '2026-08-31', end: '2026-09-03' };
 
@@ -117,5 +117,44 @@ describe('computeHiscoresRecap', () => {
       skills: { Attack: { level: 50, xp: 100_000 }, Farming: { level: 30, xp: 500_000 } },
     });
     expect(computeHiscoresRecap([before, after], WINDOW)?.lowestSkillCandidates).toEqual(['Farming']);
+  });
+});
+
+describe('computeHiscoresRecapFromBaseline', () => {
+  it('diffs the baseline against the participant\'s single most recent snapshot', () => {
+    const baseline = snapshot('2026-09-01', 1_000_000);
+    const latest = snapshot('2026-09-03', 1_050_000);
+    expect(computeHiscoresRecapFromBaseline(baseline, [latest])?.xpGained).toBe(50_000);
+  });
+
+  it('gives a real (non-null) result for a same-day baseline-to-latest diff -- the exact case computeHiscoresRecap cannot handle', () => {
+    // Both snapshots share the SAME recorded_on date -- computeHiscoresRecap
+    // would return null here (its "after" search requires a strictly
+    // later date than "before"), but the baseline was captured live at
+    // an exact instant, so a same-day resync is exactly the point.
+    const baseline = snapshot('2026-09-01', 1_000_000);
+    const laterSameDay = snapshot('2026-09-01', 1_010_000);
+    expect(computeHiscoresRecap([baseline, laterSameDay], { start: '2026-09-01', end: '2026-09-01' })).toBeNull();
+    expect(computeHiscoresRecapFromBaseline(baseline, [laterSameDay])?.xpGained).toBe(10_000);
+  });
+
+  it('picks the single most recent snapshot when more than one exists, ignoring order', () => {
+    const baseline = snapshot('2026-08-31', 0);
+    const middle = snapshot('2026-09-01', 100);
+    const latest = snapshot('2026-09-03', 300);
+    const recap = computeHiscoresRecapFromBaseline(baseline, [latest, middle]);
+    expect(recap?.xpGained).toBe(300);
+  });
+
+  it('returns null when there are no snapshots to diff against at all', () => {
+    expect(computeHiscoresRecapFromBaseline(snapshot('2026-09-01', 0), [])).toBeNull();
+  });
+
+  it('resolves lowest-skill candidates from the baseline, same as computeHiscoresRecap', () => {
+    const baseline = snapshot('2026-08-31', 0, {
+      skills: { Attack: { level: 50, xp: 100_000 }, Farming: { level: 1, xp: 0 } },
+    });
+    const latest = snapshot('2026-09-01', 0, { skills: baseline.skills });
+    expect(computeHiscoresRecapFromBaseline(baseline, [latest])?.lowestSkillCandidates).toEqual(['Farming']);
   });
 });

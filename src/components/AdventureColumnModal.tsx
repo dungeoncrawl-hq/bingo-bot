@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getSupabase } from '../db/supabaseClient';
-import type { Challenge, Tile } from '../db/types';
+import type { AdventureLayout, Challenge, Tile } from '../db/types';
 import {
   checkTile,
   describeTileCondition,
@@ -10,7 +10,7 @@ import {
   type TileStatus,
 } from '../lib/tileConditions';
 import { computeParticipantStats, type RawParticipantData } from '../lib/participantStats';
-import { computeHiscoresRecap, type SnapshotRow } from '../lib/hiscoresRecap';
+import { computeHiscoresRecap, computeHiscoresRecapFromBaseline, type SnapshotRow } from '../lib/hiscoresRecap';
 import { progressColor } from '../lib/progressColor';
 
 interface ParticipantLite {
@@ -18,6 +18,13 @@ interface ParticipantLite {
   rsn: string;
   chosen_lowest_skill: string | null;
   adventure_path: Record<string, 'top' | 'bottom'>;
+  // Adventure logout-gated reset (BACKLOG.md #4) -- null means this
+  // participant's next tile is locked, awaiting a qualifying Dink
+  // LOGOUT event. Never consulted for the very first column (column 0)
+  // of the very first fork, which always uses challenge-wide stats,
+  // same as challengeProgress.ts's own first-tile exemption.
+  adventure_baseline_at: string | null;
+  adventure_baseline_snapshot: SnapshotRow | null;
 }
 
 interface Props {
@@ -104,9 +111,32 @@ export default function AdventureColumnModal({ forkIndex, topTile, bottomTile, p
           collectionLogEntries: clogByP.get(p.id) ?? [],
           petObtains: petsByP.get(p.id) ?? [],
         };
-        const hiscoresRecap = computeHiscoresRecap(snapshotsByP.get(p.id) ?? [], window);
-        const stats = computeParticipantStats(raw, window, hiscoresRecap, p.chosen_lowest_skill);
-        result[p.id] = checkTile(tile.condition, stats);
+        const participantSnapshots = snapshotsByP.get(p.id) ?? [];
+        // The very first column of the very first fork is exempt from
+        // baseline gating (matches challengeProgress.ts's own
+        // done.size === 0 exemption) -- every other column, once a
+        // baseline is established, is checked since that baseline
+        // instead of since the challenge start.
+        const isVeryFirstColumn = (tile.layout as AdventureLayout).column === 0;
+        if (!isVeryFirstColumn && p.adventure_baseline_at) {
+          const recap = p.adventure_baseline_snapshot
+            ? computeHiscoresRecapFromBaseline(p.adventure_baseline_snapshot, participantSnapshots)
+            : null;
+          const stats = computeParticipantStats(
+            raw,
+            { start: p.adventure_baseline_at, end: window.end },
+            recap,
+            p.chosen_lowest_skill,
+          );
+          result[p.id] = checkTile(tile.condition, stats);
+        } else if (isVeryFirstColumn) {
+          const hiscoresRecap = computeHiscoresRecap(participantSnapshots, window);
+          const stats = computeParticipantStats(raw, window, hiscoresRecap, p.chosen_lowest_skill);
+          result[p.id] = checkTile(tile.condition, stats);
+        }
+        // else: not the first column and no baseline yet -- awaiting a
+        // qualifying logout, left out of `statuses` entirely so the
+        // render below shows the dedicated "log out to start" state.
       }
       if (!cancelled) {
         setStatuses(result);
@@ -118,6 +148,10 @@ export default function AdventureColumnModal({ forkIndex, topTile, bottomTile, p
       cancelled = true;
     };
   }, [forkIndex, topTile, bottomTile, participants, challenge]);
+
+  function isVeryFirstColumn(tile: Tile): boolean {
+    return (tile.layout as AdventureLayout).column === 0;
+  }
 
   function tileFor(p: ParticipantLite): Tile | null {
     const chosenLane = p.adventure_path[String(forkIndex)];
@@ -154,17 +188,24 @@ export default function AdventureColumnModal({ forkIndex, topTile, bottomTile, p
           <ul className="space-y-3">
             {ranked.map((p) => {
               const tile = tileFor(p);
+              if (!tile) return null;
               const status = statuses[p.id];
-              if (!tile || !status) return null;
               const chosenLane = p.adventure_path[String(forkIndex)];
-              const percent = progressPercent(tile.condition, status);
-              const isFirst = status.done && tile.condition.type !== 'freeSpace' && firstCompleters[tile.id] === p.id;
-              const baseCaption = formatTileProgress(tile.condition, status) ?? formatTileGoal(tile.condition);
-              const caption = status.resolvedSkill
-                ? `${baseCaption} (${status.resolvedSkill})`
-                : status.needsSkillChoice
-                  ? 'tied -- pick a skill'
-                  : baseCaption;
+              // Missing from `statuses` means the fetch effect deliberately
+              // skipped this participant: not the very first column, and no
+              // adventure_baseline_at yet -- locked awaiting a logout.
+              const awaitingBaselineReset = !status && !isVeryFirstColumn(tile);
+              if (!status && !awaitingBaselineReset) return null;
+              const percent = status ? progressPercent(tile.condition, status) : null;
+              const isFirst = !!status?.done && tile.condition.type !== 'freeSpace' && firstCompleters[tile.id] === p.id;
+              const baseCaption = status ? formatTileProgress(tile.condition, status) ?? formatTileGoal(tile.condition) : '';
+              const caption = awaitingBaselineReset
+                ? 'Log out to start'
+                : status?.resolvedSkill
+                  ? `${baseCaption} (${status.resolvedSkill})`
+                  : status?.needsSkillChoice
+                    ? 'tied -- pick a skill'
+                    : baseCaption;
               return (
                 <li key={p.id}>
                   <div className="flex items-center justify-between text-sm">
@@ -174,11 +215,11 @@ export default function AdventureColumnModal({ forkIndex, topTile, bottomTile, p
                         {chosenLane}
                       </span>
                     </span>
-                    <span className="flex items-center gap-1 text-stone-400">
+                    <span className={`flex items-center gap-1 ${awaitingBaselineReset ? 'text-sky-400' : 'text-stone-400'}`}>
                       {caption}
                       {isFirst ? (
                         <span className="text-amber-400">⭐</span>
-                      ) : status.done ? (
+                      ) : status?.done ? (
                         <span className="text-green-400">✓</span>
                       ) : null}
                     </span>

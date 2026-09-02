@@ -469,3 +469,42 @@ alter table challenge_participants add column if not exists team_id uuid referen
 -- changed via supabase.auth.updateUser() from the client, not a table
 -- write.
 alter table profiles add column if not exists default_rsn text;
+
+-- Adventure logout-gated baseline reset (BACKLOG.md #4): a tile's next
+-- sibling stays locked and unevaluated until a qualifying Dink LOGOUT
+-- event lands, whose forced on-demand hiscores resync becomes the new
+-- baseline. adventure_baseline_snapshot is a literal frozen copy of
+-- hiscoresRecap.ts's SnapshotRow shape at that moment, not a pointer to
+-- re-fetch later -- participant_snapshots' row for that day can (and
+-- will) get overwritten by a later sync, whether another logout or the
+-- daily cron in participantSync.ts.
+alter table challenge_participants add column if not exists adventure_baseline_at timestamptz;
+alter table challenge_participants add column if not exists adventure_baseline_snapshot jsonb;
+
+create or replace function establish_adventure_baseline(
+  p_participant_id uuid,
+  p_snapshot jsonb
+) returns timestamptz
+language sql
+as $$
+  update challenge_participants
+  set adventure_baseline_at = now(),
+      adventure_baseline_snapshot = p_snapshot
+  where id = p_participant_id
+  returning adventure_baseline_at;
+$$;
+
+create or replace function clear_adventure_baseline(p_participant_id uuid) returns void
+language sql
+as $$
+  update challenge_participants
+  set adventure_baseline_at = null, adventure_baseline_snapshot = null
+  where id = p_participant_id;
+$$;
+
+-- Entirely server-controlled -- a participant should never be able to
+-- grant themselves an instant baseline by PATCHing their own row
+-- directly (challenge_participants' "self or host writes" policy is
+-- `for all`). Same anti-tamper precedent as is_site_admin/
+-- webhook_call_count earlier this session.
+revoke update (adventure_baseline_at, adventure_baseline_snapshot) on challenge_participants from authenticated;

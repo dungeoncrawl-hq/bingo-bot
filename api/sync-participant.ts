@@ -49,7 +49,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch {
     syncFailed = true;
   } finally {
-    await checkChallengeProgress(participant.id).catch(() => {});
+    // A join-time baseline sync, not a real Dink LOGOUT -- must never
+    // itself count as the qualifying logout for Adventure's baseline
+    // reset (BACKLOG.md #4).
+    await checkChallengeProgress(participant.id, false).catch(() => {});
   }
   res.status(200).json(syncFailed ? { ok: false, note: 'hiscores fetch failed' } : { ok: true });
 }

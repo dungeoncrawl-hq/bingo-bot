@@ -1,4 +1,5 @@
 import type { TileCondition } from '../lib/tileConditions.js';
+import type { SnapshotRow } from '../lib/hiscoresRecap.js';
 
 export interface Profile {
   id: string;
@@ -84,4 +85,10 @@ export interface ChallengeParticipant {
   // Only meaningful for game_mode='team' -- null until the host assigns
   // this participant to one of the challenge's teams.
   team_id: string | null;
+  // Adventure logout-gated reset (BACKLOG.md #4) -- null means the
+  // participant's next tile is locked, awaiting a qualifying Dink
+  // LOGOUT event. Set together via the establish_adventure_baseline RPC
+  // (never a plain client update -- see schema.sql's revoke).
+  adventure_baseline_at: string | null;
+  adventure_baseline_snapshot: SnapshotRow | null;
 }

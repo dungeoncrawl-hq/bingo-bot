@@ -67,26 +67,11 @@ function resolveLowestSkillCandidates(snapshot: SnapshotRow): string[] {
     .sort();
 }
 
-export function computeHiscoresRecap(
-  snapshots: SnapshotRow[],
-  window: { start: string; end: string },
-): HiscoresRecap | null {
-  const sorted = [...snapshots].sort((a, b) => a.recorded_on.localeCompare(b.recorded_on));
-
-  // "before" = the last snapshot strictly before window.start, falling
-  // back to the earliest snapshot ever if none exists -- lets day-1
-  // progress still show against a slightly-early baseline rather than
-  // nothing, same as rs.
-  const strictlyBefore = sorted.filter((s) => s.recorded_on < window.start);
-  const before = strictlyBefore.length > 0 ? strictlyBefore[strictlyBefore.length - 1] : sorted[0];
-  if (!before) return null;
-
-  // "after" = the last snapshot strictly after `before`'s own date and
-  // within the window's end.
-  const afterCandidates = sorted.filter((s) => s.recorded_on > before.recorded_on && s.recorded_on <= window.end);
-  const after = afterCandidates.length > 0 ? afterCandidates[afterCandidates.length - 1] : undefined;
-  if (!after) return null;
-
+// The actual before/after diff -- extracted so both computeHiscoresRecap
+// (searches for `before`/`after` by date) and
+// computeHiscoresRecapFromBaseline (BACKLOG.md #4 -- takes an explicit
+// frozen `before` instead of searching for one) share identical math.
+function diffSnapshots(before: SnapshotRow, after: SnapshotRow): HiscoresRecap {
   const xpGained = Math.max(0, after.total_xp - before.total_xp);
 
   const skillXpGained: Record<string, number> = {};
@@ -115,4 +100,43 @@ export function computeHiscoresRecap(
     ...clueDeltas,
     lowestSkillCandidates: resolveLowestSkillCandidates(before),
   };
+}
+
+export function computeHiscoresRecap(
+  snapshots: SnapshotRow[],
+  window: { start: string; end: string },
+): HiscoresRecap | null {
+  const sorted = [...snapshots].sort((a, b) => a.recorded_on.localeCompare(b.recorded_on));
+
+  // "before" = the last snapshot strictly before window.start, falling
+  // back to the earliest snapshot ever if none exists -- lets day-1
+  // progress still show against a slightly-early baseline rather than
+  // nothing, same as rs.
+  const strictlyBefore = sorted.filter((s) => s.recorded_on < window.start);
+  const before = strictlyBefore.length > 0 ? strictlyBefore[strictlyBefore.length - 1] : sorted[0];
+  if (!before) return null;
+
+  // "after" = the last snapshot strictly after `before`'s own date and
+  // within the window's end.
+  const afterCandidates = sorted.filter((s) => s.recorded_on > before.recorded_on && s.recorded_on <= window.end);
+  const after = afterCandidates.length > 0 ? afterCandidates[afterCandidates.length - 1] : undefined;
+  if (!after) return null;
+
+  return diffSnapshots(before, after);
+}
+
+// Diffs against an explicit frozen baseline instead of date-searching
+// for one (BACKLOG.md #4's Adventure logout-gated reset) -- "after" is
+// simply the participant's single most recent snapshot, not required to
+// be a later calendar date than the baseline, since a same-day resync
+// already reflects everything gained since the baseline moment. The
+// date-search restriction in computeHiscoresRecap exists only because
+// it has no better anchor than a date to search from; this function has
+// an exact instant instead (the baseline was captured live, at the
+// moment a qualifying Dink LOGOUT event landed), so same-day precision
+// is exactly the point.
+export function computeHiscoresRecapFromBaseline(baseline: SnapshotRow, snapshots: SnapshotRow[]): HiscoresRecap | null {
+  const latest = [...snapshots].sort((a, b) => a.recorded_on.localeCompare(b.recorded_on)).at(-1);
+  if (!latest) return null;
+  return diffSnapshots(baseline, latest);
 }

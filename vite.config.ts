@@ -103,7 +103,7 @@ function devApi(): Plugin {
           res.setHeader('Content-Type', 'application/json')
           try {
             await syncOneParticipant(participant.challenge_id, participant.id, participant.rsn)
-            await checkChallengeProgress(participant.id).catch(() => {})
+            await checkChallengeProgress(participant.id, false).catch(() => {})
             res.statusCode = 200
             res.end(JSON.stringify({ ok: true }))
           } catch {
