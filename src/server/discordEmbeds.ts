@@ -3,6 +3,7 @@
 // focused on completion *detection*, not presentation.
 import { tileTaskPhrase, tileTaskDetail } from '../lib/tileConditions.js';
 import { ADVENTURE_SMALL_FINAL_BOSS_COLUMN } from '../lib/adventureProgress.js';
+import { tileCompletionFlavor, boardCompletionFlavor } from './discordBanter.js';
 import type { LeaderboardEntry } from '../lib/leaderboard.js';
 import type { AdventureLayout, Tile } from '../db/types.js';
 import type { DiscordEmbed, DiscordEmbedField } from './discordRelay.js';
@@ -91,11 +92,6 @@ export function buildTileCompletionEmbed(params: {
   // deployment can land before the DB migration adding the column runs --
   // fall back to no bonus rather than posting "NaN pts" in that gap.
   const totalPoints = tile.points + (isFirst ? (tile.first_completer_bonus ?? 0) : 0);
-  const flavor = noFirstConcept
-    ? undefined
-    : isFirst
-      ? `+${totalPoints} pts. Aren't they just showing off at this point?`
-      : `Unfortunately not as fast as ${firstCompleterRsn}, though.`;
   // Extra context that didn't fit in the headline phrase (e.g. an
   // itemSetCollected tile's "N items, each counts once") gets its own
   // line ahead of the flavor text, rather than bloating the title.
@@ -108,6 +104,12 @@ export function buildTileCompletionEmbed(params: {
   // buildBoardCompletionEmbed sent right after, unchanged by this.
   const isBoss = 'lane' in tile.layout && tile.layout.lane === 'center';
   const isFinalBoss = isBoss && (tile.layout as AdventureLayout).column === ADVENTURE_SMALL_FINAL_BOSS_COLUMN;
+  // Randomized per completion (BACKLOG.md #8) instead of one fixed line
+  // forever -- parameterized by the same two dimensions that already
+  // reshape this embed: is-boss and did-they-actually-win-the-race.
+  const flavor = noFirstConcept
+    ? undefined
+    : tileCompletionFlavor({ isFirst, isBoss, points: totalPoints, firstCompleterRsn });
   const bossLabel = isFinalBoss ? 'the FINAL BOSS' : 'a boss';
   const title = isBoss
     ? isFirst
@@ -150,7 +152,7 @@ export function buildBoardCompletionEmbed(params: { participant: ParticipantLite
   const subject = params.subject ?? participant.rsn;
   return {
     title: `${subject} completed the whole board!`,
-    description: 'Every tile conquered.',
+    description: boardCompletionFlavor(),
     color: BOARD_COLOR,
     image: challenge.board_type === 'adventure' ? undefined : { url: boardImageUrl(participant.id) },
     fields: [boardLinkField(challenge)],

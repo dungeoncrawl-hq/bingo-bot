@@ -73,7 +73,9 @@ describe('buildTileCompletionEmbed', () => {
       challenge: CHALLENGE,
     });
     expect(embed.title).toBe('26 Limont completed the single drop worth 1M+ GP task.');
-    expect(embed.description).toBe('Unfortunately not as fast as otototo, though.');
+    // Flavor text is randomized (BACKLOG.md #8) -- assert the
+    // information it must bake in, not one fixed sentence.
+    expect(embed.description).toContain('otototo');
   });
 
   it('uses the "first to complete" title/description when isFirst', () => {
@@ -87,7 +89,7 @@ describe('buildTileCompletionEmbed', () => {
       challenge: CHALLENGE,
     });
     expect(embed.title).toBe('26 Limont was first to complete the 500,000 total XP task!');
-    expect(embed.description).toBe("+3 pts. Aren't they just showing off at this point?");
+    expect(embed.description).toContain('3 pts');
   });
 
   it('adds the first-completer bonus to the flavor text and Points field when isFirst', () => {
@@ -100,7 +102,7 @@ describe('buildTileCompletionEmbed', () => {
       participants: PARTICIPANTS,
       challenge: CHALLENGE,
     });
-    expect(embed.description).toBe("+8 pts. Aren't they just showing off at this point?");
+    expect(embed.description).toContain('8 pts');
     expect(embed.fields?.find((f) => f.name === 'Points')?.value).toBe('+8');
   });
 
@@ -204,6 +206,33 @@ describe('buildTileCompletionEmbed -- game-mode subject swap (BACKLOG.md #10)', 
       challenge: CHALLENGE,
     });
     expect(embed.title).toBe('Team Red was first to complete the 500,000 total XP task!');
+  });
+});
+
+describe('buildTileCompletionEmbed -- banter (BACKLOG.md #8)', () => {
+  it('varies the description across repeated identical calls (proves randomization is actually wired through)', () => {
+    const build = () =>
+      buildTileCompletionEmbed({
+        participant: PARTICIPANTS[0],
+        tile: tile({ points: 3, condition: { type: 'xpGained', threshold: 500_000 } }),
+        isFirst: true,
+        firstCompleterRsn: '26 Limont',
+        leaderboard: [],
+        participants: PARTICIPANTS,
+        challenge: CHALLENGE,
+      }).description;
+    const seen = new Set(Array.from({ length: 40 }, build));
+    // Flaky-in-theory (a fair pool could repeat the same line 40/40
+    // times) but the pool has 6 first-place tile lines, so the odds of
+    // never seeing a second one are astronomically small.
+    expect(seen.size).toBeGreaterThan(1);
+  });
+});
+
+describe('buildBoardCompletionEmbed -- banter (BACKLOG.md #8)', () => {
+  it('always has a non-empty celebratory description', () => {
+    const board = buildBoardCompletionEmbed({ participant: PARTICIPANTS[0], challenge: CHALLENGE });
+    expect(board.description).toBeTruthy();
   });
 });
 
