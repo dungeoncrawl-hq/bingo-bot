@@ -139,4 +139,69 @@ describe('buildLineCompletionEmbed / buildBoardCompletionEmbed', () => {
     expect(line.fields?.[0].value).toBe('[Bingo Time!](https://dungeoncrawl.lol/c/bingo-time)');
     expect(board.fields?.[0].value).toBe('[Bingo Time!](https://dungeoncrawl.lol/c/bingo-time)');
   });
+
+  it('attaches the board image for a grid5x5 (or unspecified) challenge', () => {
+    const board = buildBoardCompletionEmbed({ participant: PARTICIPANTS[0], challenge: CHALLENGE });
+    expect(board.image?.url).toContain('/api/board-image/');
+  });
+
+  it('omits the board image for an adventure challenge -- no renderer exists for that shape yet', () => {
+    const adventureChallenge: ChallengeLite = { ...CHALLENGE, board_type: 'adventure' };
+    const board = buildBoardCompletionEmbed({ participant: PARTICIPANTS[0], challenge: adventureChallenge });
+    expect(board.image).toBeUndefined();
+  });
+});
+
+describe('buildTileCompletionEmbed -- adventure boss tiles', () => {
+  it('uses boss-flavored title text for a mid-boss tile (lane: center)', () => {
+    const embed = buildTileCompletionEmbed({
+      participant: PARTICIPANTS[0],
+      tile: tile({ layout: { column: 2, lane: 'center' }, condition: { type: 'bossKcGained', threshold: 10 } }),
+      isFirst: false,
+      firstCompleterRsn: 'otototo',
+      leaderboard: [],
+      participants: PARTICIPANTS,
+      challenge: { ...CHALLENGE, board_type: 'adventure' },
+    });
+    expect(embed.title).toBe('26 Limont defeated a boss -- the 10 total boss KC boss.');
+  });
+
+  it('gives the final boss column (8) extra flourish over a mid-boss', () => {
+    const embed = buildTileCompletionEmbed({
+      participant: PARTICIPANTS[0],
+      tile: tile({ layout: { column: 8, lane: 'center' }, condition: { type: 'bossKcGained', threshold: 10 } }),
+      isFirst: true,
+      firstCompleterRsn: '26 Limont',
+      leaderboard: [],
+      participants: PARTICIPANTS,
+      challenge: { ...CHALLENGE, board_type: 'adventure' },
+    });
+    expect(embed.title).toBe('26 Limont was first to defeat the FINAL BOSS -- the 10 total boss KC boss!');
+  });
+
+  it('leaves an ordinary (non-center-lane) adventure tile using the regular task title', () => {
+    const embed = buildTileCompletionEmbed({
+      participant: PARTICIPANTS[0],
+      tile: tile({ layout: { column: 0, lane: 'top' }, condition: { type: 'xpGained', threshold: 500_000 } }),
+      isFirst: false,
+      firstCompleterRsn: 'otototo',
+      leaderboard: [],
+      participants: PARTICIPANTS,
+      challenge: { ...CHALLENGE, board_type: 'adventure' },
+    });
+    expect(embed.title).toBe('26 Limont completed the 500,000 total XP task.');
+  });
+
+  it('omits the board image for an adventure tile completion', () => {
+    const embed = buildTileCompletionEmbed({
+      participant: PARTICIPANTS[0],
+      tile: tile({ layout: { column: 0, lane: 'top' } }),
+      isFirst: false,
+      firstCompleterRsn: 'otototo',
+      leaderboard: [],
+      participants: PARTICIPANTS,
+      challenge: { ...CHALLENGE, board_type: 'adventure' },
+    });
+    expect(embed.image).toBeUndefined();
+  });
 });

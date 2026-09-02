@@ -412,3 +412,17 @@ $$;
 -- surface. screenshot_count/screenshot_bytes had this same gap already --
 -- closed here alongside the new columns rather than left inconsistent.
 revoke update (screenshot_count, screenshot_bytes, webhook_call_count, last_webhook_at) on challenge_participants from authenticated;
+
+-- Adventure mode (BACKLOG.md #7): a second board_type, a branching path
+-- instead of the 5x5 grid. board_type itself needs no migration (already
+-- unconstrained text -- see its own comment above); these two columns are
+-- what a board_type='adventure' challenge additionally needs.
+-- board_size stays unconstrained text too, same "no migration for a new
+-- value" reasoning -- only 'small' exists today.
+alter table challenges add column if not exists board_size text;
+-- Keyed by fork index as a string ("0", "1", "2" for the small layout) ->
+-- which lane ('top'/'bottom') the participant picked at that fork. A
+-- participant writes their own pick directly (same trust level as the
+-- existing chosen_lowest_skill column) -- challenge_participants' "self
+-- or host writes" policy already covers it, no new RLS/revoke needed.
+alter table challenge_participants add column if not exists adventure_path jsonb not null default '{}';

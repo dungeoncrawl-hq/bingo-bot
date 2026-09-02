@@ -8,6 +8,7 @@ import TileEditorForm from '../components/TileEditorForm';
 import { formatTileGoal, type TileCondition } from '../lib/tileConditions';
 import { displayStatus } from '../lib/dungeonStatus';
 import { formatBytes } from '../lib/format';
+import { ADVENTURE_SMALL_COLUMNS, isBossColumn } from '../lib/adventureProgress';
 
 const GRID_SIZE = 5;
 
@@ -61,7 +62,15 @@ export default function EditChallengePage() {
     }
   }, [challenge]);
 
-  const tileAt = (row: number, col: number) => tiles.find((t) => t.layout.row === row && t.layout.col === col) ?? null;
+  // Handles both board_types' layout shapes -- a challenge's board_type is
+  // fixed at creation and never changes, so `layout` and every `t.layout`
+  // in `tiles` are always the same shape for one challenge.
+  function layoutEquals(a: TileLayout, b: TileLayout): boolean {
+    if ('row' in a && 'row' in b) return a.row === b.row && a.col === b.col;
+    if ('column' in a && 'column' in b) return a.column === b.column && a.lane === b.lane;
+    return false;
+  }
+  const tileAt = (layout: TileLayout) => tiles.find((t) => layoutEquals(t.layout, layout)) ?? null;
 
   async function handleSave(fields: {
     label: string;
@@ -72,7 +81,7 @@ export default function EditChallengePage() {
   }) {
     if (!editingCell || !challenge || challenge === 'not-found') return;
     const supabase = getSupabase();
-    const existing = tileAt(editingCell.row, editingCell.col);
+    const existing = tileAt(editingCell);
     if (existing) {
       await supabase.from('tiles').update(fields).eq('id', existing.id);
     } else {
@@ -84,7 +93,7 @@ export default function EditChallengePage() {
 
   async function handleDelete() {
     if (!editingCell) return;
-    const existing = tileAt(editingCell.row, editingCell.col);
+    const existing = tileAt(editingCell);
     if (!existing) return;
     await getSupabase().from('tiles').delete().eq('id', existing.id);
     setEditingCell(null);
@@ -140,7 +149,7 @@ export default function EditChallengePage() {
     return <p className="mx-auto max-w-lg py-24 text-center text-stone-400">This isn't your challenge to edit.</p>;
   }
 
-  const editingTile = editingCell ? tileAt(editingCell.row, editingCell.col) : null;
+  const editingTile = editingCell ? tileAt(editingCell) : null;
   const inviteMessage = `Come join my Dungeon Crawl challenge, "${challenge.name}"! Jump in here: ${window.location.origin}/c/${challenge.slug}`;
   // "Started" = published and its start_date has arrived -- matches
   // displayStatus's 'active'/'past', not just "not a draft," so a
@@ -191,34 +200,78 @@ export default function EditChallengePage() {
         </div>
       </div>
 
-      <div className="mt-8 grid grid-cols-5 gap-2">
-        {Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, i) => {
-          const row = Math.floor(i / GRID_SIZE);
-          const col = i % GRID_SIZE;
-          const tile = tileAt(row, col);
-          return (
-            <button
-              key={i}
-              onClick={() => setEditingCell({ row, col })}
-              className={`relative flex aspect-square min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden rounded-lg border p-2 text-center shadow-inner transition-colors hover:border-amber-500 before:pointer-events-none before:absolute before:inset-0 before:bg-[url('/stone-texture.svg')] before:bg-cover before:bg-center before:opacity-30 before:content-[''] ${
-                tile ? 'border-stone-700 bg-stone-900' : 'border-stone-800/60 bg-stone-950/50'
-              }`}
-            >
-              {tile ? (
-                <>
-                  {tile.icon && <img src={tile.icon} alt="" className="h-6 w-6 shrink-0" />}
-                  <span className="mt-1 line-clamp-2 w-full break-words text-[11px]">{tile.label}</span>
-                  {formatTileGoal(tile.condition) && (
-                    <span className="w-full break-words text-[9px] text-stone-500">{formatTileGoal(tile.condition)}</span>
-                  )}
-                </>
-              ) : (
-                <span className="text-xs text-stone-600">+ Add tile</span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+      {challenge.board_type === 'adventure' ? (
+        <div className="mt-8 overflow-x-auto pb-2">
+          <div className="flex gap-2" style={{ minWidth: `${ADVENTURE_SMALL_COLUMNS * 90}px` }}>
+            {Array.from({ length: ADVENTURE_SMALL_COLUMNS }, (_, column) => {
+              const lanes = isBossColumn(column) ? (['center'] as const) : (['top', 'bottom'] as const);
+              return (
+                <div key={column} className="flex w-20 shrink-0 flex-col justify-center gap-2">
+                  {lanes.map((lane) => {
+                    const tile = tileAt({ column, lane });
+                    return (
+                      <button
+                        key={lane}
+                        onClick={() => setEditingCell({ column, lane })}
+                        className={`relative flex aspect-square min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden rounded-lg border p-2 text-center shadow-inner transition-colors hover:border-amber-500 before:pointer-events-none before:absolute before:inset-0 before:bg-[url('/stone-texture.svg')] before:bg-cover before:bg-center before:opacity-30 before:content-[''] ${
+                          lane === 'center'
+                            ? tile
+                              ? 'border-amber-700 bg-amber-950/20'
+                              : 'border-amber-900/50 bg-stone-950/50'
+                            : tile
+                              ? 'border-stone-700 bg-stone-900'
+                              : 'border-stone-800/60 bg-stone-950/50'
+                        }`}
+                      >
+                        {tile ? (
+                          <>
+                            {tile.icon && <img src={tile.icon} alt="" className="h-6 w-6 shrink-0" />}
+                            <span className="mt-1 line-clamp-2 w-full break-words text-[11px]">{tile.label}</span>
+                            {formatTileGoal(tile.condition) && (
+                              <span className="w-full break-words text-[9px] text-stone-500">{formatTileGoal(tile.condition)}</span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-xs text-stone-600">{lane === 'center' ? '+ Boss' : '+ Add tile'}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="mt-8 grid grid-cols-5 gap-2">
+          {Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, i) => {
+            const row = Math.floor(i / GRID_SIZE);
+            const col = i % GRID_SIZE;
+            const tile = tileAt({ row, col });
+            return (
+              <button
+                key={i}
+                onClick={() => setEditingCell({ row, col })}
+                className={`relative flex aspect-square min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden rounded-lg border p-2 text-center shadow-inner transition-colors hover:border-amber-500 before:pointer-events-none before:absolute before:inset-0 before:bg-[url('/stone-texture.svg')] before:bg-cover before:bg-center before:opacity-30 before:content-[''] ${
+                  tile ? 'border-stone-700 bg-stone-900' : 'border-stone-800/60 bg-stone-950/50'
+                }`}
+              >
+                {tile ? (
+                  <>
+                    {tile.icon && <img src={tile.icon} alt="" className="h-6 w-6 shrink-0" />}
+                    <span className="mt-1 line-clamp-2 w-full break-words text-[11px]">{tile.label}</span>
+                    {formatTileGoal(tile.condition) && (
+                      <span className="w-full break-words text-[9px] text-stone-500">{formatTileGoal(tile.condition)}</span>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-xs text-stone-600">+ Add tile</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <div className="mt-10 max-w-md">
         <h2 className="text-lg font-semibold">Players</h2>

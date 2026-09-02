@@ -18,6 +18,7 @@ export default function NewChallengePage() {
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   const [slugEdited, setSlugEdited] = useState(false);
+  const [boardType, setBoardType] = useState<'grid5x5' | 'adventure'>('grid5x5');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [error, setError] = useState('');
@@ -46,7 +47,8 @@ export default function NewChallengePage() {
         host_id: session.user.id,
         name: name.trim(),
         slug: slug.trim(),
-        board_type: 'grid5x5',
+        board_type: boardType,
+        board_size: boardType === 'adventure' ? 'small' : null,
         start_date: startDate,
         end_date: endDate,
       })
@@ -88,6 +90,31 @@ export default function NewChallengePage() {
             }}
             className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
           />
+        </div>
+        <div>
+          <label className="block text-sm text-stone-400">Dungeon type</label>
+          <div className="mt-1 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setBoardType('grid5x5')}
+              className={`rounded-lg border px-3 py-2 text-left text-sm ${
+                boardType === 'grid5x5' ? 'border-amber-500 bg-stone-900' : 'border-stone-700 bg-stone-900/50 text-stone-400'
+              }`}
+            >
+              <span className="block font-medium text-stone-200">Standard</span>
+              <span className="block text-xs text-stone-500">5x5 grid, 25 tiles</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setBoardType('adventure')}
+              className={`rounded-lg border px-3 py-2 text-left text-sm ${
+                boardType === 'adventure' ? 'border-amber-500 bg-stone-900' : 'border-stone-700 bg-stone-900/50 text-stone-400'
+              }`}
+            >
+              <span className="block font-medium text-stone-200">Adventure</span>
+              <span className="block text-xs text-stone-500">Small -- 15 tiles, branching path</span>
+            </button>
+          </div>
         </div>
         <div className="flex gap-4">
           <div className="flex-1">

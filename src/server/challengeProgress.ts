@@ -16,13 +16,16 @@ import { computeHiscoresRecap } from '../lib/hiscoresRecap.js';
 import type { SnapshotRow } from '../lib/hiscoresRecap.js';
 import { computeLeaderboard } from '../lib/leaderboard.js';
 import { computeFirstCompleters } from '../lib/firstCompletions.js';
-import type { Challenge, Tile } from '../db/types.js';
+import { resolveFrontier } from '../lib/adventureProgress.js';
+import type { AdventurePath } from '../lib/adventureProgress.js';
+import type { Challenge, GridLayout, Tile } from '../db/types.js';
 
 interface ParticipantRow {
   id: string;
   challenge_id: string;
   rsn: string;
   chosen_lowest_skill: string | null;
+  adventure_path: AdventurePath | null;
 }
 
 interface CompletionRow {
@@ -42,7 +45,7 @@ const GRID_SIZE = 5;
 export async function checkChallengeProgress(participantId: string): Promise<void> {
   const [participant] = await selectRows<ParticipantRow>(
     'challenge_participants',
-    `id=eq.${encodeURIComponent(participantId)}&select=id,challenge_id,rsn,chosen_lowest_skill`,
+    `id=eq.${encodeURIComponent(participantId)}&select=id,challenge_id,rsn,chosen_lowest_skill,adventure_path`,
   );
   if (!participant) return;
 
@@ -79,24 +82,28 @@ export async function checkChallengeProgress(participantId: string): Promise<voi
   const hiscoresRecap = computeHiscoresRecap(snapshots, window);
   const stats = computeParticipantStats(raw, window, hiscoresRecap, participant.chosen_lowest_skill);
 
-  const doneTileIds = new Set(tiles.filter((t) => checkTile(t.condition, stats).done).map((t) => t.id));
   const alreadyTileIds = new Set(existingCompletions.filter((c) => c.kind === 'tile').map((c) => c.ref));
-  const newlyDoneTileIds = [...doneTileIds].filter((id) => !alreadyTileIds.has(id));
 
   // Phase 1: do every insert first, collecting only what actually landed
   // (insertCompletion races on a unique constraint -- see its own
   // comment). Discord embeds are built and sent in phase 2, once, using
   // challenge-wide data that must reflect all of this event's inserts.
   const insertedTileIds: string[] = [];
-  for (const tileId of newlyDoneTileIds) {
-    if (await insertCompletion(challenge.id, participant.id, 'tile', tileId)) insertedTileIds.push(tileId);
-  }
-
   const insertedLineIndices: string[] = [];
   let boardInserted = false;
 
   if (challenge.board_type === 'grid5x5') {
-    const tileByIndex = new Map(tiles.map((t) => [t.layout.row * GRID_SIZE + t.layout.col, t]));
+    // Every tile's condition is independent here -- any tile can complete
+    // on its own, so it's safe (and needed for line/board detection
+    // below) to check the whole board against `stats` in one sweep.
+    // Adventure (below) deliberately does NOT do this -- see its comment.
+    const doneTileIds = new Set(tiles.filter((t) => checkTile(t.condition, stats).done).map((t) => t.id));
+    const newlyDoneTileIds = [...doneTileIds].filter((id) => !alreadyTileIds.has(id));
+    for (const tileId of newlyDoneTileIds) {
+      if (await insertCompletion(challenge.id, participant.id, 'tile', tileId)) insertedTileIds.push(tileId);
+    }
+
+    const tileByIndex = new Map(tiles.map((t) => [(t.layout as GridLayout).row * GRID_SIZE + (t.layout as GridLayout).col, t]));
     const alreadyLineIndices = new Set(existingCompletions.filter((c) => c.kind === 'line').map((c) => c.ref));
     const lines = gridLines(GRID_SIZE);
 
@@ -115,6 +122,30 @@ export async function checkChallengeProgress(participantId: string): Promise<voi
     if (boardDone && !alreadyBoard) {
       boardInserted = await insertCompletion(challenge.id, participant.id, 'board', 'board');
     }
+  } else if (challenge.board_type === 'adventure') {
+    // Gated sequentially -- a cumulative stat could already clear a later
+    // tile's bar before an earlier one is even reached, so (unlike
+    // grid5x5 above) completions are never driven by sweeping every tile
+    // against `stats` at once. Only the participant's current frontier is
+    // ever checked, in a loop so one event can cascade through multiple
+    // already-satisfied tiles/bosses in a single pass (e.g. a big
+    // cumulative-XP tile that was already clear the moment it unlocked).
+    const path = participant.adventure_path ?? {};
+    const done = new Set(alreadyTileIds);
+    while (true) {
+      const frontier = resolveFrontier(tiles, path, done);
+      if (frontier.kind !== 'tile') break;
+      if (!checkTile(frontier.tile.condition, stats).done) break;
+      if (await insertCompletion(challenge.id, participant.id, 'tile', frontier.tile.id)) {
+        insertedTileIds.push(frontier.tile.id);
+      }
+      done.add(frontier.tile.id);
+    }
+
+    const alreadyBoard = existingCompletions.some((c) => c.kind === 'board');
+    if (!alreadyBoard && resolveFrontier(tiles, path, done).kind === 'clear') {
+      boardInserted = await insertCompletion(challenge.id, participant.id, 'board', 'board');
+    }
   }
 
   // Phase 2: nothing to announce -- skip the extra challenge-wide queries
@@ -131,7 +162,7 @@ export async function checkChallengeProgress(participantId: string): Promise<voi
   const firstCompleters = computeFirstCompleters(challengeCompletions);
   const leaderboard = computeLeaderboard(tiles, challengeCompletions, allParticipants.map((p) => p.id), firstCompleters);
   const participantLite: ParticipantLite = { id: participant.id, rsn: participant.rsn };
-  const challengeLite = { name: challenge.name, slug: challenge.slug };
+  const challengeLite = { name: challenge.name, slug: challenge.slug, board_type: challenge.board_type };
 
   for (const tileId of insertedTileIds) {
     const tile = tiles.find((t) => t.id === tileId);

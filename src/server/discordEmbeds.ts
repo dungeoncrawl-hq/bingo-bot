@@ -2,8 +2,9 @@
 // line/board completion -- kept separate from that file so it stays
 // focused on completion *detection*, not presentation.
 import { tileTaskPhrase, tileTaskDetail } from '../lib/tileConditions.js';
+import { ADVENTURE_SMALL_FINAL_BOSS_COLUMN } from '../lib/adventureProgress.js';
 import type { LeaderboardEntry } from '../lib/leaderboard.js';
-import type { Tile } from '../db/types.js';
+import type { AdventureLayout, Tile } from '../db/types.js';
 import type { DiscordEmbed, DiscordEmbedField } from './discordRelay.js';
 
 // Single production domain -- this app has no staging/preview Discord
@@ -24,6 +25,10 @@ export interface ParticipantLite {
 export interface ChallengeLite {
   name: string;
   slug: string;
+  // Optional so pre-existing callers/fixtures keep compiling -- absent
+  // behaves like 'grid5x5' (attach the board image), only an explicit
+  // 'adventure' omits it. See buildTileCompletionEmbed's own comment.
+  board_type?: string;
 }
 
 // The cache-busting query param exists so Discord doesn't reuse a stale
@@ -80,14 +85,32 @@ export function buildTileCompletionEmbed(params: {
   // itemSetCollected tile's "N items, each counts once") gets its own
   // line ahead of the flavor text, rather than bloating the title.
   const detail = tileTaskDetail(tile.condition);
-  return {
-    title: isFirst
+
+  // Adventure boss tiles (BACKLOG.md #7) are mechanically just a tile with
+  // bigger stakes -- same embed, boss-flavored title text instead of a
+  // new builder. The final boss gets a bit more flourish than a mid-boss;
+  // the actual "dungeon cleared" banner is a separate
+  // buildBoardCompletionEmbed sent right after, unchanged by this.
+  const isBoss = 'lane' in tile.layout && tile.layout.lane === 'center';
+  const isFinalBoss = isBoss && (tile.layout as AdventureLayout).column === ADVENTURE_SMALL_FINAL_BOSS_COLUMN;
+  const bossLabel = isFinalBoss ? 'the FINAL BOSS' : 'a boss';
+  const title = isBoss
+    ? isFirst
+      ? `${participant.rsn} was first to defeat ${bossLabel} -- the ${phrase} boss!`
+      : `${participant.rsn} defeated ${bossLabel} -- the ${phrase} boss.`
+    : isFirst
       ? `${participant.rsn} was first to complete the ${phrase} task!`
-      : `${participant.rsn} completed the ${phrase} task.`,
+      : `${participant.rsn} completed the ${phrase} task.`;
+
+  return {
+    title,
     description: detail ? `${detail}\n${flavor}` : flavor,
     color: isFirst ? FIRST_COLOR : TILE_COLOR,
     thumbnail: tile.icon ? { url: tile.icon } : undefined,
-    image: { url: boardImageUrl(participant.id) },
+    // Adventure has no equivalent board-state PNG renderer yet (see
+    // src/lib/boardImage.ts -- hardcoded to the 5x5 grid) -- omit rather
+    // than attach a garbled/wrong image.
+    image: challenge.board_type === 'adventure' ? undefined : { url: boardImageUrl(participant.id) },
     fields: [
       { name: 'Points', value: `+${totalPoints}`, inline: true },
       { name: 'Leaderboard', value: formatLeaderboardField(leaderboard, participants) || 'No one has scored yet.' },
@@ -112,7 +135,7 @@ export function buildBoardCompletionEmbed(params: { participant: ParticipantLite
     title: `${participant.rsn} completed the whole board!`,
     description: 'Every tile conquered.',
     color: BOARD_COLOR,
-    image: { url: boardImageUrl(participant.id) },
+    image: challenge.board_type === 'adventure' ? undefined : { url: boardImageUrl(participant.id) },
     fields: [boardLinkField(challenge)],
   };
 }

@@ -19,14 +19,23 @@ import { computeFirstCompleters } from '../lib/firstCompletions';
 import { progressColor } from '../lib/progressColor';
 import { displayStatus } from '../lib/dungeonStatus';
 import TileDetailModal from '../components/TileDetailModal';
+import AdventureColumnModal from '../components/AdventureColumnModal';
+import { ADVENTURE_SMALL_COLUMNS, forkIndexForColumn, isBossColumn, resolveFrontier } from '../lib/adventureProgress';
 
 const GRID_SIZE = 5;
+// Every small-dungeon participant always has exactly 9 tiles in play (3
+// bosses + 2 from whichever lane they picked at each of 3 forks) --
+// regardless of how many total slots (15) exist or which lanes were
+// chosen, so the leaderboard denominator is this fixed constant, not
+// tiles.length.
+const ADVENTURE_SMALL_TILES_IN_PLAY = 9;
 
 interface ParticipantRow {
   id: string;
   profile_id: string;
   rsn: string;
   chosen_lowest_skill: string | null;
+  adventure_path: Record<string, 'top' | 'bottom'>;
 }
 
 interface CompletionRow {
@@ -53,6 +62,7 @@ export default function BoardPage() {
   const [rsnError, setRsnError] = useState('');
   const [tileStatusesByParticipant, setTileStatusesByParticipant] = useState<Record<string, Record<string, TileStatus>>>({});
   const [selectedTile, setSelectedTile] = useState<Tile | null>(null);
+  const [selectedColumn, setSelectedColumn] = useState<number | null>(null);
 
   const myParticipant = session ? participants.find((p) => p.profile_id === session.user.id) : undefined;
   // Which participant's board is currently displayed -- explicit via ?p=,
@@ -74,7 +84,7 @@ export default function BoardPage() {
       supabase.from('tiles').select('*').eq('challenge_id', challengeData.id),
       supabase
         .from('challenge_participants')
-        .select('id, profile_id, rsn, chosen_lowest_skill')
+        .select('id, profile_id, rsn, chosen_lowest_skill, adventure_path')
         .eq('challenge_id', challengeData.id),
       supabase
         .from('tile_completions')
@@ -227,6 +237,16 @@ export default function BoardPage() {
     await load();
   }
 
+  // A lane choice, once made, is never revisited -- real branching, not
+  // just ordering (see BACKLOG.md #7) -- so this only ever adds a new
+  // fork entry, it doesn't offer to change an existing one.
+  async function handleChooseLane(forkIndex: number, lane: 'top' | 'bottom') {
+    if (!myParticipant) return;
+    const nextPath = { ...myParticipant.adventure_path, [String(forkIndex)]: lane };
+    await getSupabase().from('challenge_participants').update({ adventure_path: nextPath }).eq('id', myParticipant.id);
+    await load();
+  }
+
   async function handleLeave() {
     if (!myParticipant) return;
     if (!window.confirm('Leave this challenge? Your progress history on this board will be deleted.')) return;
@@ -239,7 +259,10 @@ export default function BoardPage() {
     return <p className="mx-auto max-w-lg py-24 text-center text-stone-400">Challenge not found.</p>;
   }
 
-  const tileAt = (row: number, col: number) => tiles.find((t) => t.layout.row === row && t.layout.col === col) ?? null;
+  const tileAt = (row: number, col: number) =>
+    tiles.find((t) => 'row' in t.layout && t.layout.row === row && t.layout.col === col) ?? null;
+  const adventureTileAt = (column: number, lane: 'top' | 'bottom' | 'center') =>
+    tiles.find((t) => 'lane' in t.layout && t.layout.column === column && t.layout.lane === lane) ?? null;
   const isHost = session?.user.id === challenge.host_id;
   const viewedParticipant = participants.find((p) => p.id === viewedParticipantId);
   const viewedTileStatuses = (viewedParticipantId && tileStatusesByParticipant[viewedParticipantId]) || {};
@@ -250,6 +273,24 @@ export default function BoardPage() {
   function hasCompletedBoard(participantId: string): boolean {
     return completions.some((c) => c.kind === 'board' && c.participant_id === participantId);
   }
+
+  // Real (already-recorded) completions only -- never the checkTile-
+  // against-stats sweep used for Standard's badges, since Adventure's
+  // frontier is gated by position, not just "stats already clear it" (see
+  // challengeProgress.ts's own comment on the same distinction).
+  function doneTileIdsFor(participantId: string): Set<string> {
+    return new Set(completions.filter((c) => c.kind === 'tile' && c.participant_id === participantId).map((c) => c.ref));
+  }
+
+  const viewedFrontier =
+    challenge.board_type === 'adventure' && viewedParticipant
+      ? resolveFrontier(tiles, viewedParticipant.adventure_path ?? {}, viewedCompletedTileIds)
+      : null;
+  const myFrontier =
+    challenge.board_type === 'adventure' && myParticipant
+      ? resolveFrontier(tiles, myParticipant.adventure_path ?? {}, doneTileIdsFor(myParticipant.id))
+      : null;
+  const pendingLaneChoice = myFrontier && myFrontier.kind === 'needsLaneChoice' ? myFrontier : null;
 
   // Any tile status of the signed-in participant's own (not the viewed
   // participant's -- the choice below is only actionable for your own
@@ -269,6 +310,7 @@ export default function BoardPage() {
 
   const today = new Date().toISOString().slice(0, 10);
   const isPast = displayStatus(challenge, today) === 'past';
+  const tilesInPlay = challenge.board_type === 'adventure' ? ADVENTURE_SMALL_TILES_IN_PLAY : tiles.length;
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-12">
@@ -287,6 +329,90 @@ export default function BoardPage() {
       <div className="mt-8 flex flex-col gap-8 lg:flex-row lg:items-start">
         {/* Board -- above the leaderboard on mobile, left column (~80%) on desktop. */}
         <div className="order-2 min-w-0 lg:order-1 lg:flex-1">
+          {challenge.board_type === 'adventure' ? (
+            <div className="overflow-x-auto pb-2">
+              <div className="flex gap-2" style={{ minWidth: `${ADVENTURE_SMALL_COLUMNS * 90}px` }}>
+                {Array.from({ length: ADVENTURE_SMALL_COLUMNS }, (_, column) => {
+                  const boss = isBossColumn(column);
+                  const lanes: ('top' | 'bottom' | 'center')[] = boss ? ['center'] : ['top', 'bottom'];
+                  const fork = boss ? null : forkIndexForColumn(column);
+                  const chosenLane = fork !== null ? viewedParticipant?.adventure_path?.[String(fork)] : undefined;
+                  const columnHasAnyTile = lanes.some((lane) => adventureTileAt(column, lane) != null);
+
+                  return (
+                    <div
+                      key={column}
+                      onClick={columnHasAnyTile ? () => setSelectedColumn(column) : undefined}
+                      className={`flex w-20 shrink-0 flex-col justify-center gap-2 ${columnHasAnyTile ? 'cursor-pointer' : ''}`}
+                    >
+                      {lanes.map((lane) => {
+                        const tile = adventureTileAt(column, lane);
+                        const isOtherLane = !boss && chosenLane != null && chosenLane !== lane;
+                        const isPendingChoice = !boss && chosenLane == null;
+                        const isOnPath = boss || (chosenLane != null && chosenLane === lane);
+                        const done = tile != null && isOnPath && viewedCompletedTileIds.has(tile.id);
+                        const isFrontier =
+                          tile != null && isOnPath && !done && viewedFrontier?.kind === 'tile' && viewedFrontier.tile.id === tile.id;
+                        const locked = tile != null && isOnPath && !done && !isFrontier;
+                        const status = tile ? viewedTileStatuses[tile.id] : undefined;
+                        const percent = tile && status && isOnPath && !done ? progressPercent(tile.condition, status) : null;
+                        const baseCaption =
+                          tile && isOnPath ? (status && formatTileProgress(tile.condition, status)) ?? formatTileGoal(tile.condition) : null;
+                        const caption = status?.resolvedSkill
+                          ? `${baseCaption} (${status.resolvedSkill})`
+                          : status?.needsSkillChoice
+                            ? 'Pick a skill below'
+                            : baseCaption;
+                        const isFirst =
+                          tile != null && done && tile.condition.type !== 'freeSpace' && firstCompleters[tile.id] === viewedParticipantId;
+
+                        return (
+                          <div
+                            key={lane}
+                            title={tile ? describeTileCondition(tile.condition) : undefined}
+                            className={`relative flex aspect-square min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden rounded-lg border p-2 text-center shadow-inner before:pointer-events-none before:absolute before:inset-0 before:bg-[url('/stone-texture.svg')] before:bg-cover before:bg-center before:opacity-30 before:content-[''] ${
+                              isOtherLane || isPendingChoice
+                                ? 'border-stone-800/40 bg-stone-950/30 opacity-40'
+                                : done
+                                  ? 'border-green-500 bg-green-950/40'
+                                  : isFrontier
+                                    ? 'border-amber-500 bg-stone-900'
+                                    : tile
+                                      ? locked
+                                        ? 'border-stone-800 bg-stone-950/60 opacity-60'
+                                        : 'border-stone-700 bg-stone-900'
+                                      : 'border-stone-800/60 bg-stone-950/50'
+                            }`}
+                          >
+                            {percent !== null && (
+                              <div className="absolute inset-y-0 left-0 w-1 bg-stone-900">
+                                <div
+                                  className="absolute inset-x-0 bottom-0"
+                                  style={{ height: `${percent}%`, backgroundColor: progressColor(percent) }}
+                                />
+                              </div>
+                            )}
+                            {isFirst && <span className="absolute right-1 top-1 text-xs text-amber-400">⭐</span>}
+                            {!isFirst && done && <span className="absolute right-1 top-1 text-xs text-green-400">✓</span>}
+                            {tile ? (
+                              <>
+                                {tile.icon && <img src={tile.icon} alt="" className="h-6 w-6 shrink-0" />}
+                                <span className="mt-1 line-clamp-2 w-full break-words text-[11px]">{tile.label}</span>
+                                {isOnPath && caption && <span className="w-full break-words text-[9px] text-stone-500">{caption}</span>}
+                                {isOtherLane && <span className="text-[9px] text-stone-600">not taken</span>}
+                              </>
+                            ) : (
+                              <span className="text-xs text-stone-700">—</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
           <div className="grid grid-cols-5 gap-2">
             {Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, i) => {
               const row = Math.floor(i / GRID_SIZE);
@@ -389,6 +515,7 @@ export default function BoardPage() {
               );
             })}
           </div>
+          )}
         </div>
 
         {/* Leaderboard + actions -- above the board on mobile, right column
@@ -409,7 +536,7 @@ export default function BoardPage() {
                     onClick={() => setSearchParams({ p: p.id })}
                     className={`whitespace-nowrap text-left hover:underline ${isViewed ? 'font-semibold text-amber-400' : 'text-stone-300'}`}
                   >
-                    {`#${i + 1}${medal ? ` ${medal}` : ''} ${p.rsn} — ${entry.points} pts (${entry.tilesCompleted}/${tiles.length} tiles)`}
+                    {`#${i + 1}${medal ? ` ${medal}` : ''} ${p.rsn} — ${entry.points} pts (${entry.tilesCompleted}/${tilesInPlay} tiles)`}
                   </button>
                   {isYou && <span className="shrink-0 text-xs text-stone-500">(you)</span>}
                   {hasCompletedBoard(p.id) && <span className="shrink-0 text-yellow-400">🏆 Complete!</span>}
@@ -523,6 +650,28 @@ export default function BoardPage() {
               </div>
             )}
 
+            {pendingLaneChoice && (
+              <div className="rounded-lg border border-amber-800 bg-amber-950/30 p-3">
+                <p className="text-sm text-stone-300">Pick your path:</p>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleChooseLane(pendingLaneChoice.forkIndex, 'top')}
+                    className="rounded-lg border border-stone-700 px-3 py-1 text-xs text-stone-300 hover:border-amber-500"
+                  >
+                    Top
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleChooseLane(pendingLaneChoice.forkIndex, 'bottom')}
+                    className="rounded-lg border border-stone-700 px-3 py-1 text-xs text-stone-300 hover:border-amber-500"
+                  >
+                    Bottom
+                  </button>
+                </div>
+              </div>
+            )}
+
             {myParticipant && (
               <button
                 type="button"
@@ -553,6 +702,32 @@ export default function BoardPage() {
           onClose={() => setSelectedTile(null)}
         />
       )}
+
+      {selectedColumn !== null &&
+        (isBossColumn(selectedColumn) ? (
+          (() => {
+            const bossTile = adventureTileAt(selectedColumn, 'center');
+            return bossTile ? (
+              <TileDetailModal
+                tile={bossTile}
+                participants={participants}
+                challenge={challenge}
+                firstCompleters={firstCompleters}
+                onClose={() => setSelectedColumn(null)}
+              />
+            ) : null;
+          })()
+        ) : (
+          <AdventureColumnModal
+            forkIndex={forkIndexForColumn(selectedColumn)}
+            topTile={adventureTileAt(selectedColumn, 'top')}
+            bottomTile={adventureTileAt(selectedColumn, 'bottom')}
+            participants={participants}
+            challenge={challenge}
+            firstCompleters={firstCompleters}
+            onClose={() => setSelectedColumn(null)}
+          />
+        ))}
     </div>
   );
 }

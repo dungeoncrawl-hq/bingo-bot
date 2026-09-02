@@ -13,6 +13,9 @@ export interface Challenge {
   name: string;
   slug: string;
   board_type: string;
+  // Only meaningful for board_type='adventure' ('small' today, the only
+  // size built so far) -- null for every other board_type.
+  board_size: string | null;
   start_date: string;
   end_date: string;
   status: 'draft' | 'active' | 'ended';
@@ -21,10 +24,21 @@ export interface Challenge {
   created_at: string;
 }
 
-export interface TileLayout {
+// board_type='grid5x5' (today's Standard board).
+export interface GridLayout {
   row: number;
   col: number;
 }
+
+// board_type='adventure' -- a branching path instead of a flat grid.
+// 'center' marks a boss slot (see src/lib/adventureProgress.ts); 'top'/
+// 'bottom' are the two lanes a participant picks between at a fork.
+export interface AdventureLayout {
+  column: number;
+  lane: 'top' | 'bottom' | 'center';
+}
+
+export type TileLayout = GridLayout | AdventureLayout;
 
 export interface Tile {
   id: string;
@@ -45,4 +59,8 @@ export interface ChallengeParticipant {
   rsn: string;
   joined_at: string;
   chosen_lowest_skill: string | null;
+  // Only meaningful for an 'adventure' challenge -- fork index (as a
+  // string key, e.g. "0") -> which lane this participant picked there.
+  // See src/lib/adventureProgress.ts's resolveFrontier.
+  adventure_path: Record<string, 'top' | 'bottom'>;
 }
