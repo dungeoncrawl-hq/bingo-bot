@@ -118,3 +118,54 @@ export function computeParticipantStats(
     chosenLowestSkill,
   };
 }
+
+function mergeCounts(maps: Record<string, number>[]): Record<string, number> {
+  const merged: Record<string, number> = {};
+  for (const map of maps) {
+    for (const [key, value] of Object.entries(map)) {
+      merged[key] = (merged[key] ?? 0) + value;
+    }
+  }
+  return merged;
+}
+
+// Combines a Coop/Team pool's already-computed per-participant stats into
+// one pooled ParticipantStats, fed into checkTile unchanged (BACKLOG.md
+// #10) -- each participant's own stats are still computed exactly as
+// today (including their own hiscoresRecap, since hiscores snapshots are
+// per-account and can't be merged); only the *results* get combined here.
+export function poolStats(statsList: ParticipantStats[]): ParticipantStats {
+  return {
+    xpGained: statsList.reduce((sum, s) => sum + s.xpGained, 0),
+    bossKcGained: statsList.reduce((sum, s) => sum + s.bossKcGained, 0),
+    kcGainedByActivity: mergeCounts(statsList.map((s) => s.kcGainedByActivity)),
+    slayerTasksCompleted: statsList.reduce((sum, s) => sum + s.slayerTasksCompleted, 0),
+    lootValueGained: statsList.reduce((sum, s) => sum + s.lootValueGained, 0),
+    // NOT summed -- the single biggest drop across the whole pool, same
+    // meaning singleDropValue already gives one participant's own board.
+    biggestDropValue: statsList.reduce((max, s) => Math.max(max, s.biggestDropValue), 0),
+    cluesCompleted: statsList.reduce((sum, s) => sum + s.cluesCompleted, 0),
+    beginnerCluesCompleted: statsList.reduce((sum, s) => sum + s.beginnerCluesCompleted, 0),
+    easyCluesCompleted: statsList.reduce((sum, s) => sum + s.easyCluesCompleted, 0),
+    mediumCluesCompleted: statsList.reduce((sum, s) => sum + s.mediumCluesCompleted, 0),
+    hardCluesCompleted: statsList.reduce((sum, s) => sum + s.hardCluesCompleted, 0),
+    eliteCluesCompleted: statsList.reduce((sum, s) => sum + s.eliteCluesCompleted, 0),
+    masterCluesCompleted: statsList.reduce((sum, s) => sum + s.masterCluesCompleted, 0),
+    collectionLogGained: statsList.reduce((sum, s) => sum + s.collectionLogGained, 0),
+    skillLevelsGained: mergeCounts(statsList.map((s) => s.skillLevelsGained)),
+    skillXpGained: mergeCounts(statsList.map((s) => s.skillXpGained)),
+    deathsInPeriod: statsList.reduce((sum, s) => sum + s.deathsInPeriod, 0),
+    itemCounts: mergeCounts(statsList.map((s) => s.itemCounts)),
+    petsObtained: statsList.reduce((sum, s) => sum + s.petsObtained, 0),
+    // Concatenated, not deduped -- bigDropsCount just counts how many
+    // entries across the whole pool clear its threshold.
+    dropValues: statsList.flatMap((s) => s.dropValues),
+    // Never consulted for a pooled tile -- xpGainedLowestSkill/
+    // levelsGainedLowestSkill are excluded from the condition picker
+    // whenever a challenge isn't solo (TileEditorForm.tsx) -- "the
+    // pool's lowest skill" isn't a coherent pooled concept the way "the
+    // pool's total XP" is.
+    lowestSkillCandidates: [],
+    chosenLowestSkill: null,
+  };
+}

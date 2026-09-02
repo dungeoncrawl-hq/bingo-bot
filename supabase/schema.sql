@@ -426,3 +426,36 @@ alter table challenges add column if not exists board_size text;
 -- existing chosen_lowest_skill column) -- challenge_participants' "self
 -- or host writes" policy already covers it, no new RLS/revoke needed.
 alter table challenge_participants add column if not exists adventure_path jsonb not null default '{}';
+
+-- Coop/Team game modes (BACKLOG.md #10): orthogonal to board_type -- this
+-- is how a board is *scored*, not shaped. 'solo' matches today's
+-- behavior exactly (every participant's own board, checked
+-- independently).
+alter table challenges add column if not exists game_mode text not null default 'solo';
+
+-- One challenge's roster of teams (Team mode only). Not reusable across
+-- challenges, matching every other host-owned entity here (tiles,
+-- webhook config, etc).
+create table if not exists teams (
+  id uuid primary key default gen_random_uuid(),
+  challenge_id uuid not null references challenges(id) on delete cascade,
+  name text not null,
+  created_at timestamptz not null default now()
+);
+alter table teams enable row level security;
+drop policy if exists "public read" on teams;
+create policy "public read" on teams for select using (true);
+drop policy if exists "host writes own challenge's teams" on teams;
+create policy "host writes own challenge's teams" on teams for all
+  to authenticated using (
+    exists (select 1 from challenges c where c.id = teams.challenge_id and c.host_id = auth.uid())
+  ) with check (
+    exists (select 1 from challenges c where c.id = teams.challenge_id and c.host_id = auth.uid())
+  );
+
+-- on delete set null: removing a team unassigns its members back to
+-- "unassigned" rather than deleting the participants themselves.
+-- challenge_participants' existing "self or host writes" policy already
+-- covers the host writing this column (the same path that already
+-- handles RSN edits) -- no new RLS needed.
+alter table challenge_participants add column if not exists team_id uuid references teams(id) on delete set null;

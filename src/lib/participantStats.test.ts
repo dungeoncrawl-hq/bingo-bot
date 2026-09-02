@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { computeParticipantStats, type RawParticipantData } from './participantStats';
+import { computeParticipantStats, poolStats, type RawParticipantData } from './participantStats';
 import type { HiscoresRecap } from './hiscoresRecap';
+import type { ParticipantStats } from './tileConditions';
 
 const EMPTY_RAW: RawParticipantData = {
   bossKills: [],
@@ -168,5 +169,74 @@ describe('computeParticipantStats', () => {
       ],
     };
     expect(computeParticipantStats(raw, WINDOW, null).bossKcGained).toBe(8);
+  });
+});
+
+function stats(overrides: Partial<ParticipantStats> = {}): ParticipantStats {
+  return {
+    xpGained: 0,
+    bossKcGained: 0,
+    kcGainedByActivity: {},
+    slayerTasksCompleted: 0,
+    lootValueGained: 0,
+    biggestDropValue: 0,
+    cluesCompleted: 0,
+    beginnerCluesCompleted: 0,
+    easyCluesCompleted: 0,
+    mediumCluesCompleted: 0,
+    hardCluesCompleted: 0,
+    eliteCluesCompleted: 0,
+    masterCluesCompleted: 0,
+    collectionLogGained: 0,
+    skillLevelsGained: {},
+    skillXpGained: {},
+    deathsInPeriod: 0,
+    itemCounts: {},
+    petsObtained: 0,
+    dropValues: [],
+    lowestSkillCandidates: [],
+    chosenLowestSkill: null,
+    ...overrides,
+  };
+}
+
+describe('poolStats', () => {
+  it('sums numeric fields across every member of the pool', () => {
+    const pooled = poolStats([
+      stats({ xpGained: 100, bossKcGained: 2, slayerTasksCompleted: 1, deathsInPeriod: 1, petsObtained: 1 }),
+      stats({ xpGained: 250, bossKcGained: 3, slayerTasksCompleted: 4, deathsInPeriod: 0, petsObtained: 0 }),
+    ]);
+    expect(pooled.xpGained).toBe(350);
+    expect(pooled.bossKcGained).toBe(5);
+    expect(pooled.slayerTasksCompleted).toBe(5);
+    expect(pooled.deathsInPeriod).toBe(1);
+    expect(pooled.petsObtained).toBe(1);
+  });
+
+  it('takes the max, not the sum, of biggestDropValue -- one biggest drop across the whole pool', () => {
+    const pooled = poolStats([stats({ biggestDropValue: 2_000_000 }), stats({ biggestDropValue: 5_000_000 }), stats({ biggestDropValue: 100 })]);
+    expect(pooled.biggestDropValue).toBe(5_000_000);
+  });
+
+  it('merges per-key maps, summing overlapping keys and keeping disjoint ones', () => {
+    const pooled = poolStats([
+      stats({ kcGainedByActivity: { Vorkath: 5, Zulrah: 2 } }),
+      stats({ kcGainedByActivity: { Vorkath: 3 } }),
+    ]);
+    expect(pooled.kcGainedByActivity).toEqual({ Vorkath: 8, Zulrah: 2 });
+  });
+
+  it('concatenates dropValues rather than deduping or summing them', () => {
+    const pooled = poolStats([stats({ dropValues: [1_000_000, 2_000_000] }), stats({ dropValues: [1_500_000] })]);
+    expect(pooled.dropValues).toEqual([1_000_000, 2_000_000, 1_500_000]);
+  });
+
+  it('never surfaces a lowest-skill candidate or choice -- not a coherent pooled concept', () => {
+    const pooled = poolStats([
+      stats({ lowestSkillCandidates: ['Farming'], chosenLowestSkill: null }),
+      stats({ lowestSkillCandidates: ['Runecraft', 'Hunter'], chosenLowestSkill: 'Hunter' }),
+    ]);
+    expect(pooled.lowestSkillCandidates).toEqual([]);
+    expect(pooled.chosenLowestSkill).toBeNull();
   });
 });

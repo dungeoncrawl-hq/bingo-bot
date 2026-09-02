@@ -132,6 +132,81 @@ describe('buildTileCompletionEmbed', () => {
   });
 });
 
+describe('buildTileCompletionEmbed -- game-mode subject swap (BACKLOG.md #10)', () => {
+  it('defaults the subject to participant.rsn when omitted, unchanged from before subject existed', () => {
+    const embed = buildTileCompletionEmbed({
+      participant: PARTICIPANTS[0],
+      tile: tile({ condition: { type: 'xpGained', threshold: 500_000 } }),
+      isFirst: false,
+      firstCompleterRsn: 'otototo',
+      leaderboard: [],
+      participants: PARTICIPANTS,
+      challenge: CHALLENGE,
+    });
+    expect(embed.title).toBe('26 Limont completed the 500,000 total XP task.');
+  });
+
+  it('uses "The group" for Coop instead of a participant name', () => {
+    const embed = buildTileCompletionEmbed({
+      participant: PARTICIPANTS[0],
+      subject: 'The group',
+      tile: tile({ condition: { type: 'xpGained', threshold: 500_000 } }),
+      isFirst: false,
+      firstCompleterRsn: 'otototo',
+      leaderboard: [],
+      participants: PARTICIPANTS,
+      challenge: CHALLENGE,
+    });
+    expect(embed.title).toBe('The group completed the 500,000 total XP task.');
+  });
+
+  it('drops the first/not-first flavor line entirely for Coop (noFirstConcept) instead of a nonsensical "not as fast as" line', () => {
+    const embed = buildTileCompletionEmbed({
+      participant: PARTICIPANTS[0],
+      subject: 'The group',
+      tile: tile({ condition: { type: 'xpGained', threshold: 500_000 } }),
+      isFirst: false,
+      firstCompleterRsn: 'irrelevant',
+      noFirstConcept: true,
+      leaderboard: [],
+      participants: PARTICIPANTS,
+      challenge: CHALLENGE,
+    });
+    expect(embed.title).toBe('The group completed the 500,000 total XP task.');
+    expect(embed.description).toBeUndefined();
+  });
+
+  it('still shows tile detail text alongside a dropped flavor line, when the tile has one', () => {
+    const embed = buildTileCompletionEmbed({
+      participant: PARTICIPANTS[0],
+      subject: 'The group',
+      tile: tile({ condition: { type: 'itemSetCollected', itemNames: ['a', 'b'], setName: 'Set', threshold: 2 } }),
+      isFirst: false,
+      firstCompleterRsn: 'irrelevant',
+      noFirstConcept: true,
+      leaderboard: [],
+      participants: PARTICIPANTS,
+      challenge: CHALLENGE,
+    });
+    expect(embed.description).toBeTruthy();
+    expect(embed.description).not.toContain('not as fast as');
+  });
+
+  it('uses the team name for Team mode, including in the "first" title', () => {
+    const embed = buildTileCompletionEmbed({
+      participant: PARTICIPANTS[0],
+      subject: 'Team Red',
+      tile: tile({ condition: { type: 'xpGained', threshold: 500_000 } }),
+      isFirst: true,
+      firstCompleterRsn: 'Team Red',
+      leaderboard: [],
+      participants: PARTICIPANTS,
+      challenge: CHALLENGE,
+    });
+    expect(embed.title).toBe('Team Red was first to complete the 500,000 total XP task!');
+  });
+});
+
 describe('buildLineCompletionEmbed / buildBoardCompletionEmbed', () => {
   it('both include the board link field', () => {
     const line = buildLineCompletionEmbed({ participant: PARTICIPANTS[0], challenge: CHALLENGE });
@@ -149,6 +224,20 @@ describe('buildLineCompletionEmbed / buildBoardCompletionEmbed', () => {
     const adventureChallenge: ChallengeLite = { ...CHALLENGE, board_type: 'adventure' };
     const board = buildBoardCompletionEmbed({ participant: PARTICIPANTS[0], challenge: adventureChallenge });
     expect(board.image).toBeUndefined();
+  });
+
+  it('both default the subject to participant.rsn when omitted', () => {
+    const line = buildLineCompletionEmbed({ participant: PARTICIPANTS[0], challenge: CHALLENGE });
+    const board = buildBoardCompletionEmbed({ participant: PARTICIPANTS[0], challenge: CHALLENGE });
+    expect(line.title).toBe('26 Limont completed a line!');
+    expect(board.title).toBe('26 Limont completed the whole board!');
+  });
+
+  it('both use an overridden subject for Coop/Team instead of the participant name', () => {
+    const line = buildLineCompletionEmbed({ participant: PARTICIPANTS[0], subject: 'The group', challenge: CHALLENGE });
+    const board = buildBoardCompletionEmbed({ participant: PARTICIPANTS[0], subject: 'Team Red', challenge: CHALLENGE });
+    expect(line.title).toBe('The group completed a line!');
+    expect(board.title).toBe('Team Red completed the whole board!');
   });
 });
 

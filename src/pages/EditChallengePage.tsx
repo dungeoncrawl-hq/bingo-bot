@@ -3,7 +3,7 @@ import type { FormEvent } from 'react';
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { getSupabase } from '../db/supabaseClient';
-import type { Challenge, Tile, TileLayout } from '../db/types';
+import type { Challenge, Team, Tile, TileLayout } from '../db/types';
 import TileEditorForm from '../components/TileEditorForm';
 import { formatTileGoal, type TileCondition } from '../lib/tileConditions';
 import { displayStatus } from '../lib/dungeonStatus';
@@ -18,6 +18,7 @@ interface ParticipantRow {
   profiles: { display_name: string } | null;
   screenshot_count: number;
   screenshot_bytes: number;
+  team_id: string | null;
 }
 
 export default function EditChallengePage() {
@@ -26,6 +27,9 @@ export default function EditChallengePage() {
   const [challenge, setChallenge] = useState<Challenge | null | 'not-found'>(null);
   const [tiles, setTiles] = useState<Tile[]>([]);
   const [participants, setParticipants] = useState<ParticipantRow[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [newTeamName, setNewTeamName] = useState('');
+  const [addingTeam, setAddingTeam] = useState(false);
   const [editingCell, setEditingCell] = useState<TileLayout | null>(null);
   const [discordWebhookUrl, setDiscordWebhookUrl] = useState('');
   const [savingWebhook, setSavingWebhook] = useState(false);
@@ -41,15 +45,17 @@ export default function EditChallengePage() {
       return;
     }
     setChallenge(challengeData as Challenge);
-    const [{ data: tilesData }, { data: participantsData }] = await Promise.all([
+    const [{ data: tilesData }, { data: participantsData }, { data: teamsData }] = await Promise.all([
       supabase.from('tiles').select('*').eq('challenge_id', challengeData.id),
       supabase
         .from('challenge_participants')
-        .select('id, rsn, profiles(display_name), screenshot_count, screenshot_bytes')
+        .select('id, rsn, profiles(display_name), screenshot_count, screenshot_bytes, team_id')
         .eq('challenge_id', challengeData.id),
+      supabase.from('teams').select('*').eq('challenge_id', challengeData.id),
     ]);
     setTiles((tilesData as Tile[]) ?? []);
     setParticipants((participantsData as unknown as ParticipantRow[]) ?? []);
+    setTeams((teamsData as Team[]) ?? []);
   }, [slug]);
 
   useEffect(() => {
@@ -123,6 +129,21 @@ export default function EditChallengePage() {
       return;
     }
     await getSupabase().from('challenge_participants').delete().eq('id', participant.id);
+    await load();
+  }
+
+  async function handleAddTeam(e: FormEvent) {
+    e.preventDefault();
+    if (!challenge || challenge === 'not-found' || !newTeamName.trim()) return;
+    setAddingTeam(true);
+    await getSupabase().from('teams').insert({ challenge_id: challenge.id, name: newTeamName.trim() });
+    setAddingTeam(false);
+    setNewTeamName('');
+    await load();
+  }
+
+  async function handleAssignTeam(participant: ParticipantRow, teamId: string | null) {
+    await getSupabase().from('challenge_participants').update({ team_id: teamId }).eq('id', participant.id);
     await load();
   }
 
@@ -273,6 +294,39 @@ export default function EditChallengePage() {
         </div>
       )}
 
+      {challenge.game_mode === 'team' && (
+        <div className="mt-10 max-w-md">
+          <h2 className="text-lg font-semibold">Teams</h2>
+          <p className="mt-1 text-xs text-stone-500">
+            Joining is blocked until at least one team exists. Assign participants below in the Players list.
+          </p>
+          <ul className="mt-3 space-y-1 text-sm text-stone-300">
+            {teams.map((t) => (
+              <li key={t.id} className="rounded-lg border border-stone-800 px-3 py-2">
+                {t.name}
+              </li>
+            ))}
+            {teams.length === 0 && <li className="text-stone-500">No teams yet.</li>}
+          </ul>
+          <form onSubmit={handleAddTeam} className="mt-3 flex gap-2">
+            <input
+              required
+              value={newTeamName}
+              onChange={(e) => setNewTeamName(e.target.value)}
+              placeholder="Team name"
+              className="flex-1 rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+            />
+            <button
+              type="submit"
+              disabled={addingTeam}
+              className="rounded-lg border border-stone-700 px-4 py-2 text-sm text-stone-300 disabled:opacity-40"
+            >
+              {addingTeam ? 'Adding…' : 'Add team'}
+            </button>
+          </form>
+        </div>
+      )}
+
       <div className="mt-10 max-w-md">
         <h2 className="text-lg font-semibold">Players</h2>
         <ul className="mt-3 space-y-2 text-sm text-stone-300">
@@ -289,13 +343,25 @@ export default function EditChallengePage() {
                   </span>
                 )}
               </span>
-              <button
-                type="button"
-                onClick={() => handleRemoveParticipant(p)}
-                className="shrink-0 text-xs text-red-400 underline"
-              >
-                Remove
-              </button>
+              <span className="flex shrink-0 items-center gap-2">
+                {challenge.game_mode === 'team' && (
+                  <select
+                    value={p.team_id ?? ''}
+                    onChange={(e) => handleAssignTeam(p, e.target.value || null)}
+                    className="rounded-lg border border-stone-700 bg-stone-900 px-2 py-1 text-xs text-stone-300"
+                  >
+                    <option value="">Unassigned</option>
+                    {teams.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <button type="button" onClick={() => handleRemoveParticipant(p)} className="text-xs text-red-400 underline">
+                  Remove
+                </button>
+              </span>
             </li>
           ))}
           {participants.length === 0 && <li className="text-stone-500">No one's joined yet.</li>}
@@ -330,6 +396,8 @@ export default function EditChallengePage() {
         <TileEditorForm
           existing={editingTile}
           locked={tilesLocked}
+          gameMode={challenge.game_mode}
+          poolSize={participants.length}
           onSave={handleSave}
           onDelete={editingTile ? handleDelete : undefined}
           onClose={() => setEditingCell(null)}

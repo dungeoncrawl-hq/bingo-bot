@@ -60,16 +60,29 @@ export function formatLeaderboardField(entries: LeaderboardEntry[], participants
 
 export function buildTileCompletionEmbed(params: {
   participant: ParticipantLite;
+  // Display text for "who completed this" in the title -- defaults to
+  // participant.rsn (solo mode, today's behavior unchanged). Pass 'The
+  // group' (Coop) or `Team ${name}` (Team) to override (BACKLOG.md #10).
+  subject?: string;
   tile: Tile;
   isFirst: boolean;
-  // Who actually was first, regardless of isFirst -- lets the "not first"
-  // flavor text call them out by name ("not as fast as {rsn}, though").
+  // Who/what actually was first, regardless of isFirst -- lets the "not
+  // first" flavor text call them out by name ("not as fast as {rsn},
+  // though"). Already just display text, so a team name works here too.
+  // Ignored when noFirstConcept is set.
   firstCompleterRsn: string;
+  // Coop only: there's no "first" when credit lands on everyone at once
+  // from one pooled event (isFirst is always false for Coop, but the
+  // ordinary "not as fast as X" flavor text for a non-first completion
+  // doesn't make sense either when there's no one to have been faster
+  // than) -- drops the first/not-first flavor line entirely instead.
+  noFirstConcept?: boolean;
   leaderboard: LeaderboardEntry[];
   participants: ParticipantLite[];
   challenge: ChallengeLite;
 }): DiscordEmbed {
-  const { participant, tile, isFirst, firstCompleterRsn, leaderboard, participants, challenge } = params;
+  const { participant, tile, isFirst, firstCompleterRsn, noFirstConcept, leaderboard, participants, challenge } = params;
+  const subject = params.subject ?? participant.rsn;
   // Two tiles can share the same label (e.g. two "Big Drop" tiles with
   // different thresholds) -- spelling out the exact requirement in the
   // title itself keeps the post unambiguous on its own.
@@ -78,9 +91,11 @@ export function buildTileCompletionEmbed(params: {
   // deployment can land before the DB migration adding the column runs --
   // fall back to no bonus rather than posting "NaN pts" in that gap.
   const totalPoints = tile.points + (isFirst ? (tile.first_completer_bonus ?? 0) : 0);
-  const flavor = isFirst
-    ? `+${totalPoints} pts. Aren't they just showing off at this point?`
-    : `Unfortunately not as fast as ${firstCompleterRsn}, though.`;
+  const flavor = noFirstConcept
+    ? undefined
+    : isFirst
+      ? `+${totalPoints} pts. Aren't they just showing off at this point?`
+      : `Unfortunately not as fast as ${firstCompleterRsn}, though.`;
   // Extra context that didn't fit in the headline phrase (e.g. an
   // itemSetCollected tile's "N items, each counts once") gets its own
   // line ahead of the flavor text, rather than bloating the title.
@@ -96,15 +111,15 @@ export function buildTileCompletionEmbed(params: {
   const bossLabel = isFinalBoss ? 'the FINAL BOSS' : 'a boss';
   const title = isBoss
     ? isFirst
-      ? `${participant.rsn} was first to defeat ${bossLabel} -- the ${phrase} boss!`
-      : `${participant.rsn} defeated ${bossLabel} -- the ${phrase} boss.`
+      ? `${subject} was first to defeat ${bossLabel} -- the ${phrase} boss!`
+      : `${subject} defeated ${bossLabel} -- the ${phrase} boss.`
     : isFirst
-      ? `${participant.rsn} was first to complete the ${phrase} task!`
-      : `${participant.rsn} completed the ${phrase} task.`;
+      ? `${subject} was first to complete the ${phrase} task!`
+      : `${subject} completed the ${phrase} task.`;
 
   return {
     title,
-    description: detail ? `${detail}\n${flavor}` : flavor,
+    description: detail && flavor ? `${detail}\n${flavor}` : (detail ?? flavor),
     color: isFirst ? FIRST_COLOR : TILE_COLOR,
     thumbnail: tile.icon ? { url: tile.icon } : undefined,
     // Adventure has no equivalent board-state PNG renderer yet (see
@@ -119,20 +134,22 @@ export function buildTileCompletionEmbed(params: {
   };
 }
 
-export function buildLineCompletionEmbed(params: { participant: ParticipantLite; challenge: ChallengeLite }): DiscordEmbed {
+export function buildLineCompletionEmbed(params: { participant: ParticipantLite; subject?: string; challenge: ChallengeLite }): DiscordEmbed {
   const { participant, challenge } = params;
+  const subject = params.subject ?? participant.rsn;
   return {
-    title: `${participant.rsn} completed a line!`,
+    title: `${subject} completed a line!`,
     color: LINE_COLOR,
     image: { url: boardImageUrl(participant.id) },
     fields: [boardLinkField(challenge)],
   };
 }
 
-export function buildBoardCompletionEmbed(params: { participant: ParticipantLite; challenge: ChallengeLite }): DiscordEmbed {
+export function buildBoardCompletionEmbed(params: { participant: ParticipantLite; subject?: string; challenge: ChallengeLite }): DiscordEmbed {
   const { participant, challenge } = params;
+  const subject = params.subject ?? participant.rsn;
   return {
-    title: `${participant.rsn} completed the whole board!`,
+    title: `${subject} completed the whole board!`,
     description: 'Every tile conquered.',
     color: BOARD_COLOR,
     image: challenge.board_type === 'adventure' ? undefined : { url: boardImageUrl(participant.id) },

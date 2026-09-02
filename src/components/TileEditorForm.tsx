@@ -12,6 +12,10 @@ import { BOSS_ACTIVITIES } from '../lib/bossActivities';
 const MIN_DROP_VALUE_THRESHOLD = 100_000;
 const DEFAULT_DROP_VALUE_THRESHOLD = 1_000_000;
 
+// xpGainedLowestSkill/levelsGainedLowestSkill are filtered out of the
+// rendered groups below (not removed from this list) whenever
+// gameMode !== 'solo' -- "the pool's lowest skill" isn't a coherent
+// pooled concept the way "the pool's total XP" is (BACKLOG.md #10).
 const CONDITION_GROUPS: { group: string; options: { value: TileCondition['type']; label: string }[] }[] = [
   {
     group: 'Experience & Levels',
@@ -179,6 +183,13 @@ interface Props {
   // slot has no progress to protect, so adding one stays allowed even on a
   // started challenge.
   locked: boolean;
+  // 'solo' (default, today's behavior) | 'coop' | 'team' -- BACKLOG.md
+  // #10. Drives the lowest-skill exclusion, the pooled-threshold hint,
+  // and (Coop only) forcing the first-completer bonus off.
+  gameMode: 'solo' | 'coop' | 'team';
+  // Current roster size, for the pooled-threshold hint text. Unused when
+  // gameMode is 'solo'.
+  poolSize: number;
   onSave: (fields: {
     label: string;
     icon: string | null;
@@ -193,8 +204,15 @@ interface Props {
 const inputClass =
   'mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50';
 
-export default function TileEditorForm({ existing, locked, onSave, onDelete, onClose }: Props) {
+export default function TileEditorForm({ existing, locked, gameMode, poolSize, onSave, onDelete, onClose }: Props) {
   const fieldsLocked = locked && existing != null;
+  const pooled = gameMode !== 'solo';
+  const conditionGroups = pooled
+    ? CONDITION_GROUPS.map((g) => ({
+        ...g,
+        options: g.options.filter((o) => o.value !== 'xpGainedLowestSkill' && o.value !== 'levelsGainedLowestSkill'),
+      })).filter((g) => g.options.length > 0)
+    : CONDITION_GROUPS;
   const [type, setType] = useState<TileCondition['type']>(existing?.condition.type ?? 'xpGained');
   const initial = existing
     ? formFromCondition(existing.condition)
@@ -254,7 +272,11 @@ export default function TileEditorForm({ existing, locked, onSave, onDelete, onC
         // weight, so it can never contribute points regardless of what's
         // left over in the points/bonus inputs from a previous condition.
         points: type === 'freeSpace' ? 0 : points || 1,
-        first_completer_bonus: type === 'freeSpace' ? 0 : Math.max(0, firstCompleterBonus || 0),
+        // Coop has no "first" either -- credit lands on everyone at once
+        // from one pooled event, same "force at the source" treatment as
+        // freeSpace forcing points to 0 above (BACKLOG.md #10). Team
+        // keeps the bonus, scoped to "first team" instead.
+        first_completer_bonus: type === 'freeSpace' || gameMode === 'coop' ? 0 : Math.max(0, firstCompleterBonus || 0),
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong.');
@@ -284,7 +306,7 @@ export default function TileEditorForm({ existing, locked, onSave, onDelete, onC
             disabled={fieldsLocked}
             className={inputClass}
           >
-            {CONDITION_GROUPS.map((g) => (
+            {conditionGroups.map((g) => (
               <optgroup key={g.group} label={g.group}>
                 {g.options.map((c) => (
                   <option key={c.value} value={c.value}>
@@ -376,6 +398,12 @@ export default function TileEditorForm({ existing, locked, onSave, onDelete, onC
             {type !== 'maxDeaths' && type !== 'bigDropsCount' && (
               <p className="mt-1 text-xs text-stone-500">The amount a player needs to reach to complete this tile.</p>
             )}
+            {pooled && (
+              <p className="mt-1 text-xs text-amber-500">
+                This will be pooled across {poolSize} participant{poolSize === 1 ? '' : 's'} -- a solo-sized goal may
+                be trivial once combined.
+              </p>
+            )}
           </div>
         )}
         {type === 'freeSpace' ? (
@@ -394,19 +422,27 @@ export default function TileEditorForm({ existing, locked, onSave, onDelete, onC
                 className={inputClass}
               />
             </div>
-            <div>
-              <label className="block text-sm text-stone-400">First-completer bonus</label>
-              <input
-                type="number"
-                min={0}
-                value={firstCompleterBonus}
-                onChange={(e) => setFirstCompleterBonus(Number(e.target.value))}
-                className={inputClass}
-              />
-              <p className="mt-1 text-xs text-stone-500">
-                Extra points for whoever completes this tile first. Leave at 0 for no bonus.
+            {gameMode === 'coop' ? (
+              <p className="text-xs text-stone-500">
+                No first-completer bonus in Coop -- credit lands on everyone at once, so there's no "first."
               </p>
-            </div>
+            ) : (
+              <div>
+                <label className="block text-sm text-stone-400">First-completer bonus</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={firstCompleterBonus}
+                  onChange={(e) => setFirstCompleterBonus(Number(e.target.value))}
+                  className={inputClass}
+                />
+                <p className="mt-1 text-xs text-stone-500">
+                  {gameMode === 'team'
+                    ? 'Extra points for whoever\'s team completes this tile first. Leave at 0 for no bonus.'
+                    : 'Extra points for whoever completes this tile first. Leave at 0 for no bonus.'}
+                </p>
+              </div>
+            )}
           </>
         )}
         {error && <p className="text-sm text-red-400">{error}</p>}

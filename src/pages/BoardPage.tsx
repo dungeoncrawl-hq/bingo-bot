@@ -3,7 +3,7 @@ import type { FormEvent } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { getSupabase } from '../db/supabaseClient';
-import type { Challenge, Tile } from '../db/types';
+import type { Challenge, Team, Tile } from '../db/types';
 import {
   checkTile,
   describeTileCondition,
@@ -36,6 +36,7 @@ interface ParticipantRow {
   rsn: string;
   chosen_lowest_skill: string | null;
   adventure_path: Record<string, 'top' | 'bottom'>;
+  team_id: string | null;
 }
 
 interface CompletionRow {
@@ -52,6 +53,7 @@ export default function BoardPage() {
   const [challenge, setChallenge] = useState<Challenge | null | 'not-found'>(null);
   const [tiles, setTiles] = useState<Tile[]>([]);
   const [participants, setParticipants] = useState<ParticipantRow[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [completions, setCompletions] = useState<CompletionRow[]>([]);
   const [rsn, setRsn] = useState('');
   const [joining, setJoining] = useState(false);
@@ -80,20 +82,22 @@ export default function BoardPage() {
       return;
     }
     setChallenge(challengeData as Challenge);
-    const [{ data: tilesData }, { data: participantsData }, { data: completionsData }] = await Promise.all([
+    const [{ data: tilesData }, { data: participantsData }, { data: completionsData }, { data: teamsData }] = await Promise.all([
       supabase.from('tiles').select('*').eq('challenge_id', challengeData.id),
       supabase
         .from('challenge_participants')
-        .select('id, profile_id, rsn, chosen_lowest_skill, adventure_path')
+        .select('id, profile_id, rsn, chosen_lowest_skill, adventure_path, team_id')
         .eq('challenge_id', challengeData.id),
       supabase
         .from('tile_completions')
         .select('participant_id, kind, ref, completed_at')
         .eq('challenge_id', challengeData.id),
+      supabase.from('teams').select('*').eq('challenge_id', challengeData.id),
     ]);
     setTiles((tilesData as Tile[]) ?? []);
     setParticipants((participantsData as ParticipantRow[]) ?? []);
     setCompletions((completionsData as CompletionRow[]) ?? []);
+    setTeams((teamsData as Team[]) ?? []);
   }, [slug]);
 
   useEffect(() => {
@@ -301,16 +305,30 @@ export default function BoardPage() {
   const pendingSkillChoice = myTileStatuses ? Object.values(myTileStatuses).find((s) => s.needsSkillChoice) : undefined;
 
   const firstCompleters = computeFirstCompleters(completions);
-  const leaderboard = computeLeaderboard(
-    tiles,
-    completions,
-    participants.map((p) => p.id),
-    firstCompleters,
-  );
+
+  // Team: one representative id per team (lexicographically smallest,
+  // matching computeLeaderboard's own tie-break convention), relabeled
+  // with the team's name -- same "collapse to one representative" trick
+  // used for the Discord embed (challengeProgress.ts), so
+  // computeLeaderboard itself needs no changes to produce a correct
+  // per-team ranking. Coop skips ranking entirely -- see the render body.
+  const teamNameById = new Map(teams.map((t) => [t.id, t.name]));
+  const representativeIdByTeam = new Map<string, string>();
+  if (challenge.game_mode === 'team') {
+    for (const p of participants) {
+      if (!p.team_id) continue;
+      const current = representativeIdByTeam.get(p.team_id);
+      if (!current || p.id < current) representativeIdByTeam.set(p.team_id, p.id);
+    }
+  }
+  const leaderboardParticipantIds =
+    challenge.game_mode === 'team' ? [...representativeIdByTeam.values()] : participants.map((p) => p.id);
+  const leaderboard = computeLeaderboard(tiles, completions, leaderboardParticipantIds, firstCompleters);
 
   const today = new Date().toISOString().slice(0, 10);
   const isPast = displayStatus(challenge, today) === 'past';
   const tilesInPlay = challenge.board_type === 'adventure' ? ADVENTURE_SMALL_TILES_IN_PLAY : tiles.length;
+  const teamGateBlocksJoining = challenge.game_mode === 'team' && teams.length === 0;
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-12">
@@ -522,29 +540,50 @@ export default function BoardPage() {
             (~20%, fixed-width so entries never wrap) on desktop. */}
         <div className="order-1 lg:order-2 lg:w-72 lg:shrink-0">
           <h2 className="text-lg font-semibold">Leaderboard</h2>
-          <ul className="mt-3 space-y-1 text-sm">
-            {leaderboard.map((entry, i) => {
-              const p = participants.find((pp) => pp.id === entry.participantId);
-              if (!p) return null;
-              const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : null;
-              const isViewed = entry.participantId === viewedParticipantId;
-              const isYou = entry.participantId === myParticipant?.id;
-              return (
-                <li key={p.id} className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSearchParams({ p: p.id })}
-                    className={`whitespace-nowrap text-left hover:underline ${isViewed ? 'font-semibold text-amber-400' : 'text-stone-300'}`}
-                  >
-                    {`#${i + 1}${medal ? ` ${medal}` : ''} ${p.rsn} — ${entry.points} pts (${entry.tilesCompleted}/${tilesInPlay} tiles)`}
-                  </button>
-                  {isYou && <span className="shrink-0 text-xs text-stone-500">(you)</span>}
-                  {hasCompletedBoard(p.id) && <span className="shrink-0 text-yellow-400">🏆 Complete!</span>}
-                </li>
-              );
-            })}
-            {participants.length === 0 && <li className="text-stone-500">No one's joined yet.</li>}
-          </ul>
+          {challenge.game_mode === 'coop' ? (
+            // No ranking -- everyone's progress is always identical in
+            // Coop, so a shared readout replaces the ranked list
+            // (BACKLOG.md #10).
+            <div className="mt-3 space-y-2 text-sm">
+              {leaderboard[0] && (
+                <p className="font-semibold text-amber-400">
+                  {leaderboard[0].points} pts · {leaderboard[0].tilesCompleted}/{tilesInPlay} tiles
+                </p>
+              )}
+              <ul className="space-y-1 text-stone-300">
+                {participants.map((p) => (
+                  <li key={p.id}>{p.rsn}</li>
+                ))}
+                {participants.length === 0 && <li className="text-stone-500">No one's joined yet.</li>}
+              </ul>
+            </div>
+          ) : (
+            <ul className="mt-3 space-y-1 text-sm">
+              {leaderboard.map((entry, i) => {
+                const isTeam = challenge.game_mode === 'team';
+                const p = participants.find((pp) => pp.id === entry.participantId);
+                if (!p) return null;
+                const label = isTeam ? (p.team_id && teamNameById.get(p.team_id)) || 'Unknown Team' : p.rsn;
+                const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : null;
+                const isViewed = isTeam ? p.team_id != null && p.team_id === viewedParticipant?.team_id : entry.participantId === viewedParticipantId;
+                const isYou = isTeam ? p.team_id != null && p.team_id === myParticipant?.team_id : entry.participantId === myParticipant?.id;
+                return (
+                  <li key={p.id} className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSearchParams({ p: p.id })}
+                      className={`whitespace-nowrap text-left hover:underline ${isViewed ? 'font-semibold text-amber-400' : 'text-stone-300'}`}
+                    >
+                      {`#${i + 1}${medal ? ` ${medal}` : ''} ${label} — ${entry.points} pts (${entry.tilesCompleted}/${tilesInPlay} tiles)`}
+                    </button>
+                    {isYou && <span className="shrink-0 text-xs text-stone-500">(you)</span>}
+                    {hasCompletedBoard(p.id) && <span className="shrink-0 text-yellow-400">🏆 Complete!</span>}
+                  </li>
+                );
+              })}
+              {leaderboard.length === 0 && <li className="text-stone-500">No one's joined yet.</li>}
+            </ul>
+          )}
 
           {/* Actions available to the current viewer for this challenge. */}
           <div className="mt-6 space-y-3">
@@ -560,7 +599,10 @@ export default function BoardPage() {
                 .
               </p>
             )}
-            {session && !myParticipant && (
+            {session && !myParticipant && teamGateBlocksJoining && (
+              <p className="text-sm text-stone-500">The host hasn't set up any teams yet -- check back soon.</p>
+            )}
+            {session && !myParticipant && !teamGateBlocksJoining && (
               <form onSubmit={handleJoin} className="flex flex-col gap-2">
                 <input
                   required
@@ -699,6 +741,8 @@ export default function BoardPage() {
           participants={participants}
           challenge={challenge}
           firstCompleters={firstCompleters}
+          gameMode={challenge.game_mode}
+          teams={teams}
           onClose={() => setSelectedTile(null)}
         />
       )}

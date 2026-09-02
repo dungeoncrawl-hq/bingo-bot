@@ -19,6 +19,7 @@ export default function NewChallengePage() {
   const [slug, setSlug] = useState('');
   const [slugEdited, setSlugEdited] = useState(false);
   const [boardType, setBoardType] = useState<'grid5x5' | 'adventure'>('grid5x5');
+  const [gameMode, setGameMode] = useState<'solo' | 'coop' | 'team'>('solo');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [error, setError] = useState('');
@@ -49,6 +50,7 @@ export default function NewChallengePage() {
         slug: slug.trim(),
         board_type: boardType,
         board_size: boardType === 'adventure' ? 'small' : null,
+        game_mode: gameMode,
         start_date: startDate,
         end_date: endDate,
       })
@@ -106,7 +108,13 @@ export default function NewChallengePage() {
             </button>
             <button
               type="button"
-              onClick={() => setBoardType('adventure')}
+              onClick={() => {
+                setBoardType('adventure');
+                // Coop/Team + Adventure is deliberately unsupported for
+                // now (BACKLOG.md #10) -- reset rather than let the UI
+                // reach that combination.
+                setGameMode('solo');
+              }}
               className={`rounded-lg border px-3 py-2 text-left text-sm ${
                 boardType === 'adventure' ? 'border-amber-500 bg-stone-900' : 'border-stone-700 bg-stone-900/50 text-stone-400'
               }`}
@@ -116,6 +124,32 @@ export default function NewChallengePage() {
             </button>
           </div>
         </div>
+        {boardType === 'grid5x5' && (
+          <div>
+            <label className="block text-sm text-stone-400">Game mode</label>
+            <div className="mt-1 grid grid-cols-3 gap-2">
+              {(
+                [
+                  { value: 'solo', label: 'Solo', sub: 'Everyone has their own board' },
+                  { value: 'coop', label: 'Coop', sub: 'One shared board for all' },
+                  { value: 'team', label: 'Team', sub: 'Teams share pooled progress' },
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setGameMode(opt.value)}
+                  className={`rounded-lg border px-3 py-2 text-left text-sm ${
+                    gameMode === opt.value ? 'border-amber-500 bg-stone-900' : 'border-stone-700 bg-stone-900/50 text-stone-400'
+                  }`}
+                >
+                  <span className="block font-medium text-stone-200">{opt.label}</span>
+                  <span className="block text-xs text-stone-500">{opt.sub}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="flex gap-4">
           <div className="flex-1">
             <label className="block text-sm text-stone-400">Start date</label>

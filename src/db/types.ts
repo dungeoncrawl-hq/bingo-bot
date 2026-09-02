@@ -16,11 +16,25 @@ export interface Challenge {
   // Only meaningful for board_type='adventure' ('small' today, the only
   // size built so far) -- null for every other board_type.
   board_size: string | null;
+  // How the board is *scored* -- orthogonal to board_type, which is how
+  // it's *shaped*. 'solo' matches every challenge's behavior before this
+  // existed: each participant's own board, checked independently.
+  game_mode: 'solo' | 'coop' | 'team';
   start_date: string;
   end_date: string;
   status: 'draft' | 'active' | 'ended';
   dink_secret: string;
   discord_webhook_url: string | null;
+  created_at: string;
+}
+
+// One challenge's roster of teams (game_mode='team' only) -- not
+// reusable across challenges, matching every other host-owned entity
+// here.
+export interface Team {
+  id: string;
+  challenge_id: string;
+  name: string;
   created_at: string;
 }
 
@@ -63,4 +77,7 @@ export interface ChallengeParticipant {
   // string key, e.g. "0") -> which lane this participant picked there.
   // See src/lib/adventureProgress.ts's resolveFrontier.
   adventure_path: Record<string, 'top' | 'bottom'>;
+  // Only meaningful for game_mode='team' -- null until the host assigns
+  // this participant to one of the challenge's teams.
+  team_id: string | null;
 }

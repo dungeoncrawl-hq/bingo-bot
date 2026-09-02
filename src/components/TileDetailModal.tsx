@@ -7,9 +7,10 @@ import {
   formatTileGoal,
   formatTileProgress,
   progressPercent,
+  type ParticipantStats,
   type TileStatus,
 } from '../lib/tileConditions';
-import { computeParticipantStats, type RawParticipantData } from '../lib/participantStats';
+import { computeParticipantStats, poolStats, type RawParticipantData } from '../lib/participantStats';
 import { computeHiscoresRecap, type SnapshotRow } from '../lib/hiscoresRecap';
 import { progressColor } from '../lib/progressColor';
 
@@ -17,6 +18,13 @@ interface ParticipantLite {
   id: string;
   rsn: string;
   chosen_lowest_skill: string | null;
+  // Only meaningful for gameMode='team' -- null/absent otherwise.
+  team_id?: string | null;
+}
+
+interface TeamLite {
+  id: string;
+  name: string;
 }
 
 interface Props {
@@ -24,6 +32,12 @@ interface Props {
   participants: ParticipantLite[];
   challenge: Challenge;
   firstCompleters: Record<string, string>;
+  // 'solo' (default) | 'coop' | 'team' -- BACKLOG.md #10. Coop pools
+  // everyone into one aggregate row instead of ranking individuals; Team
+  // pools per team_id and ranks one row per team. `teams` is only
+  // consulted (for name lookup) when gameMode is 'team'.
+  gameMode?: 'solo' | 'coop' | 'team';
+  teams?: TeamLite[];
   onClose: () => void;
 }
 
@@ -45,9 +59,16 @@ function rankValue(status: TileStatus, percent: number | null): number {
   return percent ?? (status.done ? 100 : 0);
 }
 
-export default function TileDetailModal({ tile, participants, challenge, firstCompleters, onClose }: Props) {
+interface Row {
+  key: string;
+  label: string;
+  status: TileStatus;
+  isFirst: boolean;
+}
+
+export default function TileDetailModal({ tile, participants, challenge, firstCompleters, gameMode = 'solo', teams = [], onClose }: Props) {
   const [loading, setLoading] = useState(true);
-  const [statuses, setStatuses] = useState<Record<string, TileStatus>>({});
+  const [rows, setRows] = useState<Row[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -59,7 +80,7 @@ export default function TileDetailModal({ tile, participants, challenge, firstCo
     (async () => {
       if (ids.length === 0) {
         if (!cancelled) {
-          setStatuses({});
+          setRows([]);
           setLoading(false);
         }
         return;
@@ -88,7 +109,10 @@ export default function TileDetailModal({ tile, participants, challenge, firstCo
       const petsByP = groupByParticipant((petObtains.data as ({ participant_id: string } & RawParticipantData['petObtains'][number])[]) ?? []);
       const snapshotsByP = groupByParticipant((snapshots.data as ({ participant_id: string } & SnapshotRow)[]) ?? []);
 
-      const result: Record<string, TileStatus> = {};
+      // Every participant's own raw ParticipantStats, computed exactly as
+      // today -- pooling (Coop/Team) happens afterward, on these results,
+      // never on the raw event rows themselves.
+      const statsById: Record<string, ParticipantStats> = {};
       for (const id of ids) {
         const raw: RawParticipantData = {
           bossKills: bossKillsByP.get(id) ?? [],
@@ -100,11 +124,38 @@ export default function TileDetailModal({ tile, participants, challenge, firstCo
         };
         const hiscoresRecap = computeHiscoresRecap(snapshotsByP.get(id) ?? [], window);
         const chosenLowestSkill = participants.find((p) => p.id === id)?.chosen_lowest_skill ?? null;
-        const stats = computeParticipantStats(raw, window, hiscoresRecap, chosenLowestSkill);
-        result[id] = checkTile(tile.condition, stats);
+        statsById[id] = computeParticipantStats(raw, window, hiscoresRecap, chosenLowestSkill);
       }
+
+      let result: Row[];
+      if (gameMode === 'coop') {
+        const status = checkTile(tile.condition, poolStats(Object.values(statsById)));
+        result = [{ key: 'pooled', label: 'Everyone', status, isFirst: false }];
+      } else if (gameMode === 'team') {
+        result = teams
+          .map((t) => {
+            const memberIds = participants.filter((p) => p.team_id === t.id).map((p) => p.id);
+            if (memberIds.length === 0) return null;
+            const status = checkTile(tile.condition, poolStats(memberIds.map((id) => statsById[id])));
+            const winnerId = firstCompleters[tile.id];
+            const isFirst = status.done && tile.condition.type !== 'freeSpace' && memberIds.includes(winnerId);
+            return { key: t.id, label: t.name, status, isFirst };
+          })
+          .filter((r): r is Row => r != null);
+      } else {
+        result = participants.map((p) => ({
+          key: p.id,
+          label: p.rsn,
+          status: checkTile(tile.condition, statsById[p.id]),
+          isFirst: false, // set below, once per row, for solo (needs `done` first)
+        }));
+        for (const row of result) {
+          row.isFirst = row.status.done && tile.condition.type !== 'freeSpace' && firstCompleters[tile.id] === row.key;
+        }
+      }
+
       if (!cancelled) {
-        setStatuses(result);
+        setRows(result);
         setLoading(false);
       }
     })();
@@ -112,14 +163,11 @@ export default function TileDetailModal({ tile, participants, challenge, firstCo
     return () => {
       cancelled = true;
     };
-  }, [tile, participants, challenge]);
+  }, [tile, participants, challenge, gameMode, teams, firstCompleters]);
 
-  const ranked = [...participants].sort((a, b) => {
-    const statusA = statuses[a.id];
-    const statusB = statuses[b.id];
-    if (!statusA || !statusB) return 0;
-    return rankValue(statusB, progressPercent(tile.condition, statusB)) - rankValue(statusA, progressPercent(tile.condition, statusA));
-  });
+  const ranked = [...rows].sort(
+    (a, b) => rankValue(b.status, progressPercent(tile.condition, b.status)) - rankValue(a.status, progressPercent(tile.condition, a.status)),
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
@@ -143,11 +191,9 @@ export default function TileDetailModal({ tile, participants, challenge, firstCo
           <p className="text-sm text-stone-500">Loading progress…</p>
         ) : (
           <ul className="space-y-3">
-            {ranked.map((p) => {
-              const status = statuses[p.id];
-              if (!status) return null;
+            {ranked.map((row) => {
+              const status = row.status;
               const percent = progressPercent(tile.condition, status);
-              const isFirst = status.done && tile.condition.type !== 'freeSpace' && firstCompleters[tile.id] === p.id;
               const baseCaption = formatTileProgress(tile.condition, status) ?? formatTileGoal(tile.condition);
               const caption = status.resolvedSkill
                 ? `${baseCaption} (${status.resolvedSkill})`
@@ -155,12 +201,12 @@ export default function TileDetailModal({ tile, participants, challenge, firstCo
                   ? 'tied -- pick a skill'
                   : baseCaption;
               return (
-                <li key={p.id}>
+                <li key={row.key}>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium">{p.rsn}</span>
+                    <span className="font-medium">{row.label}</span>
                     <span className="flex items-center gap-1 text-stone-400">
                       {caption}
-                      {isFirst ? (
+                      {row.isFirst ? (
                         <span className="text-amber-400">⭐</span>
                       ) : status.done ? (
                         <span className="text-green-400">✓</span>
@@ -175,7 +221,7 @@ export default function TileDetailModal({ tile, participants, challenge, firstCo
                 </li>
               );
             })}
-            {participants.length === 0 && <li className="text-sm text-stone-500">No one's joined yet.</li>}
+            {ranked.length === 0 && <li className="text-sm text-stone-500">No one's joined yet.</li>}
           </ul>
         )}
 
