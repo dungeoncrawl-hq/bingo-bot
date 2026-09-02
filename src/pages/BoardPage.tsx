@@ -457,11 +457,16 @@ export default function BoardPage() {
               // A free space has no "first" worth bragging about -- everyone
               // gets it the instant it exists, so it's excluded here even
               // though computeFirstCompleters technically records one
-              // (whoever's sync happened to land first).
+              // (whoever's sync happened to land first). Same reasoning
+              // excludes Coop -- credit lands on everyone at once from one
+              // pooled event, so whichever participant's fanout insert
+              // happened to land first in the loop isn't a real "first"
+              // worth a star (matches discordEmbeds.ts's noFirstConcept).
               const isFirst =
                 tile != null &&
                 done &&
                 tile.condition.type !== 'freeSpace' &&
+                challenge.game_mode !== 'coop' &&
                 firstCompleters[tile.id] === viewedParticipantId;
               const noOneCompleted = tile != null && !completions.some((c) => c.kind === 'tile' && c.ref === tile.id);
               const someoneElseCompleted =
