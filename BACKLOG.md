@@ -40,10 +40,89 @@ ordered -- just captured so they don't get lost.
    so a new type needs no migration -- see its own comment in
    `supabase/schema.sql`). The current 5x5 grid becomes the "Standard"
    type (today's only value, `'grid5x5'`). A second type, "Adventure,"
-   gets its own `size` attribute (`small` | `medium` | `large`) --
-   scope for this backlog entry is just the "small" Adventure dungeon;
-   medium/large and Adventure's actual rules (what a size even changes)
-   are TBD, to be defined later.
+   is a branching path -- tiles represent physical rooms the player
+   moves through sequentially, like a horizontal hopscotch board, with
+   forks where the player picks a route. Scope here is just the
+   "small" Adventure dungeon; medium/large are TBD later (the design
+   below should generalize to them, but only small is being built now).
+
+   **Layout ("small").** 9 columns, shape `2,2,1,2,2,1,2,2,1`: two
+   2-tile lanes (top/bottom) converging on a boss, three times, ending
+   at a final boss. 15 tile slots total, but only 9 are ever "in play"
+   for one participant (see path choice below) -- 3 bosses + 2 tiles
+   from whichever lane they picked at each of the 3 forks.
+   `tiles.layout` becomes `{ column: 0-8, lane: 'top' | 'bottom' |
+   'center' }` instead of `{row, col}` -- same jsonb column, no
+   migration, exactly the extensibility it was built for. Boss slots
+   are inherently `lane: 'center'` at columns 2/5/8 (2 mid-bosses +
+   1 final) -- nothing marks a slot as a boss, its fixed position in
+   the canonical small-adventure layout already does.
+
+   **Path choice is real branching, not just ordering.** At the start
+   and after each boss, the player picks top or bottom; the other
+   lane's 2 tiles are never required for that player. Persisted as
+   `challenge_participants.adventure_path` (new jsonb column), keyed
+   by fork index (0/1/2 for small): `{"0": "top", "1": "bottom", "2":
+   "top"}`.
+
+   **Progress is gated, sequentially.** Tile 1 of the chosen lane ->
+   tile 2 -> boss -> next fork. `checkChallengeProgress` only ever
+   attempts to record a completion for a participant's current
+   *frontier* tile (needs a new pure resolver, structurally like
+   `resolveLowestSkill` in `tileConditions.ts`: walk the chosen path
+   against `tile_completions`, return the first not-done tile). This
+   doesn't touch `checkTile`/condition evaluation at all -- conditions
+   keep working exactly as they do today (cumulative gains since
+   challenge start); if a participant's stats already clear a tile's
+   bar the instant it unlocks, it completes immediately, same as a
+   `freeSpace` tile or a tile added mid-challenge already can.
+
+   **A boss is mechanically just a tile** with a bigger
+   points/threshold -- not a new condition type, no special editor UI.
+   Its Discord completion embed reuses `buildTileCompletionEmbed`
+   as-is, just with boss-flavored title/description text when
+   `tile.layout.lane === 'center'` (bigger "cleared the dungeon" text
+   for the final boss) -- no new embed builder needed.
+
+   **Leaderboard denominator is a fixed constant per size**, not
+   derived from the board's total tile count (15) or a participant's
+   specific path length -- every small-dungeon participant always has
+   exactly 9 tiles in play, so it's always "X / 9", not "X / 15".
+
+   **Type + size are chosen once, at creation, in
+   `NewChallengePage.tsx`** (today hardcodes `board_type: 'grid5x5'`)
+   and never editable after -- once tiles exist against a layout
+   shape, changing it out from under them has no sane migration.
+   New `challenges.board_size` column (`'small' | null`, only
+   meaningful for `board_type = 'adventure'`) -- typed as just
+   `'small'` for now rather than the full future union, since
+   exposing sizes that don't do anything yet is worse than adding them
+   when they're real. UI: a Standard/Adventure card picker (Standard
+   stays the default), Adventure shows a static "Small -- 15 tiles,
+   branching path" sub-line rather than a size dropdown with one
+   option.
+
+   **Host authoring falls out of the layout model for free** once the
+   board renderer (below) exists to click on: a canonical
+   `ADVENTURE_SMALL_LAYOUT` constant (15 `{column, lane}` slots) plays
+   the same role `GRID_SIZE=5` plays for Standard's `row*5+col` slots
+   in `EditChallengePage.tsx` -- click an empty slot, same
+   `TileEditorForm`, no new authoring concept.
+
+   **`TileDetailModal` opens per column, not per tile.** For a fork
+   column, it shows every participant (ranked, including "not reached
+   yet" ones, same pattern as today), each scored against whichever
+   lane's tile they actually picked, with a lane badge next to their
+   name (fork index for a column = `Math.floor(column / 3)`). For a
+   boss column it collapses to exactly today's single-condition modal.
+   Implies the board renderer needs a whole *column* as one click
+   target, not individual tile cells.
+
+   **Still fully unscoped: the board's visual rendering.** An entirely
+   new component, not a variant of the 5x5 grid -- horizontal,
+   branching, connecting lines, locked/unlocked/other-lane-not-taken
+   states, mobile layout, whole-column click targets. Probably faster
+   to hash out while building than in the abstract.
 
 ## Anti-abuse
 9. Whether/who to email when a participant's screenshot count crosses a
