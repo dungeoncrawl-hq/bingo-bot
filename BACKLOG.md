@@ -7,11 +7,12 @@ ordered -- just captured so they don't get lost.
 1. Hidden/mystery tiles -- a tile that doesn't reveal itself until some
    trigger happens. Needs further design (what triggers it? does it show
    as a blank slot, a "?" placeholder, or not appear in the grid at
-   all?). Worth a look at #7's Adventure gating for a ready-made answer
-   to "what triggers it": a tile past a participant's current frontier
-   is already conceptually hidden (not yet relevant) purely by
-   sequence -- may not need its own new trigger concept at all, at
-   least for Adventure boards.
+   all?). Worth a look at Adventure mode's gating
+   (`src/lib/adventureProgress.ts`, shipped) for a ready-made answer to
+   "what triggers it": a tile past a participant's current frontier is
+   already conceptually hidden (not yet relevant) purely by sequence --
+   may not need its own new trigger concept at all, at least for
+   Adventure boards.
 2. Improve the logic around the "Obtain a set of items" (`itemCount`)
    condition -- currently just a flat comma-separated item-name list
    matched case-insensitively against loot; needs a closer look (exact
@@ -24,11 +25,12 @@ ordered -- just captured so they don't get lost.
    typing the full number by hand.
 
 ## Host tooling
-Items 4-6 were scoped before board types (#7) or game modes (#11)
-existed -- none of them currently say what "randomize"/"library"/"copy"
-means for anything but a Standard/solo board. Simplest path: scope all
-three to Standard + solo only for v1, same deferral already applied to
-Coop/Team and to combining Adventure with a game mode -- an Adventure
+Items 4-6 were scoped before board types (Adventure mode, now shipped) or
+game modes (#10) existed -- none of them currently say what "randomize"/
+"library"/"copy" means for anything but a Standard/solo board. Simplest
+path: scope all three to Standard + solo only for v1, same deferral
+already applied to Coop/Team and to combining Adventure with a game
+mode -- an Adventure
 board's "random tile" needs different pools per lane/boss, and copying
 a challenge needs to carry `board_type`/`board_size`/`game_mode`
 forward, not just tiles, once those exist to copy.
@@ -40,138 +42,45 @@ forward, not just tiles, once those exist to copy.
 6. "Copy a past challenge" -- start a new challenge that mirrors an
    existing/past board's tiles instead of rebuilding it from scratch.
 
-## Dungeon types
-7. Support more than one board shape/ruleset ("dungeon type"), building
-   on `challenges.board_type` (already unconstrained text specifically
-   so a new type needs no migration -- see its own comment in
-   `supabase/schema.sql`). The current 5x5 grid becomes the "Standard"
-   type (today's only value, `'grid5x5'`). A second type, "Adventure,"
-   is a branching path -- tiles represent physical rooms the player
-   moves through sequentially, like a horizontal hopscotch board, with
-   forks where the player picks a route. Scope here is just the
-   "small" Adventure dungeon; medium/large are TBD later (the design
-   below should generalize to them, but only small is being built now).
-
-   **Layout ("small").** 9 columns, shape `2,2,1,2,2,1,2,2,1`: two
-   2-tile lanes (top/bottom) converging on a boss, three times, ending
-   at a final boss. 15 tile slots total, but only 9 are ever "in play"
-   for one participant (see path choice below) -- 3 bosses + 2 tiles
-   from whichever lane they picked at each of the 3 forks.
-   `tiles.layout` becomes `{ column: 0-8, lane: 'top' | 'bottom' |
-   'center' }` instead of `{row, col}` -- same jsonb column, no
-   migration, exactly the extensibility it was built for. Boss slots
-   are inherently `lane: 'center'` at columns 2/5/8 (2 mid-bosses +
-   1 final) -- nothing marks a slot as a boss, its fixed position in
-   the canonical small-adventure layout already does.
-
-   **Path choice is real branching, not just ordering.** At the start
-   and after each boss, the player picks top or bottom; the other
-   lane's 2 tiles are never required for that player. Persisted as
-   `challenge_participants.adventure_path` (new jsonb column), keyed
-   by fork index (0/1/2 for small): `{"0": "top", "1": "bottom", "2":
-   "top"}`.
-
-   **Progress is gated, sequentially.** Tile 1 of the chosen lane ->
-   tile 2 -> boss -> next fork. `checkChallengeProgress` only ever
-   attempts to record a completion for a participant's current
-   *frontier* tile (needs a new pure resolver, structurally like
-   `resolveLowestSkill` in `tileConditions.ts`: walk the chosen path
-   against `tile_completions`, return the first not-done tile). This
-   doesn't touch `checkTile`/condition evaluation at all -- conditions
-   keep working exactly as they do today (cumulative gains since
-   challenge start); if a participant's stats already clear a tile's
-   bar the instant it unlocks, it completes immediately, same as a
-   `freeSpace` tile or a tile added mid-challenge already can.
-
-   **A boss is mechanically just a tile** with a bigger
-   points/threshold -- not a new condition type, no special editor UI.
-   Its Discord completion embed reuses `buildTileCompletionEmbed`
-   as-is, just with boss-flavored title/description text when
-   `tile.layout.lane === 'center'` (bigger "cleared the dungeon" text
-   for the final boss) -- no new embed builder needed.
-
-   **Leaderboard denominator is a fixed constant per size**, not
-   derived from the board's total tile count (15) or a participant's
-   specific path length -- every small-dungeon participant always has
-   exactly 9 tiles in play, so it's always "X / 9", not "X / 15".
-
-   **Type + size are chosen once, at creation, in
-   `NewChallengePage.tsx`** (today hardcodes `board_type: 'grid5x5'`)
-   and never editable after -- once tiles exist against a layout
-   shape, changing it out from under them has no sane migration.
-   New `challenges.board_size` column (`'small' | null`, only
-   meaningful for `board_type = 'adventure'`) -- typed as just
-   `'small'` for now rather than the full future union, since
-   exposing sizes that don't do anything yet is worse than adding them
-   when they're real. UI: a Standard/Adventure card picker (Standard
-   stays the default), Adventure shows a static "Small -- 15 tiles,
-   branching path" sub-line rather than a size dropdown with one
-   option.
-
-   **Host authoring falls out of the layout model for free** once the
-   board renderer (below) exists to click on: a canonical
-   `ADVENTURE_SMALL_LAYOUT` constant (15 `{column, lane}` slots) plays
-   the same role `GRID_SIZE=5` plays for Standard's `row*5+col` slots
-   in `EditChallengePage.tsx` -- click an empty slot, same
-   `TileEditorForm`, no new authoring concept.
-
-   **`TileDetailModal` opens per column, not per tile.** For a fork
-   column, it shows every participant (ranked, including "not reached
-   yet" ones, same pattern as today), each scored against whichever
-   lane's tile they actually picked, with a lane badge next to their
-   name (fork index for a column = `Math.floor(column / 3)`). For a
-   boss column it collapses to exactly today's single-condition modal.
-   Implies the board renderer needs a whole *column* as one click
-   target, not individual tile cells.
-
-   **Still fully unscoped: the board's visual rendering.** An entirely
-   new component, not a variant of the 5x5 grid -- horizontal,
-   branching, connecting lines, locked/unlocked/other-lane-not-taken
-   states, mobile layout, whole-column click targets. Probably faster
-   to hash out while building than in the abstract.
-
-   Combining Adventure with a Coop/Team game mode (#11) is explicitly
-   deferred, not forgotten -- see that item.
-
 ## Anti-abuse
-8. Whether/who to email when a participant's screenshot count crosses a
+7. Whether/who to email when a participant's screenshot count crosses a
    concerning threshold -- detection itself already shipped
    (`increment_screenshot_stats`, the ⚠ badge on `EditChallengePage.tsx`'s
    Players list, a console.warn every 10th screenshot), this is just the
    open notification-behavior question: email the player, the host, both,
    or leave it at the badge/log the host already has? A site-admin
-   dashboard (see #12) is the planned first step here -- aggregate,
+   dashboard (see #11) is the planned first step here -- aggregate,
    site-wide visibility before deciding who gets a targeted email.
 
 ## Notifications
-9. Full rewrite of Discord notification content (`discordEmbeds.ts`) --
+8. Full rewrite of Discord notification content (`discordEmbeds.ts`) --
    keep the current embed structure (title/description/fields/image),
    but replace the fixed flavor-text lines (e.g. "Aren't they just
    showing off at this point?") with randomized joke/banter variants
    pulled from a pool, to lean into the site's ".lol" branding. Design
    this aware of the other things already reshaping the same flavor
-   text: #7's boss-vs-regular-tile swap and #11's solo/"the group"/
-   "Team X" subject swap. Those are two independent dimensions
-   (is-boss x who's-the-subject) that'll both exist by the time this
-   gets built -- the banter pool should be parameterized by both from
-   the start, not bolted on after, or this needs redoing once
-   Adventure/Coop/Team ship.
+   text: Adventure's boss-vs-regular-tile swap (shipped) and #10's
+   solo/"the group"/"Team X" subject swap. Those are two independent
+   dimensions (is-boss x who's-the-subject) that'll both exist by the
+   time this gets built -- the banter pool should be parameterized by
+   both from the start, not bolted on after, or this needs redoing once
+   Coop/Team ships.
 
 ## Account / profile
-10. A user profile page letting someone change their email and set a
-    default RSN, so they don't have to retype it every time they join a
-    new challenge. Two different underlying mechanisms: email lives on
-    Supabase's own `auth.users` (changing it goes through
-    `supabase.auth.updateUser()`, which re-sends a confirmation email --
-    not a plain field update), while a default RSN would need a new
-    column on `profiles` (today just `id`, `display_name`,
-    `created_at` -- see `supabase/schema.sql`), then `BoardPage.tsx`'s
-    join form pre-filling from it instead of starting blank.
+9. A user profile page letting someone change their email and set a
+   default RSN, so they don't have to retype it every time they join a
+   new challenge. Two different underlying mechanisms: email lives on
+   Supabase's own `auth.users` (changing it goes through
+   `supabase.auth.updateUser()`, which re-sends a confirmation email --
+   not a plain field update), while a default RSN would need a new
+   column on `profiles` (today just `id`, `display_name`,
+   `created_at` -- see `supabase/schema.sql`), then `BoardPage.tsx`'s
+   join form pre-filling from it instead of starting blank.
 
 ## Game modes
-11. New game modes, applying to any dungeon type (orthogonal to #7's
-    board *type* -- Standard/Adventure -- this is about how a board is
-    *scored*, not shaped). New `challenges.game_mode` column (`'solo' |
+10. New game modes, applying to any dungeon type (orthogonal to
+    Adventure's board *type*, now shipped -- this is about how a board
+    is *scored*, not shaped). New `challenges.game_mode` column (`'solo' |
     'coop' | 'team'`, default `'solo'` = today's behavior). Scope for
     both modes below is Standard boards only -- combining either with
     Adventure (e.g. a team sharing one branching path) is real design
@@ -329,9 +238,9 @@ forward, not just tiles, once those exist to copy.
     team instead.
 
 ## Site administration
-12. A site-administrator role, for the site owner only -- not a
+11. A site-administrator role, for the site owner only -- not a
     per-challenge host permission, a whole-site one. Directly unblocks
-    #8's "who to email" question -- decide that with real aggregate
+    #7's "who to email" question -- decide that with real aggregate
     data in front of you, not a guess. Read-only for v1: no force-close/
     ban actions yet, just visibility. That's a natural later addition
     once the view itself proves useful, not a day-one requirement.
