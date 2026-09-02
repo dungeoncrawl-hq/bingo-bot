@@ -23,28 +23,64 @@ ordered -- just captured so they don't get lost.
    number with a denomination selector (K/M) plus a value, so the host
    picks e.g. "100" + "M" to form a 100,000,000 threshold instead of
    typing the full number by hand.
-4. **Open question: does a newly-unlocked Adventure tile start at 0, or
-   can earlier progress already count?** Current actual behavior
-   (confirmed against the shipped code, not a guess): every tile's
-   condition is checked against the participant's *cumulative stats
-   since the challenge's start date* -- not "since this tile became
-   reachable." So a tile several columns into the path can complete
-   the instant it unlocks, off stat gains the player racked up earlier
-   in the dungeon (or even before reaching that fork at all) -- nothing
-   resets at unlock. This was a deliberate simplification when Adventure
-   shipped (`checkTile`/`ParticipantStats` reused completely unchanged,
-   no per-tile "gains since unlock" tracking), called out in its own
-   code comment (`src/lib/adventureProgress.ts`) but never actually
-   weighed as a design choice against the alternative. Real consequence
-   worth deciding on purpose: two tiles sharing the same condition type
-   at different points in the path (e.g. two "Slayer XP" tiles) can
-   both complete back to back off one pool of cumulative progress,
-   without the player doing anything new between them -- may or may not
-   match the intended "earn each room as you reach it" feel. If a
-   per-tile "gains since unlock" model is wanted instead, it needs a
-   stored baseline (stats snapshot, or simply `frontier reached at`
-   timestamp) per participant per tile to diff against, which is a real
-   scope increase over today's stateless-recompute approach.
+4. **Adventure: logout-gated progress reset between tiles.** Today,
+   every tile's condition is checked against a participant's *cumulative
+   stats since the challenge's start date* -- nothing resets at unlock,
+   so a tile several columns into the path can complete the instant it
+   unlocks, off gains racked up earlier in the dungeon (or before
+   reaching that fork at all). Resolved design: reset the baseline at
+   every tile transition, gated on a Dink `LOGOUT` event specifically --
+   not a timestamp/snapshot recorded at tile-completion time, since
+   hiscores only get polled daily except when a logout forces an
+   on-demand resync (`syncOneParticipant`, already wired up in
+   `dinkWebhook.ts`'s `LOGOUT` case) -- a logout is the only moment
+   precise enough to serve as a clean baseline for XP/level/clue-tier
+   conditions, not just the Dink-event-driven ones.
+
+   **Mechanism.** When tile *N* completes: if the triggering Dink event
+   was itself a `LOGOUT`, that event's fresh stat-pull immediately
+   becomes tile *N+1*'s baseline, no waiting. If it wasn't, tile *N+1*
+   is locked and **not evaluated at all** -- not "hasn't progressed," a
+   distinct state -- until the participant's next `LOGOUT` event
+   arrives; that logout's fresh pull becomes the baseline the moment it
+   lands. The very first tile in a participant's path keeps today's
+   behavior (baseline = challenge start) since there's nothing to reset
+   yet.
+
+   **New column**: `challenge_participants.adventure_baseline_at
+   timestamptz`, nullable. Null = "awaiting a qualifying logout,"
+   blocking the frontier tile entirely. Cleared back to null the moment
+   a tile completes, so the next tile starts in the same "awaiting"
+   state.
+
+   **New plumbing**: `checkChallengeProgress(participantId)` has no
+   idea today what kind of Dink event triggered it -- needs an
+   `isLogout` flag threaded down from `dinkWebhook.ts`'s `processDinkWebhook`.
+
+   **The one real deviation from today's pattern**: for XP/skill-level/
+   clue-tier conditions, `hiscoresRecap.ts` doesn't diff "since a
+   timestamp" -- it searches for "the most recent *daily* snapshot
+   before a date," which would still leak same-day progress across the
+   reset if reused as-is. To make the logout's snapshot the *exact*
+   baseline, the reset needs to pin directly to that specific snapshot
+   row rather than date-search for it -- a genuinely different code
+   path from every other tile-checking flow today, not a reuse of
+   `computeHiscoresRecap`'s existing search.
+
+   **New UI state needed**: today's model only has locked/frontier/
+   done/other-lane-not-taken. This adds a distinct "reached, but log
+   out to start counting" state on the board and in
+   `AdventureColumnModal.tsx` -- otherwise a player sees a room right in
+   front of them and can't tell why their already-sufficient stats
+   aren't registering.
+
+   **Accepted, intended side effect**: one Dink event can no longer
+   cascade through several already-satisfied tiles at once (today's
+   `while` loop in `challengeProgress.ts`'s Adventure branch) -- each
+   tile now genuinely requires a fresh logout before the next one is
+   even checkable, so a single big stat lead can't clear multiple rooms
+   in one pass anymore. That's the direct mechanism closing the gap,
+   not a regression to work around.
 
 ## Host tooling
 Items 5-7 were scoped before board types (Adventure mode, shipped) or
