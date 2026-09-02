@@ -542,3 +542,68 @@ create policy "site admin writes" on randomize_settings for all
 -- hand, to avoid a transcription mismatch).
 insert into randomize_settings (id, settings) values (true, '{"thresholds":{"xpGained":{"easy":200000,"medium":500000,"hard":1500000},"bossKcGained":{"easy":20,"medium":50,"hard":150},"slayerTasksCompleted":{"easy":5,"medium":15,"hard":40},"lootValueGained":{"easy":1000000,"medium":5000000,"hard":20000000},"singleDropValue":{"easy":250000,"medium":1000000,"hard":5000000},"cluesCompleted":{"easy":3,"medium":10,"hard":25},"beginnerCluesCompleted":{"easy":2,"medium":5,"hard":15},"easyCluesCompleted":{"easy":2,"medium":5,"hard":15},"mediumCluesCompleted":{"easy":2,"medium":5,"hard":12},"hardCluesCompleted":{"easy":1,"medium":3,"hard":8},"eliteCluesCompleted":{"easy":1,"medium":2,"hard":5},"masterCluesCompleted":{"easy":1,"medium":1,"hard":3},"collectionLogGained":{"easy":2,"medium":5,"hard":15},"skillLevelGained":{"easy":1,"medium":3,"hard":8},"skillXpGained":{"easy":100000,"medium":300000,"hard":1000000},"xpGainedLowestSkill":{"easy":100000,"medium":300000,"hard":1000000},"levelsGainedLowestSkill":{"easy":1,"medium":3,"hard":8},"itemCount":{"easy":1,"medium":4,"hard":10},"bigDropsCount":{"easy":1,"medium":3,"hard":6},"maxDeaths":{"easy":20,"medium":10,"hard":3},"petsObtained":{"easy":1,"medium":1,"hard":2}},"itemSetCollectedPercent":{"easy":25,"medium":50,"hard":100},"bigDropsCountDropValueThreshold":{"easy":1000000,"medium":1000000,"hard":2000000},"kcTiers":{"tierThresholds":{"fast":{"easy":10,"medium":30,"hard":75},"slow":{"easy":3,"medium":10,"hard":25},"verySlow":{"easy":1,"medium":2,"hard":5}},"bossToTier":{"Abyssal Sire":"fast","Amoxliatl":"fast","Artio":"fast","Barrows Chests":"fast","Brutus":"fast","Bryophyta":"fast","Callisto":"fast","Calvar''ion":"fast","Cerberus":"fast","Chaos Elemental":"fast","Chaos Fanatic":"fast","Commander Zilyana":"fast","Crazy Archaeologist":"fast","Dagannoth Prime":"fast","Dagannoth Rex":"fast","Dagannoth Supreme":"fast","Deranged Archaeologist":"fast","General Graardor":"fast","Giant Mole":"fast","Grotesque Guardians":"fast","Hespori":"fast","Kalphite Queen":"fast","King Black Dragon":"fast","Kraken":"fast","Kree''Arra":"fast","K''ril Tsutsaroth":"fast","Lunar Chests":"fast","Mimic":"fast","Obor":"fast","Rifts closed":"fast","Sarachnis":"fast","Scorpia":"fast","Scurrius":"fast","Skotizo":"fast","Spindel":"fast","Tempoross":"fast","The Gauntlet":"fast","Thermonuclear Smoke Devil":"fast","Venenatis":"fast","Vet''ion":"fast","Vorkath":"fast","Wintertodt":"fast","Zalcano":"fast","Zulrah":"fast","Alchemical Hydra":"slow","Corporeal Beast":"slow","Nex":"slow","Nightmare":"slow","Phantom Muspah":"slow","The Corrupted Gauntlet":"slow","Duke Sucellus":"slow","The Leviathan":"slow","The Whisperer":"slow","Vardorvis":"slow","Araxxor":"slow","Doom of Mokhaiotl":"slow","The Hueycoatl":"slow","The Royal Titans":"slow","Yama":"slow","Chambers of Xeric":"slow","Theatre of Blood":"slow","Tombs of Amascut":"slow","Shellbane Gryphon":"slow","Mad Angel":"slow","Maggot King":"slow","TzTok-Jad":"verySlow","TzKal-Zuk":"verySlow","Sol Heredit":"verySlow","Phosani''s Nightmare":"verySlow","Theatre of Blood: Hard Mode":"verySlow","Tombs of Amascut: Expert Mode":"verySlow","Chambers of Xeric: Challenge Mode":"verySlow"}},"pointsByDifficulty":{"easy":1,"medium":2,"hard":3}}'::jsonb)
   on conflict (id) do nothing;
+
+-- BACKLOG.md #9 -- Discord completion-embed randomized flavor lines
+-- (src/server/discordBanter.ts), site-admin-editable via
+-- /dungeon-master-admin/discord-templates instead of hardcoded TS, so
+-- wording changes don't need a code deploy. Fixed (non-randomized) title
+-- templates aren't covered -- those have real conditional branching baked
+-- into discordEmbeds.ts, not just interpolation, a bigger lift deferred
+-- for now.
+create table if not exists discord_banter_lines (
+  id uuid primary key default gen_random_uuid(),
+  pool text not null check (pool in ('firstTile', 'notFirstTile', 'firstBoss', 'notFirstBoss', 'boardCompletion')),
+  -- {points}/{rsn} placeholders, substituted generically at render time
+  -- (discordBanter.ts's fill()) -- not every pool uses both; boardCompletion
+  -- uses neither.
+  template text not null,
+  sort_order integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
+alter table discord_banter_lines enable row level security;
+drop policy if exists "public read" on discord_banter_lines;
+create policy "public read" on discord_banter_lines for select using (true);
+drop policy if exists "site admin writes" on discord_banter_lines;
+create policy "site admin writes" on discord_banter_lines for all
+  to authenticated using (
+    exists (select 1 from profiles p where p.id = auth.uid() and p.is_site_admin)
+  ) with check (
+    exists (select 1 from profiles p where p.id = auth.uid() and p.is_site_admin)
+  );
+
+-- Must match src/server/discordBanter.ts's DEFAULT_BANTER_POOLS exactly --
+-- generated from that constant via a one-off script, not typed by hand, to
+-- avoid a transcription mismatch. Guarded by "where not exists" rather than
+-- an on-conflict key, since there's no natural per-row uniqueness to
+-- conflict on -- only ever seeds an empty table, safe to leave here
+-- permanently, same as every other seed in this file.
+insert into discord_banter_lines (pool, template, sort_order)
+select * from (values
+  ('firstTile', '+{points} pts. Aren''t they just showing off at this point?', 0),
+  ('firstTile', '+{points} pts. Absolutely no chill.', 1),
+  ('firstTile', '+{points} pts. Somebody''s speedrunning this challenge.', 2),
+  ('firstTile', '+{points} pts. The rest of the lobby should be nervous.', 3),
+  ('firstTile', '+{points} pts. Zero hesitation on that one.', 4),
+  ('firstTile', '+{points} pts. Didn''t even let anyone else try.', 5),
+  ('notFirstTile', 'Unfortunately not as fast as {rsn}, though.', 0),
+  ('notFirstTile', '{rsn} beat them to it. Tough crowd out here.', 1),
+  ('notFirstTile', '{rsn} already claimed this one. There''s always the next tile.', 2),
+  ('notFirstTile', 'A solid finish -- just not as solid as {rsn}''s.', 3),
+  ('notFirstTile', 'Bested by {rsn}. No shame in it.', 4),
+  ('firstBoss', '+{points} pts. Absolutely demolished.', 0),
+  ('firstBoss', '+{points} pts. The boss never stood a chance.', 1),
+  ('firstBoss', '+{points} pts. GG to whatever that boss was trying to do.', 2),
+  ('firstBoss', '+{points} pts. That''s a wrap on that fight.', 3),
+  ('firstBoss', '+{points} pts. Flawless victory.', 4),
+  ('notFirstBoss', '{rsn} already claimed this kill. Better luck on the next one.', 0),
+  ('notFirstBoss', '{rsn} got there first -- this boss just isn''t safe from this lobby.', 1),
+  ('notFirstBoss', 'Still a kill, just not the first one. {rsn} beat them to that.', 2),
+  ('notFirstBoss', '{rsn} already dropped this boss. Next!', 3),
+  ('boardCompletion', 'Every tile conquered.', 0),
+  ('boardCompletion', 'That''s the whole thing. No tiles left standing.', 1),
+  ('boardCompletion', 'A clean sweep.', 2),
+  ('boardCompletion', 'Board cleared. What now, champion?', 3),
+  ('boardCompletion', 'Not a single tile left to do.', 4)
+) as seed(pool, template, sort_order)
+where not exists (select 1 from discord_banter_lines);

@@ -9,6 +9,7 @@ import { selectRows, insertRowReturning, callRpc, callRpcReturning } from './sup
 import { relayToDiscord } from './discordRelay.js';
 import { buildTileCompletionEmbed, buildLineCompletionEmbed, buildBoardCompletionEmbed } from './discordEmbeds.js';
 import type { ParticipantLite } from './discordEmbeds.js';
+import { fetchBanterPools } from './discordBanterStore.js';
 import { checkTile, gridLines } from '../lib/tileConditions.js';
 import { computeParticipantStats, poolStats } from '../lib/participantStats.js';
 import type { RawParticipantData } from '../lib/participantStats.js';
@@ -383,6 +384,12 @@ export async function checkChallengeProgress(participantId: string, isLogout: bo
 
   const leaderboard = computeLeaderboard(tiles, challengeCompletions, leaderboardParticipantIds, firstCompleters);
 
+  // BACKLOG.md #9 -- fetched once per webhook call (60s-cached in
+  // discordBanterStore.ts), not once per tile. Only needed when there's
+  // actually a tile or board completion to flavor -- buildLineCompletionEmbed
+  // takes no pools, so a line-only completion skips this fetch entirely.
+  const pools = insertedTileIds.length > 0 || boardInserted ? await fetchBanterPools() : undefined;
+
   for (const tileId of insertedTileIds) {
     const tile = tiles.find((t) => t.id === tileId);
     if (!tile) continue;
@@ -414,6 +421,7 @@ export async function checkChallengeProgress(participantId: string, isLogout: bo
       leaderboard,
       participants: embedParticipants,
       challenge: challengeLite,
+      pools,
     });
     await relayToDiscord(challenge.discord_webhook_url, embed);
   }
@@ -426,7 +434,7 @@ export async function checkChallengeProgress(participantId: string, isLogout: bo
   if (boardInserted) {
     await relayToDiscord(
       challenge.discord_webhook_url,
-      buildBoardCompletionEmbed({ participant: participantLite, subject, challenge: challengeLite }),
+      buildBoardCompletionEmbed({ participant: participantLite, subject, challenge: challengeLite, pools }),
     );
   }
 }

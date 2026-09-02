@@ -3,7 +3,7 @@
 // focused on completion *detection*, not presentation.
 import { tileTaskPhrase, tileTaskDetail } from '../lib/tileConditions.js';
 import { ADVENTURE_SMALL_FINAL_BOSS_COLUMN } from '../lib/adventureProgress.js';
-import { tileCompletionFlavor, boardCompletionFlavor } from './discordBanter.js';
+import { tileCompletionFlavor, boardCompletionFlavor, type BanterPools } from './discordBanter.js';
 import type { LeaderboardEntry } from '../lib/leaderboard.js';
 import type { AdventureLayout, Tile } from '../db/types.js';
 import type { DiscordEmbed, DiscordEmbedField } from './discordRelay.js';
@@ -81,8 +81,12 @@ export function buildTileCompletionEmbed(params: {
   leaderboard: LeaderboardEntry[];
   participants: ParticipantLite[];
   challenge: ChallengeLite;
+  // BACKLOG.md #9 -- the admin-editable pools (discordBanterStore.ts's
+  // fetchBanterPools()), defaulting to the hardcoded pools when omitted
+  // (every existing caller, including this file's own test suite).
+  pools?: BanterPools;
 }): DiscordEmbed {
-  const { participant, tile, isFirst, firstCompleterRsn, noFirstConcept, leaderboard, participants, challenge } = params;
+  const { participant, tile, isFirst, firstCompleterRsn, noFirstConcept, leaderboard, participants, challenge, pools } = params;
   const subject = params.subject ?? participant.rsn;
   // Two tiles can share the same label (e.g. two "Big Drop" tiles with
   // different thresholds) -- spelling out the exact requirement in the
@@ -109,7 +113,7 @@ export function buildTileCompletionEmbed(params: {
   // reshape this embed: is-boss and did-they-actually-win-the-race.
   const flavor = noFirstConcept
     ? undefined
-    : tileCompletionFlavor({ isFirst, isBoss, points: totalPoints, firstCompleterRsn });
+    : tileCompletionFlavor({ isFirst, isBoss, points: totalPoints, firstCompleterRsn }, pools);
   const bossLabel = isFinalBoss ? 'the FINAL BOSS' : 'a boss';
   const title = isBoss
     ? isFirst
@@ -147,12 +151,17 @@ export function buildLineCompletionEmbed(params: { participant: ParticipantLite;
   };
 }
 
-export function buildBoardCompletionEmbed(params: { participant: ParticipantLite; subject?: string; challenge: ChallengeLite }): DiscordEmbed {
-  const { participant, challenge } = params;
+export function buildBoardCompletionEmbed(params: {
+  participant: ParticipantLite;
+  subject?: string;
+  challenge: ChallengeLite;
+  pools?: BanterPools;
+}): DiscordEmbed {
+  const { participant, challenge, pools } = params;
   const subject = params.subject ?? participant.rsn;
   return {
     title: `${subject} completed the whole board!`,
-    description: boardCompletionFlavor(),
+    description: boardCompletionFlavor(pools),
     color: BOARD_COLOR,
     image: challenge.board_type === 'adventure' ? undefined : { url: boardImageUrl(participant.id) },
     fields: [boardLinkField(challenge)],
