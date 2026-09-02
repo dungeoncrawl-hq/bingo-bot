@@ -13,6 +13,7 @@ export default function AccountPage() {
   const [defaultRsn, setDefaultRsn] = useState('');
   const [rsnSaving, setRsnSaving] = useState(false);
   const [rsnSaved, setRsnSaved] = useState(false);
+  const [rsnError, setRsnError] = useState('');
 
   useEffect(() => {
     if (session?.user.email) setEmail(session.user.email);
@@ -47,11 +48,16 @@ export default function AccountPage() {
     e.preventDefault();
     if (!session) return;
     setRsnSaving(true);
-    await getSupabase()
+    setRsnError('');
+    const { error } = await getSupabase()
       .from('profiles')
       .update({ default_rsn: defaultRsn.trim() || null })
       .eq('id', session.user.id);
     setRsnSaving(false);
+    if (error) {
+      setRsnError(error.message);
+      return;
+    }
     setRsnSaved(true);
     setTimeout(() => setRsnSaved(false), 2000);
   }
@@ -105,6 +111,7 @@ export default function AccountPage() {
             {rsnSaving ? 'Saving…' : rsnSaved ? 'Saved ✓' : 'Save'}
           </button>
         </form>
+        {rsnError && <p className="mt-1 text-sm text-red-400">{rsnError}</p>}
       </div>
     </div>
   );
