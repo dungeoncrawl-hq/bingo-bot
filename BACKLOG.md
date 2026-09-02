@@ -3,63 +3,51 @@
 Ideas and known gaps not yet scheduled into a milestone. Not prioritized/
 ordered -- just captured so they don't get lost.
 
-## UI/UX polish
-1. Cap the tile label length (open question: 40 characters?) so hosts
-   can't create labels that break the layout.
-
 ## Tile mechanics
-2. Hidden/mystery tiles -- a tile that doesn't reveal itself until some
+1. Hidden/mystery tiles -- a tile that doesn't reveal itself until some
    trigger happens. Needs further design (what triggers it? does it show
    as a blank slot, a "?" placeholder, or not appear in the grid at
    all?).
-3. Improve the logic around the "Obtain a set of items" (`itemCount`)
+2. Improve the logic around the "Obtain a set of items" (`itemCount`)
    condition -- currently just a flat comma-separated item-name list
    matched case-insensitively against loot; needs a closer look (exact
    scope TBD).
-4. Restrict `lootValueGained`/`singleDropValue`/`xpGained`-style GP and
+3. Restrict `lootValueGained`/`singleDropValue`/`xpGained`-style GP and
    XP thresholds to increments of 1,000 instead of any raw number a
    host types in. In `TileEditorForm.tsx`, replace the free-typed
    number with a denomination selector (K/M) plus a value, so the host
    picks e.g. "100" + "M" to form a 100,000,000 threshold instead of
    typing the full number by hand.
-5. New condition: "XP gained in lowest skill." Unlike `skillXpGained`
+4. New condition: "XP gained in lowest skill." Unlike `skillXpGained`
    (host picks a fixed skill), the skill itself is derived per
    participant -- whichever skill was their *lowest level* as of their
-   final hiscores sync before the challenge's start_date. Open
-   questions: tie-break rule if two skills are tied for lowest; what
-   "final sync before start" means for someone who joins mid-challenge
-   (no pre-start snapshot to anchor to); whether the resolved skill name
-   should be shown on the tile so players know what they're being
-   judged on.
-6. New condition: "Levels gained in lowest skill" -- same per-participant
-   lowest-skill resolution as #5 above, tracking `skillLevelsGained`
-   instead of `skillXpGained`. Shares the same open design questions.
+   final hiscores sync before the challenge's start_date. Tie-break rule
+   (decided): find the skill(s) with the lowest XP; if more than one
+   skill is tied for lowest, the player picks which of the tied skills
+   they're judged on at the moment they join a challenge containing this
+   condition. Still open: what "final sync before start" means for
+   someone who joins mid-challenge (no pre-start snapshot to anchor to).
+5. New condition: "Levels gained in lowest skill" -- same per-participant
+   lowest-skill resolution and tie-break rule as #4 above, tracking
+   `skillLevelsGained` instead of `skillXpGained`.
 
 ## Host tooling
-7. "Randomize a board" starting point -- host picks random tiles/
+6. "Randomize a board" starting point -- host picks random tiles/
    conditions to seed a new board, then edits/tweaks from there instead
    of starting from a fully blank grid.
-8. A library of pre-made boards hosts can pick from to start a challenge.
-9. "Copy a past challenge" -- start a new challenge that mirrors an
+7. A library of pre-made boards hosts can pick from to start a challenge.
+8. "Copy a past challenge" -- start a new challenge that mirrors an
    existing/past board's tiles instead of rebuilding it from scratch.
-10. Restrict which icons are selectable based on the tile's condition,
-    instead of the full picker always being open. E.g. a loot-value
-    condition should always be the 10k coin stack; a total-XP condition
-    should always be the generic skill icon; a specific-skill condition
-    (e.g. Attack) should always be that skill's icon. Where more than one
-    icon could reasonably fit, offer a small curated set instead of the
-    full picker. Goal: fewer decisions for the host, and a standardized,
-    recognizable look across boards for players.
-11. Once a challenge has started, its tile conditions should no longer be
-    editable from `EditChallengePage.tsx` -- changing a condition
-    mid-challenge could invalidate progress players have already made
-    toward it. (Tile *metadata* like label/icon presumably still fine to
-    edit; scope of what counts as "started" and what stays editable
-    needs a closer look.) Deferred for now -- every current challenge is
-    still a test board, so there's no live risk yet.
+9. Once a challenge has started, its tile conditions should no longer be
+   editable from `EditChallengePage.tsx` -- changing a condition
+   mid-challenge could invalidate progress players have already made
+   toward it. (Tile *metadata* like label/icon presumably still fine to
+   edit; scope of what counts as "started" and what stays editable
+   needs a closer look.) Deferred for now -- every current challenge is
+   still a test board, so there's no live risk yet.
 
 ## My Dungeons page (rename of "My Challenges" / DashboardPage.tsx)
-12. Rename the page/route from "My Challenges" to "My Dungeons"
+10. Rename the page/route from "My Challenges" to "My Dungeons"
     (`DashboardPage.tsx`, `Header.tsx`'s nav link, any other on-site
     copy) and enhance it:
     - A quick button on each row to copy that challenge's Dink webhook
@@ -83,7 +71,7 @@ ordered -- just captured so they don't get lost.
       section further down the page.
 
 ## Dungeon types
-13. Support more than one board shape/ruleset ("dungeon type"), building
+11. Support more than one board shape/ruleset ("dungeon type"), building
     on `challenges.board_type` (already unconstrained text specifically
     so a new type needs no migration -- see its own comment in
     `supabase/schema.sql`). The current 5x5 grid becomes the "Standard"
@@ -94,7 +82,7 @@ ordered -- just captured so they don't get lost.
     are TBD, to be defined later.
 
 ## Anti-abuse
-14. Figure out how to handle a participant who leaves Dink's
+12. Figure out how to handle a participant who leaves Dink's
     "send screenshot" setting on and floods the site with screenshot
     data (bandwidth/storage). Open question from the host: should this
     email both the player and the host when it happens, or just log/
@@ -103,14 +91,14 @@ ordered -- just captured so they don't get lost.
     presence at all) before any notification behavior can be built.
 
 ## Notifications
-15. Full rewrite of Discord notification content (`discordEmbeds.ts`) --
+13. Full rewrite of Discord notification content (`discordEmbeds.ts`) --
     keep the current embed structure (title/description/fields/image),
     but replace the fixed flavor-text lines (e.g. "Aren't they just
     showing off at this point?") with randomized joke/banter variants
     pulled from a pool, to lean into the site's ".lol" branding.
 
 ## Account / profile
-16. A user profile page letting someone change their email and set a
+14. A user profile page letting someone change their email and set a
     default RSN, so they don't have to retype it every time they join a
     new challenge. Two different underlying mechanisms: email lives on
     Supabase's own `auth.users` (changing it goes through
@@ -121,7 +109,7 @@ ordered -- just captured so they don't get lost.
     join form pre-filling from it instead of starting blank.
 
 ## Game modes
-17. New game modes, applying to any dungeon type (orthogonal to #13's
+15. New game modes, applying to any dungeon type (orthogonal to #11's
     board *type* -- Standard/Adventure -- this is about how a board is
     *scored*, not shaped). Today every participant has their own
     private board/completions (`challenge_participants` ->
