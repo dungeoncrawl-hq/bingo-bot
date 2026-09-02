@@ -25,6 +25,7 @@ interface ParticipantRow {
   id: string;
   profile_id: string;
   rsn: string;
+  chosen_lowest_skill: string | null;
 }
 
 interface CompletionRow {
@@ -70,7 +71,10 @@ export default function BoardPage() {
     setChallenge(challengeData as Challenge);
     const [{ data: tilesData }, { data: participantsData }, { data: completionsData }] = await Promise.all([
       supabase.from('tiles').select('*').eq('challenge_id', challengeData.id),
-      supabase.from('challenge_participants').select('id, profile_id, rsn').eq('challenge_id', challengeData.id),
+      supabase
+        .from('challenge_participants')
+        .select('id, profile_id, rsn, chosen_lowest_skill')
+        .eq('challenge_id', challengeData.id),
       supabase
         .from('tile_completions')
         .select('participant_id, kind, ref, completed_at')
@@ -153,10 +157,11 @@ export default function BoardPage() {
         (snapshotsByParticipant[row.participant_id] ??= []).push(row);
       }
 
+      const chosenSkillByParticipant = new Map(participants.map((p) => [p.id, p.chosen_lowest_skill]));
       const statuses: Record<string, Record<string, TileStatus>> = {};
       for (const pid of participantIds) {
         const hiscoresRecap = computeHiscoresRecap(snapshotsByParticipant[pid] ?? [], window);
-        const stats = computeParticipantStats(rawByParticipant[pid], window, hiscoresRecap);
+        const stats = computeParticipantStats(rawByParticipant[pid], window, hiscoresRecap, chosenSkillByParticipant.get(pid) ?? null);
         const tileStatuses: Record<string, TileStatus> = {};
         for (const tile of tiles) {
           tileStatuses[tile.id] = checkTile(tile.condition, stats);
@@ -215,6 +220,12 @@ export default function BoardPage() {
     await load();
   }
 
+  async function handleChooseLowestSkill(skill: string) {
+    if (!myParticipant) return;
+    await getSupabase().from('challenge_participants').update({ chosen_lowest_skill: skill }).eq('id', myParticipant.id);
+    await load();
+  }
+
   async function handleLeave() {
     if (!myParticipant) return;
     if (!window.confirm('Leave this challenge? Your progress history on this board will be deleted.')) return;
@@ -238,6 +249,14 @@ export default function BoardPage() {
   function hasCompletedBoard(participantId: string): boolean {
     return completions.some((c) => c.kind === 'board' && c.participant_id === participantId);
   }
+
+  // Any tile status of the signed-in participant's own (not the viewed
+  // participant's -- the choice below is only actionable for your own
+  // membership) that's still waiting on a lowest-skill tie-break. Every
+  // lowestSkill-type tile shares the same candidate set for one
+  // participant, so the first one found is enough to drive the prompt.
+  const myTileStatuses = myParticipant ? tileStatusesByParticipant[myParticipant.id] : undefined;
+  const pendingSkillChoice = myTileStatuses ? Object.values(myTileStatuses).find((s) => s.needsSkillChoice) : undefined;
 
   const firstCompleters = computeFirstCompleters(completions);
   const leaderboard = computeLeaderboard(
@@ -270,7 +289,17 @@ export default function BoardPage() {
               // covers the condition types where a running total is large
               // enough for shorthand to actually help -- everything else
               // falls back to the plain goal-only caption.
-              const caption = tile ? (status && formatTileProgress(tile.condition, status)) ?? formatTileGoal(tile.condition) : null;
+              const baseCaption = tile ? (status && formatTileProgress(tile.condition, status)) ?? formatTileGoal(tile.condition) : null;
+              // xpGainedLowestSkill/levelsGainedLowestSkill's caption is
+              // otherwise skill-agnostic (the same tile means a different
+              // skill for every participant) -- append which skill this
+              // viewer's own progress is actually measuring, or a prompt if
+              // they still need to break a tie (see the Actions section).
+              const caption = status?.resolvedSkill
+                ? `${baseCaption} (${status.resolvedSkill})`
+                : status?.needsSkillChoice
+                  ? 'Pick a skill below'
+                  : baseCaption;
               // A free space has no "first" worth bragging about -- everyone
               // gets it the instant it exists, so it's excluded here even
               // though computeFirstCompleters technically records one
@@ -462,6 +491,27 @@ export default function BoardPage() {
               </form>
             )}
             {rsnError && <p className="text-sm text-red-400">{rsnError}</p>}
+
+            {pendingSkillChoice && (
+              <div className="rounded-lg border border-amber-800 bg-amber-950/30 p-3">
+                <p className="text-sm text-stone-300">
+                  This board has a "lowest skill" tile, and you're tied for lowest in more than one skill. Pick which
+                  one you'll be judged on:
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {pendingSkillChoice.skillChoices?.map((skill) => (
+                    <button
+                      key={skill}
+                      type="button"
+                      onClick={() => handleChooseLowestSkill(skill)}
+                      className="rounded-lg border border-stone-700 px-3 py-1 text-xs text-stone-300 hover:border-amber-500"
+                    >
+                      {skill}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {myParticipant && (
               <button

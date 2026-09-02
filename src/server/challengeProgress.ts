@@ -22,6 +22,7 @@ interface ParticipantRow {
   id: string;
   challenge_id: string;
   rsn: string;
+  chosen_lowest_skill: string | null;
 }
 
 interface CompletionRow {
@@ -41,7 +42,7 @@ const GRID_SIZE = 5;
 export async function checkChallengeProgress(participantId: string): Promise<void> {
   const [participant] = await selectRows<ParticipantRow>(
     'challenge_participants',
-    `id=eq.${encodeURIComponent(participantId)}&select=id,challenge_id,rsn`,
+    `id=eq.${encodeURIComponent(participantId)}&select=id,challenge_id,rsn,chosen_lowest_skill`,
   );
   if (!participant) return;
 
@@ -76,7 +77,7 @@ export async function checkChallengeProgress(participantId: string): Promise<voi
   const raw: RawParticipantData = { bossKills, slayerTasks, lootDrops, deaths, collectionLogEntries, petObtains };
   const window = { start: challenge.start_date, end: challenge.end_date };
   const hiscoresRecap = computeHiscoresRecap(snapshots, window);
-  const stats = computeParticipantStats(raw, window, hiscoresRecap);
+  const stats = computeParticipantStats(raw, window, hiscoresRecap, participant.chosen_lowest_skill);
 
   const doneTileIds = new Set(tiles.filter((t) => checkTile(t.condition, stats).done).map((t) => t.id));
   const alreadyTileIds = new Set(existingCompletions.filter((c) => c.kind === 'tile').map((c) => c.ref));

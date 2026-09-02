@@ -19,6 +19,8 @@ const CONDITION_GROUPS: { group: string; options: { value: TileCondition['type']
       { value: 'xpGained', label: 'Total XP gained' },
       { value: 'skillXpGained', label: 'XP gained in a skill' },
       { value: 'skillLevelGained', label: 'Levels gained in a skill' },
+      { value: 'xpGainedLowestSkill', label: "XP gained in the player's lowest skill" },
+      { value: 'levelsGainedLowestSkill', label: "Levels gained in the player's lowest skill" },
     ],
   },
   {
@@ -147,6 +149,10 @@ function defaultLabelFor(type: TileCondition['type'], skill: string, activity: s
       return 'Collection Log';
     case 'petsObtained':
       return 'Pet';
+    case 'xpGainedLowestSkill':
+      return 'Lowest Skill XP';
+    case 'levelsGainedLowestSkill':
+      return 'Lowest Skill Levels';
     case 'freeSpace':
       return 'Free Space';
     case 'tbd':

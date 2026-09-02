@@ -89,4 +89,33 @@ describe('computeHiscoresRecap', () => {
     expect(recap?.easyCluesCompleted).toBe(1);
     expect(recap?.mediumCluesCompleted).toBe(0);
   });
+
+  it('resolves a single unambiguous lowest-XP skill from the "before" baseline snapshot', () => {
+    const before = snapshot('2026-08-30', 0, {
+      skills: { Attack: { level: 50, xp: 100_000 }, Farming: { level: 1, xp: 0 } },
+    });
+    const after = snapshot('2026-09-01', 0, { skills: before.skills });
+    expect(computeHiscoresRecap([before, after], WINDOW)?.lowestSkillCandidates).toEqual(['Farming']);
+  });
+
+  it('lists every skill tied for lowest XP in the baseline, sorted', () => {
+    const before = snapshot('2026-08-30', 0, {
+      skills: { Attack: { level: 50, xp: 100_000 }, Runecraft: { level: 1, xp: 0 }, Farming: { level: 1, xp: 0 } },
+    });
+    const after = snapshot('2026-09-01', 0, { skills: before.skills });
+    expect(computeHiscoresRecap([before, after], WINDOW)?.lowestSkillCandidates).toEqual(['Farming', 'Runecraft']);
+  });
+
+  it('resolves lowest-skill candidates from the baseline, unaffected by gains during the window', () => {
+    // Farming is lowest at baseline; even though it gains the most XP
+    // during the window, the candidate list reflects the STARTING point,
+    // not where things ended up.
+    const before = snapshot('2026-08-30', 0, {
+      skills: { Attack: { level: 50, xp: 100_000 }, Farming: { level: 1, xp: 0 } },
+    });
+    const after = snapshot('2026-09-01', 0, {
+      skills: { Attack: { level: 50, xp: 100_000 }, Farming: { level: 30, xp: 500_000 } },
+    });
+    expect(computeHiscoresRecap([before, after], WINDOW)?.lowestSkillCandidates).toEqual(['Farming']);
+  });
 });

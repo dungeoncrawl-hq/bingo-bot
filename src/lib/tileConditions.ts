@@ -59,6 +59,16 @@ export type TileCondition =
   // Any pet obtained during the event (threshold is usually 1) -- a
   // duplicate-pet ping doesn't count.
   | { type: 'petsObtained'; threshold: number }
+  // XP gained in whichever skill was the participant's own lowest-XP skill
+  // at their baseline snapshot (see ParticipantStats.lowestSkillCandidates
+  // below) -- unlike skillXpGained, the skill isn't host-chosen and can be
+  // different for every participant on the same tile. Ties (commonly
+  // several untrained skills all at 0 XP) are resolved by the player
+  // picking one of the tied skills, not automatically.
+  | { type: 'xpGainedLowestSkill'; threshold: number }
+  // Same per-participant lowest-skill resolution as xpGainedLowestSkill
+  // above, tracking levels gained instead of XP gained.
+  | { type: 'levelsGainedLowestSkill'; threshold: number }
   // Always complete for every participant, the moment checkTile ever runs
   // for them (typically right on joining -- see api/sync-participant.ts) --
   // no stats involved, nothing to earn. Points/first_completer_bonus are
@@ -98,6 +108,16 @@ export interface ParticipantStats {
   // across many drops, not one drop's real value, so it's excluded here
   // (see participantStats.ts).
   dropValues: number[];
+  // Every skill tied for lowest XP at this participant's baseline
+  // snapshot (see hiscoresRecap.ts) -- backs xpGainedLowestSkill/
+  // levelsGainedLowestSkill. Length 1 when unambiguous, >1 on a tie,
+  // empty when there's no baseline snapshot yet at all.
+  lowestSkillCandidates: string[];
+  // The participant's own tie-break pick (challenge_participants.
+  // chosen_lowest_skill), only meaningful when lowestSkillCandidates has
+  // more than one entry. null if they haven't chosen (or there's nothing
+  // to choose).
+  chosenLowestSkill: string | null;
 }
 
 export interface TileStatus {
@@ -108,6 +128,33 @@ export interface TileStatus {
   // has since been broken, so the UI can render that as a distinct "lost
   // it" state rather than an ordinary "not done yet".
   failed?: boolean;
+  // Only set for xpGainedLowestSkill/levelsGainedLowestSkill. true when
+  // the participant has more than one skill tied for lowest and hasn't
+  // picked one yet -- done is always false in this state regardless of
+  // any stat, since there's no single skill to measure progress against.
+  needsSkillChoice?: boolean;
+  // The tied skill names to choose from, only present alongside
+  // needsSkillChoice.
+  skillChoices?: string[];
+  // Only set for xpGainedLowestSkill/levelsGainedLowestSkill once a skill
+  // is resolved (unambiguous, or chosen) -- which skill progress/goal
+  // above are actually measuring, so the UI can show it (e.g. "(Mining)").
+  resolvedSkill?: string;
+}
+
+// Which skill counts as "the lowest" for this participant right now: the
+// single candidate if there's no tie, their stored tie-break choice if
+// they've made one and it's still among the tied candidates (a stale
+// choice from before the candidate set could theoretically change is
+// treated as unresolved rather than trusted blindly), or null if it's
+// still an unresolved tie.
+function resolveLowestSkill(stats: ParticipantStats): string | null {
+  const { lowestSkillCandidates, chosenLowestSkill } = stats;
+  if (lowestSkillCandidates.length === 1) return lowestSkillCandidates[0];
+  if (lowestSkillCandidates.length > 1 && chosenLowestSkill && lowestSkillCandidates.includes(chosenLowestSkill)) {
+    return chosenLowestSkill;
+  }
+  return null;
 }
 
 export function checkTile(cond: TileCondition, stats: ParticipantStats): TileStatus {
@@ -172,6 +219,18 @@ export function checkTile(cond: TileCondition, stats: ParticipantStats): TileSta
     }
     case 'petsObtained':
       return { done: stats.petsObtained >= cond.threshold, progress: stats.petsObtained, goal: cond.threshold };
+    case 'xpGainedLowestSkill': {
+      const skill = resolveLowestSkill(stats);
+      if (!skill) return { done: false, progress: 0, goal: cond.threshold, needsSkillChoice: true, skillChoices: stats.lowestSkillCandidates };
+      const progress = stats.skillXpGained[skill] ?? 0;
+      return { done: progress >= cond.threshold, progress, goal: cond.threshold, resolvedSkill: skill };
+    }
+    case 'levelsGainedLowestSkill': {
+      const skill = resolveLowestSkill(stats);
+      if (!skill) return { done: false, progress: 0, goal: cond.threshold, needsSkillChoice: true, skillChoices: stats.lowestSkillCandidates };
+      const progress = stats.skillLevelsGained[skill] ?? 0;
+      return { done: progress >= cond.threshold, progress, goal: cond.threshold, resolvedSkill: skill };
+    }
     case 'freeSpace':
       return { done: true, progress: 1, goal: 1 };
     case 'tbd':
@@ -229,6 +288,10 @@ export function describeTileCondition(cond: TileCondition): string {
       return `${cond.threshold.toLocaleString()} deaths or fewer`;
     case 'petsObtained':
       return cond.threshold > 1 ? `${cond.threshold} pets` : 'a pet';
+    case 'xpGainedLowestSkill':
+      return `${cond.threshold.toLocaleString()} XP in your lowest-level skill`;
+    case 'levelsGainedLowestSkill':
+      return cond.threshold > 1 ? `${cond.threshold} levels in your lowest-level skill` : 'a level in your lowest-level skill';
     case 'freeSpace':
       return 'a free space -- always complete';
     case 'tbd':
@@ -292,6 +355,10 @@ export function tileTaskPhrase(cond: TileCondition): string {
       return `${cond.threshold.toLocaleString()} deaths or fewer`;
     case 'petsObtained':
       return cond.threshold === 1 ? '1 pet' : `${cond.threshold} pets`;
+    case 'xpGainedLowestSkill':
+      return `${cond.threshold.toLocaleString()} XP in their lowest skill`;
+    case 'levelsGainedLowestSkill':
+      return cond.threshold === 1 ? '1 level in their lowest skill' : `${cond.threshold} levels in their lowest skill`;
     case 'freeSpace':
       // Unreachable in practice -- challengeProgress.ts never builds a
       // completion embed for a freeSpace tile (see its own comment).
@@ -333,8 +400,10 @@ export function formatTileGoal(cond: TileCondition): string | null {
       return `≤${cond.threshold.toLocaleString()} deaths`;
     case 'xpGained':
     case 'skillXpGained':
+    case 'xpGainedLowestSkill':
       return `${formatCompactNumber(cond.threshold)} XP`;
     case 'skillLevelGained':
+    case 'levelsGainedLowestSkill':
       return `${cond.threshold.toLocaleString()} level${cond.threshold === 1 ? '' : 's'}`;
     case 'bossKcGained':
     case 'kcGained':
@@ -379,6 +448,7 @@ export function formatTileProgress(cond: TileCondition, status: TileStatus): str
   switch (cond.type) {
     case 'xpGained':
     case 'skillXpGained':
+    case 'xpGainedLowestSkill':
       return `${formatCompactNumber(status.progress, { roundDown: true })} / ${formatCompactNumber(cond.threshold)} XP`;
     case 'lootValueGained':
       return `${formatCompactNumber(status.progress, { roundDown: true })} / ${formatCompactNumber(cond.threshold)} gp`;
@@ -403,6 +473,9 @@ export function formatTileProgress(cond: TileCondition, status: TileStatus): str
 // condition gets this behavior automatically.
 export function progressPercent(cond: TileCondition, status: TileStatus): number | null {
   if (cond.type === 'singleDropValue' || cond.type === 'tbd' || cond.type === 'freeSpace') return null;
+  // Still waiting on the player to break a tie -- 0 progress here doesn't
+  // mean "no progress," it means "nothing to measure yet."
+  if (status.needsSkillChoice) return null;
   if (status.failed !== undefined) {
     if (status.goal <= 0) return null;
     return Math.max(0, Math.min(100, ((status.goal - status.progress) / status.goal) * 100));

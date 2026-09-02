@@ -24,6 +24,12 @@ export interface HiscoresRecap {
   hardCluesCompleted: number;
   eliteCluesCompleted: number;
   masterCluesCompleted: number;
+  // Every skill tied for lowest XP in the `before` baseline snapshot (see
+  // xpGainedLowestSkill/levelsGainedLowestSkill in tileConditions.ts) --
+  // length 1 when there's a single unambiguous lowest skill, >1 on a
+  // genuine tie (most commonly several untrained skills all sitting at 0
+  // XP on a newer account). Sorted alphabetically for a stable order.
+  lowestSkillCandidates: string[];
 }
 
 type ClueField =
@@ -49,6 +55,16 @@ const CLUE_TIER_ACTIVITY: Record<ClueField, string> = {
 
 function activityScore(snapshot: SnapshotRow, activityName: string): number {
   return snapshot.activities[activityName]?.score ?? 0;
+}
+
+function resolveLowestSkillCandidates(snapshot: SnapshotRow): string[] {
+  const entries = Object.entries(snapshot.skills);
+  if (entries.length === 0) return [];
+  const minXp = Math.min(...entries.map(([, s]) => s.xp));
+  return entries
+    .filter(([, s]) => s.xp === minXp)
+    .map(([name]) => name)
+    .sort();
 }
 
 export function computeHiscoresRecap(
@@ -97,5 +113,6 @@ export function computeHiscoresRecap(
     skillXpGained,
     skillLevelsGained,
     ...clueDeltas,
+    lowestSkillCandidates: resolveLowestSkillCandidates(before),
   };
 }

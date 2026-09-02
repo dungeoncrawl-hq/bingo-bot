@@ -73,6 +73,12 @@ export function computeParticipantStats(
   raw: RawParticipantData,
   window: DateWindow,
   hiscoresRecap: HiscoresRecap | null,
+  // The participant's own tie-break pick from challenge_participants
+  // (chosen_lowest_skill) -- only meaningful when lowestSkillCandidates
+  // has more than one entry (see xpGainedLowestSkill/
+  // levelsGainedLowestSkill in tileConditions.ts). null when they haven't
+  // chosen yet, or their board has no lowest-skill tile to begin with.
+  chosenLowestSkill: string | null = null,
 ): ParticipantStats {
   const lootInWindow = raw.lootDrops.filter((d) => inWindow(d.created_at, window));
 
@@ -108,5 +114,7 @@ export function computeParticipantStats(
     itemCounts,
     petsObtained: raw.petObtains.filter((p) => inWindow(p.updated_at, window)).length,
     dropValues: lootInWindow.filter((d) => !d.is_misc).map((d) => d.total_value),
+    lowestSkillCandidates: hiscoresRecap?.lowestSkillCandidates ?? [],
+    chosenLowestSkill,
   };
 }

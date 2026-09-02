@@ -34,11 +34,37 @@ describe('computeParticipantStats', () => {
       hardCluesCompleted: 1,
       eliteCluesCompleted: 0,
       masterCluesCompleted: 0,
+      lowestSkillCandidates: ['Farming'],
     };
     const s = computeParticipantStats(EMPTY_RAW, WINDOW, recap);
     expect(s.xpGained).toBe(50_000);
     expect(s.skillLevelsGained).toEqual({ Attack: 2 });
     expect(s.hardCluesCompleted).toBe(1);
+    expect(s.lowestSkillCandidates).toEqual(['Farming']);
+  });
+
+  it('defaults lowestSkillCandidates to empty and chosenLowestSkill to null with no recap/choice', () => {
+    const s = computeParticipantStats(EMPTY_RAW, WINDOW, null);
+    expect(s.lowestSkillCandidates).toEqual([]);
+    expect(s.chosenLowestSkill).toBeNull();
+  });
+
+  it('passes through the chosen tie-break skill unchanged', () => {
+    const recap: HiscoresRecap = {
+      xpGained: 0,
+      skillXpGained: {},
+      skillLevelsGained: {},
+      cluesCompleted: 0,
+      beginnerCluesCompleted: 0,
+      easyCluesCompleted: 0,
+      mediumCluesCompleted: 0,
+      hardCluesCompleted: 0,
+      eliteCluesCompleted: 0,
+      masterCluesCompleted: 0,
+      lowestSkillCandidates: ['Farming', 'Runecraft'],
+    };
+    const s = computeParticipantStats(EMPTY_RAW, WINDOW, recap, 'Runecraft');
+    expect(s.chosenLowestSkill).toBe('Runecraft');
   });
 
   it('only counts events whose date falls inside the window', () => {

@@ -43,4 +43,5 @@ export interface ChallengeParticipant {
   profile_id: string;
   rsn: string;
   joined_at: string;
+  chosen_lowest_skill: string | null;
 }

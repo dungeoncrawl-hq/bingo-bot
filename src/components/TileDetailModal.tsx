@@ -16,6 +16,7 @@ import { progressColor } from '../lib/progressColor';
 interface ParticipantLite {
   id: string;
   rsn: string;
+  chosen_lowest_skill: string | null;
 }
 
 interface Props {
@@ -98,7 +99,8 @@ export default function TileDetailModal({ tile, participants, challenge, firstCo
           petObtains: petsByP.get(id) ?? [],
         };
         const hiscoresRecap = computeHiscoresRecap(snapshotsByP.get(id) ?? [], window);
-        const stats = computeParticipantStats(raw, window, hiscoresRecap);
+        const chosenLowestSkill = participants.find((p) => p.id === id)?.chosen_lowest_skill ?? null;
+        const stats = computeParticipantStats(raw, window, hiscoresRecap, chosenLowestSkill);
         result[id] = checkTile(tile.condition, stats);
       }
       if (!cancelled) {
@@ -146,7 +148,12 @@ export default function TileDetailModal({ tile, participants, challenge, firstCo
               if (!status) return null;
               const percent = progressPercent(tile.condition, status);
               const isFirst = status.done && tile.condition.type !== 'freeSpace' && firstCompleters[tile.id] === p.id;
-              const caption = formatTileProgress(tile.condition, status) ?? formatTileGoal(tile.condition);
+              const baseCaption = formatTileProgress(tile.condition, status) ?? formatTileGoal(tile.condition);
+              const caption = status.resolvedSkill
+                ? `${baseCaption} (${status.resolvedSkill})`
+                : status.needsSkillChoice
+                  ? 'tied -- pick a skill'
+                  : baseCaption;
               return (
                 <li key={p.id}>
                   <div className="flex items-center justify-between text-sm">

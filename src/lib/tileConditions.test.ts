@@ -31,6 +31,8 @@ const ZERO_STATS: ParticipantStats = {
   itemCounts: {},
   petsObtained: 0,
   dropValues: [],
+  lowestSkillCandidates: [],
+  chosenLowestSkill: null,
 };
 
 function stats(overrides: Partial<ParticipantStats>): ParticipantStats {
@@ -146,6 +148,63 @@ describe('checkTile', () => {
   it('freeSpace is always done, regardless of stats', () => {
     expect(checkTile({ type: 'freeSpace' }, ZERO_STATS)).toEqual({ done: true, progress: 1, goal: 1 });
   });
+
+  it('xpGainedLowestSkill/levelsGainedLowestSkill need a choice when candidates are tied', () => {
+    const s = stats({ lowestSkillCandidates: ['Farming', 'Runecraft'], chosenLowestSkill: null });
+    expect(checkTile({ type: 'xpGainedLowestSkill', threshold: 1000 }, s)).toEqual({
+      done: false,
+      progress: 0,
+      goal: 1000,
+      needsSkillChoice: true,
+      skillChoices: ['Farming', 'Runecraft'],
+    });
+    expect(checkTile({ type: 'levelsGainedLowestSkill', threshold: 1 }, s)).toEqual({
+      done: false,
+      progress: 0,
+      goal: 1,
+      needsSkillChoice: true,
+      skillChoices: ['Farming', 'Runecraft'],
+    });
+  });
+
+  it('xpGainedLowestSkill/levelsGainedLowestSkill resolve directly with a single candidate', () => {
+    const s = stats({
+      lowestSkillCandidates: ['Farming'],
+      skillXpGained: { Farming: 500 },
+      skillLevelsGained: { Farming: 2 },
+    });
+    expect(checkTile({ type: 'xpGainedLowestSkill', threshold: 1000 }, s)).toEqual({
+      done: false,
+      progress: 500,
+      goal: 1000,
+      resolvedSkill: 'Farming',
+    });
+    expect(checkTile({ type: 'levelsGainedLowestSkill', threshold: 2 }, s)).toEqual({
+      done: true,
+      progress: 2,
+      goal: 2,
+      resolvedSkill: 'Farming',
+    });
+  });
+
+  it('xpGainedLowestSkill resolves using a valid tie-break choice', () => {
+    const s = stats({
+      lowestSkillCandidates: ['Farming', 'Runecraft'],
+      chosenLowestSkill: 'Runecraft',
+      skillXpGained: { Runecraft: 1500 },
+    });
+    expect(checkTile({ type: 'xpGainedLowestSkill', threshold: 1000 }, s)).toEqual({
+      done: true,
+      progress: 1500,
+      goal: 1000,
+      resolvedSkill: 'Runecraft',
+    });
+  });
+
+  it('ignores a stale tie-break choice no longer among the candidates', () => {
+    const s = stats({ lowestSkillCandidates: ['Farming', 'Runecraft'], chosenLowestSkill: 'Mining' });
+    expect(checkTile({ type: 'xpGainedLowestSkill', threshold: 1000 }, s).needsSkillChoice).toBe(true);
+  });
 });
 
 describe('formatTileProgress', () => {
@@ -214,6 +273,18 @@ describe('progressPercent', () => {
     expect(progressPercent(cond, checkTile(cond, stats({ deathsInPeriod: 4 })))).toBe(0);
     // Broken the limit entirely -- clamped to 0, not negative.
     expect(progressPercent(cond, checkTile(cond, stats({ deathsInPeriod: 10 })))).toBe(0);
+  });
+
+  it('returns null while a lowest-skill tie is unresolved, even though progress is 0', () => {
+    const cond: TileCondition = { type: 'xpGainedLowestSkill', threshold: 1000 };
+    const s = stats({ lowestSkillCandidates: ['Farming', 'Runecraft'] });
+    expect(progressPercent(cond, checkTile(cond, s))).toBeNull();
+  });
+
+  it('is proportional once a lowest-skill tie resolves', () => {
+    const cond: TileCondition = { type: 'xpGainedLowestSkill', threshold: 1000 };
+    const s = stats({ lowestSkillCandidates: ['Farming'], skillXpGained: { Farming: 250 } });
+    expect(progressPercent(cond, checkTile(cond, s))).toBe(25);
   });
 });
 

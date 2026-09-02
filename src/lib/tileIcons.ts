@@ -82,6 +82,12 @@ export function defaultIconFor(type: TileCondition['type'], skill?: string, acti
       return DEATH_ICON_URL;
     case 'petsObtained':
       return PETS_ICON_URL;
+    // The lowest skill is resolved per participant, not fixed at
+    // tile-creation time, so there's no one skill icon to show -- same
+    // generic stats icon as xpGained.
+    case 'xpGainedLowestSkill':
+    case 'levelsGainedLowestSkill':
+      return TOTAL_LEVEL_ICON_URL;
     case 'itemCount':
     case 'itemSetCollected':
       return COLLECTION_LOG_ICON_URL;

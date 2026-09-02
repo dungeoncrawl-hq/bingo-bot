@@ -104,8 +104,19 @@ create table if not exists challenge_participants (
   profile_id uuid not null references profiles(id) on delete cascade,
   rsn text not null,
   joined_at timestamptz not null default now(),
+  -- This participant's tie-break pick for xpGainedLowestSkill/
+  -- levelsGainedLowestSkill tiles (src/lib/tileConditions.ts), only
+  -- meaningful when their baseline snapshot has more than one skill tied
+  -- for lowest XP. null until they've chosen (or there's nothing to
+  -- choose -- most participants never need this column at all).
+  chosen_lowest_skill text,
   unique (challenge_id, profile_id)
 );
+
+-- `create table if not exists` above is a no-op against an already-existing
+-- production challenge_participants table, so this ALTER is what actually
+-- lands the column there -- safe to re-run.
+alter table challenge_participants add column if not exists chosen_lowest_skill text;
 
 -- Table-level UNIQUE only accepts plain columns, not expressions like
 -- lower(rsn) -- an expression index is the correct way to enforce
@@ -254,6 +265,35 @@ as $$
     max_single_value = greatest(loot_drops.max_single_value, excluded.max_single_value),
     drop_count = loot_drops.drop_count + 1,
     created_at = now();
+$$;
+
+-- Anti-abuse detection (backlog): a participant who leaves Dink's "send
+-- screenshot" setting on has every notifier attach a full image to its
+-- webhook POST -- extracted and immediately discarded today (see
+-- dinkPayload.ts's own comment), but still costs inbound bandwidth/parse
+-- time on every single event. These two columns are pure running totals,
+-- no per-event history -- enough for a host to notice a repeat offender,
+-- not a full audit log.
+alter table challenge_participants add column if not exists screenshot_count integer not null default 0;
+alter table challenge_participants add column if not exists screenshot_bytes bigint not null default 0;
+
+-- Atomic increment for the screenshot counters above -- same reasoning as
+-- increment_misc_loot above (a plain PostgREST PATCH can only replace a
+-- column, not add to it, so concurrent screenshot events would otherwise
+-- race). Returns the new running count so the caller
+-- (src/server/dinkWebhook.ts) can log a milestone warning without a
+-- second round trip.
+create or replace function increment_screenshot_stats(
+  p_participant_id uuid,
+  p_bytes bigint
+) returns integer
+language sql
+as $$
+  update challenge_participants
+  set screenshot_count = screenshot_count + 1,
+      screenshot_bytes = screenshot_bytes + p_bytes
+  where id = p_participant_id
+  returning screenshot_count;
 $$;
 
 create table if not exists deaths (
