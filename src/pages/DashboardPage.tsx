@@ -115,9 +115,17 @@ export default function DashboardPage() {
 
   async function copyWebhook(c: ChallengeRow) {
     const url = `${window.location.origin}/api/dink/${c.dink_secret}`;
-    await navigator.clipboard.writeText(url);
-    setCopiedId(c.id);
-    setTimeout(() => setCopiedId((id) => (id === c.id ? null : id)), 2000);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedId(c.id);
+      setTimeout(() => setCopiedId((id) => (id === c.id ? null : id)), 2000);
+    } catch (err) {
+      // Clipboard access can be denied by the browser (permissions policy,
+      // an unfocused document, etc.) -- fail visibly instead of the button
+      // silently doing nothing.
+      console.error('Failed to copy webhook URL', err);
+      window.alert(`Couldn't copy automatically. Here's the URL:\n\n${url}`);
+    }
   }
 
   return (
