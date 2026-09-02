@@ -24,7 +24,7 @@ ordered -- just captured so they don't get lost.
    typing the full number by hand.
 
 ## Host tooling
-Items 4-6 were scoped before board types (#8) or game modes (#13)
+Items 4-6 were scoped before board types (#8) or game modes (#12)
 existed -- none of them currently say what "randomize"/"library"/"copy"
 means for anything but a Standard/solo board. Simplest path: scope all
 three to Standard + solo only for v1, same deferral already applied to
@@ -143,7 +143,7 @@ forward, not just tiles, once those exist to copy.
    states, mobile layout, whole-column click targets. Probably faster
    to hash out while building than in the abstract.
 
-   Combining Adventure with a Coop/Team game mode (#13) is explicitly
+   Combining Adventure with a Coop/Team game mode (#12) is explicitly
    deferred, not forgotten -- see that item.
 
 ## Anti-abuse
@@ -153,30 +153,15 @@ forward, not just tiles, once those exist to copy.
    Players list, a console.warn every 10th screenshot), this is just the
    open notification-behavior question: email the player, the host, both,
    or leave it at the badge/log the host already has?
-10. A challenge past its end_date can still have players' Dink installs
-    pointed at its webhook URL, sending events nobody will ever see --
-    wasted processing and (per item #9) even more screenshot-flood
-    surface area. `api/dink/[secret].ts` already has a guard for exactly
-    this (`if (challenge.status === 'ended') return early`), but nothing
-    in the codebase ever actually sets a challenge's status to `'ended'`
-    -- `togglePublish` in `EditChallengePage.tsx` only ever toggles
-    between `'draft'`/`'active'`, so that guard is dead code today. Needs
-    either an automatic transition (a cron once today > end_date, mirroring
-    the `displayStatus` "past" derivation already built for the My
-    Dungeons page in `src/lib/dungeonStatus.ts`) or a host-visible way to
-    close out a challenge manually -- and probably worth telling the
-    player directly too (e.g. a note on the board page once a challenge
-    is past its end date) so they know to go turn Dink off, not just
-    silently dropping their events server-side.
 
 ## Notifications
-11. Full rewrite of Discord notification content (`discordEmbeds.ts`) --
+10. Full rewrite of Discord notification content (`discordEmbeds.ts`) --
     keep the current embed structure (title/description/fields/image),
     but replace the fixed flavor-text lines (e.g. "Aren't they just
     showing off at this point?") with randomized joke/banter variants
     pulled from a pool, to lean into the site's ".lol" branding. Design
     this aware of the other things already reshaping the same flavor
-    text: #8's boss-vs-regular-tile swap and #13's solo/"the group"/
+    text: #8's boss-vs-regular-tile swap and #12's solo/"the group"/
     "Team X" subject swap. Those are two independent dimensions
     (is-boss x who's-the-subject) that'll both exist by the time this
     gets built -- the banter pool should be parameterized by both from
@@ -184,7 +169,7 @@ forward, not just tiles, once those exist to copy.
     Adventure/Coop/Team ship.
 
 ## Account / profile
-12. A user profile page letting someone change their email and set a
+11. A user profile page letting someone change their email and set a
     default RSN, so they don't have to retype it every time they join a
     new challenge. Two different underlying mechanisms: email lives on
     Supabase's own `auth.users` (changing it goes through
@@ -195,7 +180,7 @@ forward, not just tiles, once those exist to copy.
     join form pre-filling from it instead of starting blank.
 
 ## Game modes
-13. New game modes, applying to any dungeon type (orthogonal to #8's
+12. New game modes, applying to any dungeon type (orthogonal to #8's
     board *type* -- Standard/Adventure -- this is about how a board is
     *scored*, not shaped). New `challenges.game_mode` column (`'solo' |
     'coop' | 'team'`, default `'solo'` = today's behavior). Scope for
