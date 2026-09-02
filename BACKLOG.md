@@ -18,27 +18,15 @@ ordered -- just captured so they don't get lost.
    number with a denomination selector (K/M) plus a value, so the host
    picks e.g. "100" + "M" to form a 100,000,000 threshold instead of
    typing the full number by hand.
-4. New condition: "XP gained in lowest skill." Unlike `skillXpGained`
-   (host picks a fixed skill), the skill itself is derived per
-   participant -- whichever skill was their *lowest level* as of their
-   final hiscores sync before the challenge's start_date. Tie-break rule
-   (decided): find the skill(s) with the lowest XP; if more than one
-   skill is tied for lowest, the player picks which of the tied skills
-   they're judged on at the moment they join a challenge containing this
-   condition. Still open: what "final sync before start" means for
-   someone who joins mid-challenge (no pre-start snapshot to anchor to).
-5. New condition: "Levels gained in lowest skill" -- same per-participant
-   lowest-skill resolution and tie-break rule as #4 above, tracking
-   `skillLevelsGained` instead of `skillXpGained`.
 
 ## Host tooling
-6. "Randomize a board" starting point -- host picks random tiles/
+4. "Randomize a board" starting point -- host picks random tiles/
    conditions to seed a new board, then edits/tweaks from there instead
    of starting from a fully blank grid.
-7. A library of pre-made boards hosts can pick from to start a challenge.
-8. "Copy a past challenge" -- start a new challenge that mirrors an
+5. A library of pre-made boards hosts can pick from to start a challenge.
+6. "Copy a past challenge" -- start a new challenge that mirrors an
    existing/past board's tiles instead of rebuilding it from scratch.
-9. Once a challenge has started, its tile conditions should no longer be
+7. Once a challenge has started, its tile conditions should no longer be
    editable from `EditChallengePage.tsx` -- changing a condition
    mid-challenge could invalidate progress players have already made
    toward it. (Tile *metadata* like label/icon presumably still fine to
@@ -46,59 +34,49 @@ ordered -- just captured so they don't get lost.
    needs a closer look.) Deferred for now -- every current challenge is
    still a test board, so there's no live risk yet.
 
-## My Dungeons page (rename of "My Challenges" / DashboardPage.tsx)
-10. Rename the page/route from "My Challenges" to "My Dungeons"
-    (`DashboardPage.tsx`, `Header.tsx`'s nav link, any other on-site
-    copy) and enhance it:
-    - A quick button on each row to copy that challenge's Dink webhook
-      URL to the clipboard, without opening the setup guide page.
-    - Colored status badges: Active = green, Draft, Upcoming, Past, etc.
-      (today `c.status` just prints as plain uppercase text -- see
-      `challenges.status`, currently `'draft' | 'active' | 'ended'`; an
-      "Upcoming" status implied here doesn't exist yet -- active vs.
-      upcoming presumably needs deriving from `start_date` vs. today
-      rather than a new stored status, since a challenge is published
-      -- `status = 'active'` -- before its start_date arrives).
-    - Replace the "Edit" text link with an icon button, and either turn
-      "View public page" into a recognizable icon too or make the whole
-      row itself a clickable link to the board.
-    - Friendlier date formatting -- "Sep 1 - Sep 13" instead of the raw
-      `2026-09-01` / `2026-09-13` strings.
-    - "X days remaining" on an Active row, "X days until it begins" on
-      an Upcoming row, "X days to publish" on a Draft row -- all derived
-      from `start_date`/`end_date` vs. today, not stored.
-    - Move past/ended challenges out of the main list into their own
-      section further down the page.
-
 ## Dungeon types
-11. Support more than one board shape/ruleset ("dungeon type"), building
-    on `challenges.board_type` (already unconstrained text specifically
-    so a new type needs no migration -- see its own comment in
-    `supabase/schema.sql`). The current 5x5 grid becomes the "Standard"
-    type (today's only value, `'grid5x5'`). A second type, "Adventure,"
-    gets its own `size` attribute (`small` | `medium` | `large`) --
-    scope for this backlog entry is just the "small" Adventure dungeon;
-    medium/large and Adventure's actual rules (what a size even changes)
-    are TBD, to be defined later.
+8. Support more than one board shape/ruleset ("dungeon type"), building
+   on `challenges.board_type` (already unconstrained text specifically
+   so a new type needs no migration -- see its own comment in
+   `supabase/schema.sql`). The current 5x5 grid becomes the "Standard"
+   type (today's only value, `'grid5x5'`). A second type, "Adventure,"
+   gets its own `size` attribute (`small` | `medium` | `large`) --
+   scope for this backlog entry is just the "small" Adventure dungeon;
+   medium/large and Adventure's actual rules (what a size even changes)
+   are TBD, to be defined later.
 
 ## Anti-abuse
-12. Figure out how to handle a participant who leaves Dink's
-    "send screenshot" setting on and floods the site with screenshot
-    data (bandwidth/storage). Open question from the host: should this
-    email both the player and the host when it happens, or just log/
-    flag it for the host to notice? Needs detection first (nothing in
-    `dinkWebhook.ts` currently inspects payload size or screenshot
-    presence at all) before any notification behavior can be built.
+9. Whether/who to email when a participant's screenshot count crosses a
+   concerning threshold -- detection itself already shipped
+   (`increment_screenshot_stats`, the ⚠ badge on `EditChallengePage.tsx`'s
+   Players list, a console.warn every 10th screenshot), this is just the
+   open notification-behavior question: email the player, the host, both,
+   or leave it at the badge/log the host already has?
+10. A challenge past its end_date can still have players' Dink installs
+    pointed at its webhook URL, sending events nobody will ever see --
+    wasted processing and (per item #9) even more screenshot-flood
+    surface area. `api/dink/[secret].ts` already has a guard for exactly
+    this (`if (challenge.status === 'ended') return early`), but nothing
+    in the codebase ever actually sets a challenge's status to `'ended'`
+    -- `togglePublish` in `EditChallengePage.tsx` only ever toggles
+    between `'draft'`/`'active'`, so that guard is dead code today. Needs
+    either an automatic transition (a cron once today > end_date, mirroring
+    the `displayStatus` "past" derivation already built for the My
+    Dungeons page in `src/lib/dungeonStatus.ts`) or a host-visible way to
+    close out a challenge manually -- and probably worth telling the
+    player directly too (e.g. a note on the board page once a challenge
+    is past its end date) so they know to go turn Dink off, not just
+    silently dropping their events server-side.
 
 ## Notifications
-13. Full rewrite of Discord notification content (`discordEmbeds.ts`) --
+11. Full rewrite of Discord notification content (`discordEmbeds.ts`) --
     keep the current embed structure (title/description/fields/image),
     but replace the fixed flavor-text lines (e.g. "Aren't they just
     showing off at this point?") with randomized joke/banter variants
     pulled from a pool, to lean into the site's ".lol" branding.
 
 ## Account / profile
-14. A user profile page letting someone change their email and set a
+12. A user profile page letting someone change their email and set a
     default RSN, so they don't have to retype it every time they join a
     new challenge. Two different underlying mechanisms: email lives on
     Supabase's own `auth.users` (changing it goes through
@@ -109,7 +87,7 @@ ordered -- just captured so they don't get lost.
     join form pre-filling from it instead of starting blank.
 
 ## Game modes
-15. New game modes, applying to any dungeon type (orthogonal to #11's
+13. New game modes, applying to any dungeon type (orthogonal to #8's
     board *type* -- Standard/Adventure -- this is about how a board is
     *scored*, not shaped). Today every participant has their own
     private board/completions (`challenge_participants` ->
