@@ -3,6 +3,7 @@ import type { FormEvent } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { getSupabase } from '../db/supabaseClient';
+import { formatRelativeTime } from '../lib/format';
 
 export default function AccountPage() {
   const { session, profile, loading } = useAuth();
@@ -16,6 +17,9 @@ export default function AccountPage() {
   const [rsnError, setRsnError] = useState('');
   const [dinkSecret, setDinkSecret] = useState<string | null>(null);
   const [webhookCopied, setWebhookCopied] = useState(false);
+  // 'loading' distinct from null (no events yet) so the line doesn't
+  // flash "no events" before the fetch has actually finished.
+  const [lastDinkEventAt, setLastDinkEventAt] = useState<string | null | 'loading'>('loading');
 
   useEffect(() => {
     if (session?.user.email) setEmail(session.user.email);
@@ -38,6 +42,28 @@ export default function AccountPage() {
       .eq('profile_id', session.user.id)
       .maybeSingle()
       .then(({ data }) => setDinkSecret((data as { dink_secret: string } | null)?.dink_secret ?? null));
+  }, [session]);
+
+  // challenge_participants.last_webhook_at is bumped on every successful
+  // Dink call regardless of event type (dinkWebhook.ts's
+  // recordWebhookCall) -- already public-read, no new column/migration
+  // needed. Account-wide here: the most recent across every challenge
+  // this profile participates in, not any one challenge's own value
+  // (that's BoardPage.tsx's job).
+  useEffect(() => {
+    if (!session) return;
+    getSupabase()
+      .from('challenge_participants')
+      .select('last_webhook_at')
+      .eq('profile_id', session.user.id)
+      .then(({ data }) => {
+        const rows = (data as { last_webhook_at: string | null }[] | null) ?? [];
+        const latest = rows.reduce<string | null>(
+          (max, r) => (r.last_webhook_at && (!max || r.last_webhook_at > max) ? r.last_webhook_at : max),
+          null,
+        );
+        setLastDinkEventAt(latest);
+      });
   }, [session]);
 
   if (loading) return null;
@@ -158,6 +184,12 @@ export default function AccountPage() {
               {webhookCopied ? 'Copied!' : 'Copy'}
             </button>
           </div>
+          {lastDinkEventAt !== 'loading' && (
+            <p className="mt-2 text-xs text-stone-600">
+              Last Dink event:{' '}
+              {lastDinkEventAt ? formatRelativeTime(lastDinkEventAt, Date.now()) : "none received yet -- check your Dink settings"}
+            </p>
+          )}
         </div>
       )}
     </div>
