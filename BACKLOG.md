@@ -317,6 +317,21 @@ instead of renumbering the existing list.
 
 ## Timezone handling
 14. **Let hosts set a per-dungeon timezone instead of implicit UTC.**
+    **Assessed 2026-09-03, not building the full version below for now**
+    -- the actual harm is pure UX confusion (nothing was lost or
+    mis-awarded, a tile just completed a few hours "earlier" than
+    expected), it's only been reported once, and the full fix carries
+    real risk (the dual-window split below, four duplicated call sites,
+    a cron edge case) for a problem this narrow. Shipped a cheaper
+    mitigation instead: the UTC anchoring is now surfaced everywhere
+    instead of hidden -- `NewChallengePage.tsx` shows a host's picked
+    dates converted into their own browser-detected timezone as they
+    pick them, and `BoardPage.tsx` shows a friendlier date range, a
+    "Your time: ..." line with the same per-viewer local conversion, and
+    a live "N days/hours remaining" countdown (new `formatLocalRange`/
+    `preciseCountdownText` in `dungeonStatus.ts`). Revisit the full
+    per-host-timezone version below if this recurs for other hosts.
+
     Prompted by a real report (2026-09-02, ~11:28pm Eastern): WheresMyGear
     completed a tile on `adventure-test` (`start_date: '2026-09-03'`)
     that evening, before the challenge "felt" started. Root cause,
