@@ -91,6 +91,23 @@ export const PRESET_ITEM_SETS: PresetItemSet[] = [
     ],
   },
   {
+    name: 'Moons of Peril uniques',
+    items: [
+      'Blood moon helm',
+      'Blood moon chestplate',
+      'Blood moon tassets',
+      'Dual macuahuitl',
+      'Blue moon helm',
+      'Blue moon chestplate',
+      'Blue moon tassets',
+      'Blue moon spear',
+      'Eclipse moon helm',
+      'Eclipse moon chestplate',
+      'Eclipse moon tassets',
+      'Eclipse atlatl',
+    ],
+  },
+  {
     name: 'Bandos armour (God Wars)',
     items: ['Bandos chestplate', 'Bandos tassets', 'Bandos boots', 'Bandos hilt'],
   },

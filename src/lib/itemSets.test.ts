@@ -13,6 +13,7 @@ describe('isNotableLootItem', () => {
     expect(isNotableLootItem("Tumeken's Shadow (Uncharged)")).toBe(true);
     expect(isNotableLootItem('Bandos hilt')).toBe(true);
     expect(isNotableLootItem('Zamorak hilt')).toBe(true);
+    expect(isNotableLootItem('dual macuahuitl')).toBe(true);
   });
 
   it('does not match an item outside every catalog set', () => {
