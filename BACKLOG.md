@@ -17,12 +17,41 @@ ordered -- just captured so they don't get lost.
    condition -- currently just a flat comma-separated item-name list
    matched case-insensitively against loot; needs a closer look (exact
    scope TBD).
-3. Restrict `lootValueGained`/`singleDropValue`/`xpGained`-style GP and
-   XP thresholds to increments of 1,000 instead of any raw number a
-   host types in. In `TileEditorForm.tsx`, replace the free-typed
-   number with a denomination selector (K/M) plus a value, so the host
-   picks e.g. "100" + "M" to form a 100,000,000 threshold instead of
-   typing the full number by hand.
+3. **Restrict GP/XP thresholds to K/M increments.** Resolved design
+   below. Covers exactly 6 fields, all in `TileEditorForm.tsx`: the
+   shared `threshold` field when the condition is `xpGained`,
+   `skillXpGained`, `xpGainedLowestSkill`, `lootValueGained`, or
+   `singleDropValue`, plus `bigDropsCount`'s own separate
+   `dropValueThreshold` field. `bigDropsCount`'s *other* field (its
+   `threshold` -- how many such drops) stays a plain integer, since
+   that's a drop count, not a GP/XP amount.
+
+   **Control**: replace the bare number input for just these 6 fields
+   with a two-part control -- a whole-number value input plus a K
+   (x1,000) / M (x1,000,000) toggle, combined to form the actual
+   threshold. Guarantees every new/edited threshold lands on a clean
+   multiple of 1,000 (an integer times 1,000 or 1,000,000 always is)
+   with no separate min-increment validator needed. K alone covers any
+   value M can't hit cleanly (e.g. "1500" + K for what'd otherwise be
+   1.5M) -- no decimal support needed in either field.
+
+   **Existing values on an already-authored tile**: decompose the
+   stored raw number back into (value, unit) when the form opens --
+   exact M if divisible by 1,000,000, else exact K if divisible by
+   1,000, else (a tile saved before this existed, or hand-edited to an
+   odd number) falls back to K with the value rounded
+   (`Math.round(n / 1000)`) -- a best-effort display only, re-quantized
+   to a clean multiple the next time the host actually touches and
+   re-saves that field.
+
+   **No knock-on changes needed elsewhere**: every `randomizeBoard.ts`
+   default threshold (#5 below) already lands on a clean K/M value
+   (200K, 500K, 1.5M, 1M, 5M, 20M, 250K, 100K, 300K -- checked against
+   all 6 affected fields), so nothing there needs adjusting.
+   `bigDropsCount`'s existing `MIN_DROP_VALUE_THRESHOLD` (100,000)
+   clamp on save is unchanged -- the K/M control doesn't need its own
+   copy of that rule, just to still produce a number the existing
+   clamp can check.
 4. **Adventure: logout-gated progress reset between tiles.** Today,
    every tile's condition is checked against a participant's *cumulative
    stats since the challenge's start date* -- nothing resets at unlock,
@@ -251,3 +280,20 @@ forward, not just tiles, once those exist to copy.
     **If prioritized**: scope as a minimal notifier-only plugin
     covering just the 7 event types we actually consume today, with
     screenshots never wired up -- not a Dink feature-parity rewrite.
+
+## Challenge setup
+Appended here rather than inserted into an earlier section -- several
+`(BACKLOG.md #N)` references are already baked into code comments
+across the repo, so new items get appended (next number, new section)
+instead of renumbering the existing list.
+
+11. Define a maximum length a dungeon is allowed to run for (start_date
+    to end_date span) -- today a host can set an arbitrarily long
+    challenge with no upper bound. Exact cap TBD.
+
+## Tile authoring UX
+12. Re-order the fields on the "Add Tile" modal (`TileEditorForm.tsx`).
+    Also add a scroll bar for modals taller than the viewport -- e.g.
+    "Obtain a set of items" (itemCount/itemSetCollected, whose item
+    catalog list can push the form past the screen) currently has no
+    way to reach fields/buttons below the fold.
