@@ -6,6 +6,10 @@ import { formatBytes } from '../lib/format';
 
 interface Kpis {
   challengesByStatus: Record<'draft' | 'active' | 'ended', number>;
+  // Distinct accounts (profiles rows) -- different from totalParticipants
+  // below, which counts challenge_participants rows (one per person per
+  // challenge they've joined, so the same account can count several times).
+  totalUsers: number;
   totalParticipants: number;
   tilesCompleted: number;
 }
@@ -67,6 +71,7 @@ export default function AdminDashboardPage() {
     const supabase = getSupabase();
     Promise.all([
       supabase.from('challenges').select('status'),
+      supabase.from('profiles').select('id', { count: 'exact', head: true }),
       supabase.from('challenge_participants').select('id', { count: 'exact', head: true }),
       supabase.from('tile_completions').select('id', { count: 'exact', head: true }).eq('kind', 'tile'),
       supabase
@@ -82,13 +87,14 @@ export default function AdminDashboardPage() {
         .order('webhook_call_count', { ascending: false })
         .limit(5),
     ])
-      .then(([challenges, participantCount, tileCompletionCount, screenshotRows, webhookRows]) => {
+      .then(([challenges, userCount, participantCount, tileCompletionCount, screenshotRows, webhookRows]) => {
         const byStatus = { draft: 0, active: 0, ended: 0 };
         for (const c of (challenges.data as { status: 'draft' | 'active' | 'ended' }[]) ?? []) {
           byStatus[c.status]++;
         }
         setKpis({
           challengesByStatus: byStatus,
+          totalUsers: userCount.count ?? 0,
           totalParticipants: participantCount.count ?? 0,
           tilesCompleted: tileCompletionCount.count ?? 0,
         });
@@ -108,7 +114,8 @@ export default function AdminDashboardPage() {
       {!loadError && !kpis && <p className="mt-4 text-stone-500">Loading…</p>}
       {kpis && (
         <>
-          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
+            <KpiCard label="Accounts" value={String(kpis.totalUsers)} />
             <KpiCard label="Draft" value={String(kpis.challengesByStatus.draft)} />
             <KpiCard label="Active" value={String(kpis.challengesByStatus.active)} />
             <KpiCard label="Ended" value={String(kpis.challengesByStatus.ended)} />

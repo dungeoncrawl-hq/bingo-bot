@@ -39,7 +39,7 @@ function DungeonRow({
       onKeyDown={(e) => {
         if (e.key === 'Enter') navigate(`/c/${c.slug}`);
       }}
-      className="cursor-pointer rounded-lg border border-stone-800 px-4 py-3 hover:border-stone-700"
+      className="cursor-pointer rounded-lg border border-stone-800 px-4 py-2.5 transition-colors hover:border-stone-700"
     >
       <div className="flex items-center justify-between gap-2">
         <span className="font-medium">{c.name}</span>
@@ -48,22 +48,29 @@ function DungeonRow({
           <span className={`rounded-full border px-2 py-0.5 text-xs ${style.className}`}>{style.label}</span>
         </div>
       </div>
-      <p className="text-sm text-stone-500">{formatDateRange(c.start_date, c.end_date)}</p>
-      {countdown && <p className="mt-0.5 text-xs text-stone-600">{countdown}</p>}
-      <div className="mt-2 flex items-center gap-3 text-sm" onClick={(e) => e.stopPropagation()}>
-        {c.isHost && (
-          <Link
-            to={`/c/${c.slug}/edit`}
-            title="Edit"
-            className="text-stone-400 hover:text-stone-200"
-            onClick={(e) => e.stopPropagation()}
+      <div className="mt-1 flex items-center justify-between gap-2">
+        <p className="text-xs text-stone-500">
+          {formatDateRange(c.start_date, c.end_date)}
+          {countdown && <span className="text-stone-600"> · {countdown}</span>}
+        </p>
+        <div className="flex shrink-0 items-center gap-3 text-xs" onClick={(e) => e.stopPropagation()}>
+          {c.isHost && (
+            <Link
+              to={`/c/${c.slug}/edit`}
+              className="text-stone-400 underline decoration-dotted hover:text-stone-200"
+              onClick={(e) => e.stopPropagation()}
+            >
+              Edit
+            </Link>
+          )}
+          <button
+            type="button"
+            onClick={() => onCopyWebhook(c)}
+            className="text-stone-400 underline decoration-dotted hover:text-stone-200"
           >
-            ✎ Edit
-          </Link>
-        )}
-        <button type="button" onClick={() => onCopyWebhook(c)} className="text-stone-400 underline decoration-dotted hover:text-stone-200">
-          {copied ? 'Copied!' : '📋 Copy webhook'}
-        </button>
+            {copied ? 'Copied!' : 'Copy webhook'}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -136,7 +143,7 @@ export default function DashboardPage() {
           New challenge
         </Link>
       </div>
-      <div className="mt-6 space-y-3">
+      <div className="mt-6 space-y-2">
         {loadError && <p className="text-sm text-red-400">Couldn't load your dungeons. Try refreshing the page.</p>}
         {!loadError && challenges === null && <p className="text-stone-500">Loading…</p>}
         {!loadError && challenges?.length === 0 && <p className="text-stone-500">No dungeons yet.</p>}
@@ -148,7 +155,7 @@ export default function DashboardPage() {
       {past.length > 0 && (
         <div className="mt-10">
           <h2 className="text-sm font-semibold uppercase text-stone-500">Past</h2>
-          <div className="mt-3 space-y-3">
+          <div className="mt-3 space-y-2">
             {past.map((c) => (
               <DungeonRow key={c.id} c={c} today={today} copied={copiedId === c.id} onCopyWebhook={copyWebhook} />
             ))}
