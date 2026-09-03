@@ -117,10 +117,15 @@ export function computeHiscoresRecap(
   if (!before) return null;
 
   // "after" = the last snapshot strictly after `before`'s own date and
-  // within the window's end.
+  // within the window's end. If none exists -- a brand-new participant
+  // whose very first snapshot landed on/after window.start, with nothing
+  // earlier to have picked as "before" -- self-diff against `before`
+  // instead of bailing to null entirely. Every XP/level/clue delta comes
+  // out 0 (honest: there's no earlier point yet to measure a gain
+  // against), but lowestSkillCandidates still resolves correctly, since
+  // it only ever depends on the "before" snapshot, never a real "after".
   const afterCandidates = sorted.filter((s) => s.recorded_on > before.recorded_on && s.recorded_on <= window.end);
-  const after = afterCandidates.length > 0 ? afterCandidates[afterCandidates.length - 1] : undefined;
-  if (!after) return null;
+  const after = afterCandidates.length > 0 ? afterCandidates[afterCandidates.length - 1] : before;
 
   return diffSnapshots(before, after);
 }

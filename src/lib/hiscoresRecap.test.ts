@@ -12,8 +12,26 @@ describe('computeHiscoresRecap', () => {
     expect(computeHiscoresRecap([], WINDOW)).toBeNull();
   });
 
-  it('returns null with only one snapshot ever (no "after" to diff against)', () => {
-    expect(computeHiscoresRecap([snapshot('2026-08-31', 100)], WINDOW)).toBeNull();
+  it('self-diffs against the "before" snapshot when there is no "after" to diff against, rather than returning null', () => {
+    // A participant with exactly one snapshot ever, dated before the
+    // window -- every delta is honestly 0 (nothing later to compare
+    // against), but the result still exists.
+    const recap = computeHiscoresRecap([snapshot('2026-08-31', 100)], WINDOW);
+    expect(recap?.xpGained).toBe(0);
+  });
+
+  it('still resolves lowestSkillCandidates from a lone snapshot exactly on window.start (BACKLOG.md report: WheresMyGear, adventure-test)', () => {
+    // Real production scenario: a participant's very first hiscores sync
+    // landed on the challenge's own start date, so there's no earlier
+    // snapshot to serve as "before" and no later one to serve as "after".
+    // lowestSkillCandidates only ever needs "before", so it should still
+    // resolve correctly even though xpGained can't mean anything yet.
+    const lone = snapshot('2026-09-03', 0, {
+      skills: { Attack: { level: 50, xp: 100_000 }, Prayer: { level: 30, xp: 5_000 } },
+    });
+    const recap = computeHiscoresRecap([lone], { start: '2026-09-03', end: '2026-09-12' });
+    expect(recap?.lowestSkillCandidates).toEqual(['Prayer']);
+    expect(recap?.xpGained).toBe(0);
   });
 
   it('diffs the last snapshot before the window against the last one within it', () => {
@@ -127,14 +145,15 @@ describe('computeHiscoresRecapFromBaseline', () => {
     expect(computeHiscoresRecapFromBaseline(baseline, [latest])?.xpGained).toBe(50_000);
   });
 
-  it('gives a real (non-null) result for a same-day baseline-to-latest diff -- the exact case computeHiscoresRecap cannot handle', () => {
+  it('gives an accurate result for a same-day baseline-to-latest diff, unlike computeHiscoresRecap', () => {
     // Both snapshots share the SAME recorded_on date -- computeHiscoresRecap
-    // would return null here (its "after" search requires a strictly
-    // later date than "before"), but the baseline was captured live at
-    // an exact instant, so a same-day resync is exactly the point.
+    // has no strictly-later snapshot to use as "after", so it self-diffs
+    // against "before" and reports 0 (technically non-null, but not the
+    // real gain). The baseline was captured live at an exact instant
+    // instead of a date, so a same-day resync gets the right answer.
     const baseline = snapshot('2026-09-01', 1_000_000);
     const laterSameDay = snapshot('2026-09-01', 1_010_000);
-    expect(computeHiscoresRecap([baseline, laterSameDay], { start: '2026-09-01', end: '2026-09-01' })).toBeNull();
+    expect(computeHiscoresRecap([baseline, laterSameDay], { start: '2026-09-01', end: '2026-09-01' })?.xpGained).toBe(0);
     expect(computeHiscoresRecapFromBaseline(baseline, [laterSameDay])?.xpGained).toBe(10_000);
   });
 
