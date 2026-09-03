@@ -3,6 +3,12 @@ import type { FormEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { getSupabase } from '../db/supabaseClient';
+import { formatLocalRange } from '../lib/dungeonStatus';
+
+// Every date in this app is a UTC calendar date (BACKLOG.md #14) -- shown
+// once both dates are picked, so a host setting an evening start date
+// isn't surprised later that it began hours before their own midnight.
+const VIEWER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 function slugify(s: string): string {
   return s
@@ -184,6 +190,11 @@ export default function NewChallengePage() {
             />
           </div>
         </div>
+        {startDate && endDate && (
+          <p className="text-xs text-stone-500">
+            Dates run on a fixed UTC clock -- in your timezone that's {formatLocalRange(startDate, endDate, VIEWER_TIMEZONE)}.
+          </p>
+        )}
         {error && <p className="text-sm text-red-400">{error}</p>}
         <button
           type="submit"

@@ -59,3 +59,45 @@ export function countdownText(c: DungeonDates, status: DisplayStatus, today: str
   }
   return null;
 }
+
+// Formats a challenge's start/end range as observed in an explicit
+// timezone, including time of day -- unlike formatDateRange (always UTC,
+// date only), this is what surfaces "8:00 PM your time" so a viewer can
+// tell at a glance what a UTC-anchored boundary means on their own clock
+// (the confusion behind BACKLOG.md #14: a challenge's start_date/end_date
+// are UTC calendar dates everywhere else in this codebase). `timeZone` is
+// a parameter rather than implicit so this stays pure/testable -- callers
+// pass Intl.DateTimeFormat().resolvedOptions().timeZone for "the viewer's
+// own zone". End is end-of-day on end_date, mirroring
+// participantStats.ts's boundaryMs 'end' convention.
+export function formatLocalRange(start: string, end: string, timeZone: string): string {
+  const fmt = (iso: string) =>
+    new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone }).format(
+      new Date(iso),
+    );
+  return `${fmt(`${start}T00:00:00.000Z`)} – ${fmt(`${end}T23:59:59.999Z`)}`;
+}
+
+// Days when there's at least one full day left, otherwise hours (down to
+// a 1-hour floor so this never prints "0 hours") -- coarser than that is
+// unhelpful when a challenge is about to start or end, which is exactly
+// when this line matters most.
+function formatDuration(ms: number): string {
+  const totalHours = Math.max(1, Math.ceil(ms / (1000 * 60 * 60)));
+  if (totalHours < 24) return `${totalHours} hour${plural(totalHours)}`;
+  const days = Math.ceil(totalHours / 24);
+  return `${days} day${plural(days)}`;
+}
+
+// Hour-precision counterpart to countdownText's day-only granularity --
+// used on the board page itself (where "3 days remaining" isn't precise
+// enough right at a boundary) rather than the compact dashboard list.
+// Takes `nowMs` explicitly (not Date.now() internally) to stay pure/
+// testable, same reasoning as every other "today" parameter in this file.
+export function preciseCountdownText(start_date: string, end_date: string, nowMs: number): string | null {
+  const startMs = Date.parse(`${start_date}T00:00:00.000Z`);
+  const endMs = Date.parse(`${end_date}T23:59:59.999Z`);
+  if (nowMs < startMs) return `Starts in ${formatDuration(startMs - nowMs)}`;
+  if (nowMs <= endMs) return `${formatDuration(endMs - nowMs)} remaining`;
+  return null;
+}

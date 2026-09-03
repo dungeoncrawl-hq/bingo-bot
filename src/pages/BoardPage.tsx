@@ -17,6 +17,7 @@ import { computeHiscoresRecap, computeHiscoresRecapFromBaseline, type SnapshotRo
 import { computeLeaderboard } from '../lib/leaderboard';
 import { computeFirstCompleters } from '../lib/firstCompletions';
 import { progressColor } from '../lib/progressColor';
+import { formatDateRange, formatLocalRange, preciseCountdownText } from '../lib/dungeonStatus';
 import TileDetailModal from '../components/TileDetailModal';
 import AdventureColumnModal from '../components/AdventureColumnModal';
 import AdventureConnector from '../components/AdventureConnector';
@@ -38,6 +39,10 @@ const GRID_SIZE = 5;
 // chosen, so the leaderboard denominator is this fixed constant, not
 // tiles.length.
 const ADVENTURE_SMALL_TILES_IN_PLAY = 9;
+// Every challenge date is a fixed UTC calendar date (BACKLOG.md #14) --
+// this is the viewer's own zone, used only to show what those UTC
+// boundaries mean on their clock, never for gating/status logic itself.
+const VIEWER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 interface ParticipantRow {
   id: string;
@@ -386,13 +391,14 @@ export default function BoardPage() {
 
   const tilesInPlay = challenge.board_type === 'adventure' ? ADVENTURE_SMALL_TILES_IN_PLAY : tiles.length;
   const teamGateBlocksJoining = challenge.game_mode === 'team' && teams.length === 0;
+  const countdown = preciseCountdownText(challenge.start_date, challenge.end_date, Date.now());
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-12">
       <h1 className="text-2xl font-semibold">{challenge.name}</h1>
-      <p className="text-sm text-stone-500">
-        {challenge.start_date} – {challenge.end_date}
-      </p>
+      <p className="text-sm text-stone-500">{formatDateRange(challenge.start_date, challenge.end_date)}</p>
+      <p className="text-xs text-stone-600">Your time: {formatLocalRange(challenge.start_date, challenge.end_date, VIEWER_TIMEZONE)}</p>
+      {countdown && <p className="mt-1 text-xs font-medium text-amber-500">{countdown}</p>}
       {viewedParticipant && <p className="mt-2 text-sm font-medium text-stone-400">{viewedParticipant.rsn}'s board</p>}
 
       <div className="mt-8 flex flex-col gap-8 lg:flex-row lg:items-start">
