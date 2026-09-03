@@ -331,14 +331,25 @@ export default function TileDetailModal({
               const status = row.status;
               const done = row.completedAt != null;
               const percent = done ? 100 : row.awaitingBaselineReset ? null : progressPercent(tile.condition, status);
-              const baseCaption = formatTileProgress(tile.condition, status) ?? formatTileGoal(tile.condition);
-              const caption = row.awaitingBaselineReset
-                ? 'Log out to start'
-                : status.resolvedSkill
-                  ? `${baseCaption} (${status.resolvedSkill})`
-                  : status.needsSkillChoice
-                    ? 'tied -- pick a skill'
-                    : baseCaption;
+              // Once done, never trust the live-recomputed status for the
+              // caption -- same reasoning as percent/done trusting
+              // completedAt instead: an Adventure participant can move
+              // their baseline forward again for a *later* tile after
+              // completing this one, and re-checking this tile against
+              // their current window would then show near-zero progress
+              // (or a since-changed resolvedSkill) for something already
+              // finished. Goal-only text is always safe, whatever the
+              // current baseline state is.
+              const baseCaption = done ? formatTileGoal(tile.condition) : formatTileProgress(tile.condition, status) ?? formatTileGoal(tile.condition);
+              const caption = done
+                ? baseCaption
+                : row.awaitingBaselineReset
+                  ? 'Log out to start'
+                  : status.resolvedSkill
+                    ? `${baseCaption} (${status.resolvedSkill})`
+                    : status.needsSkillChoice
+                      ? 'tied -- pick a skill'
+                      : baseCaption;
               return (
                 <li key={row.key}>
                   <div className="flex items-center justify-between text-sm">

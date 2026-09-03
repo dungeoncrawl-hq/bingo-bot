@@ -163,13 +163,26 @@ describe('computeParticipantStats', () => {
     expect(s.bossKcGained).toBe(5);
   });
 
-  it('defaults KC-before to 0 when there is no event prior to the window (no baseline yet)', () => {
+  it('treats the first in-window event as establishing the baseline, not full credit, when there is no event prior to the window', () => {
     const raw: RawParticipantData = {
       ...EMPTY_RAW,
       bossKills: [{ boss: 'Zulrah', kc: 3, created_at: '2026-09-01T00:00:00Z' }],
     };
     const s = computeParticipantStats(raw, WINDOW, null);
-    expect(s.kcGainedByActivity.Zulrah).toBe(3);
+    expect(s.kcGainedByActivity.Zulrah).toBeUndefined();
+    expect(s.bossKcGained).toBe(0);
+  });
+
+  it('counts real gains after that first in-window event establishes the baseline', () => {
+    const raw: RawParticipantData = {
+      ...EMPTY_RAW,
+      bossKills: [
+        { boss: 'Zulrah', kc: 3, created_at: '2026-09-01T00:00:00Z' }, // first ever -- baseline, no credit
+        { boss: 'Zulrah', kc: 5, created_at: '2026-09-02T00:00:00Z' }, // 2 real kills after
+      ],
+    };
+    const s = computeParticipantStats(raw, WINDOW, null);
+    expect(s.kcGainedByActivity.Zulrah).toBe(2);
   });
 
   it('omits a boss from kcGainedByActivity entirely when gained is 0 (or negative)', () => {
@@ -189,11 +202,13 @@ describe('computeParticipantStats', () => {
     const raw: RawParticipantData = {
       ...EMPTY_RAW,
       bossKills: [
-        { boss: 'Vorkath', kc: 5, created_at: '2026-09-01T00:00:00Z' },
-        { boss: 'Zulrah', kc: 3, created_at: '2026-09-01T00:00:00Z' },
+        { boss: 'Vorkath', kc: 5, created_at: '2026-08-20T00:00:00Z' },
+        { boss: 'Vorkath', kc: 10, created_at: '2026-09-01T00:00:00Z' },
+        { boss: 'Zulrah', kc: 3, created_at: '2026-08-20T00:00:00Z' },
+        { boss: 'Zulrah', kc: 6, created_at: '2026-09-01T00:00:00Z' },
       ],
     };
-    expect(computeParticipantStats(raw, WINDOW, null).bossKcGained).toBe(8);
+    expect(computeParticipantStats(raw, WINDOW, null).bossKcGained).toBe(8); // 5 + 3
   });
 });
 
