@@ -16,6 +16,8 @@ describe('isNotableLootItem', () => {
     expect(isNotableLootItem('dual macuahuitl')).toBe(true);
     expect(isNotableLootItem("Scurrius' spine")).toBe(true);
     expect(isNotableLootItem('Giantsoul amulet')).toBe(true);
+    expect(isNotableLootItem('abyssal whip')).toBe(true);
+    expect(isNotableLootItem('Black mask (10)')).toBe(true);
   });
 
   it('does not match an item outside every catalog set', () => {
@@ -36,5 +38,17 @@ describe('PRESET_ITEM_SETS', () => {
 
   it('gives every set at least one item', () => {
     for (const set of PRESET_ITEM_SETS) expect(set.items.length).toBeGreaterThan(0);
+  });
+
+  it('has no duplicate items within any one set', () => {
+    for (const set of PRESET_ITEM_SETS) {
+      const lower = set.items.map((i) => i.toLowerCase());
+      expect(new Set(lower).size).toBe(lower.length);
+    }
+  });
+
+  it('has exactly 95 items in the Slayer monster uniques set, matching the OSRS Wiki collection log tab', () => {
+    const set = PRESET_ITEM_SETS.find((s) => s.name === 'Slayer monster uniques');
+    expect(set?.items.length).toBe(95);
   });
 });
