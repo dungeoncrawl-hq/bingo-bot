@@ -849,6 +849,7 @@ export default function BoardPage() {
           participants={participants}
           challenge={challenge}
           firstCompleters={firstCompleters}
+          completions={completions}
           gameMode={challenge.game_mode}
           teams={teams}
           onClose={() => setSelectedTile(null)}
@@ -866,6 +867,22 @@ export default function BoardPage() {
                 participants={participants}
                 challenge={challenge}
                 firstCompleters={firstCompleters}
+                completions={completions}
+                // Pass the real gameMode/teams explicitly (Adventure has no
+                // coop/team support, BACKLOG.md #10, so these are always
+                // 'solo'/empty here) rather than omitting them and relying
+                // on TileDetailModal's own default parameter values -- a
+                // default `teams = []` is a FRESH array literal evaluated
+                // on every render of that component, including the
+                // re-renders its own setLoading/setRows calls trigger.
+                // Since `teams` sits in the data-fetch effect's dependency
+                // array, a fresh reference every render made the effect
+                // look "changed" every time, restarting the fetch forever
+                // -- the modal never got past "Loading progress...". The
+                // real `teams` state below is a stable reference, so this
+                // doesn't recur.
+                gameMode={challenge.game_mode}
+                teams={teams}
                 onClose={() => setSelectedColumn(null)}
               />
             ) : null;
@@ -876,9 +893,11 @@ export default function BoardPage() {
             roomNumber={roomNumberForColumn(selectedColumn)}
             topTile={adventureTileAt(selectedColumn, 'top')}
             bottomTile={adventureTileAt(selectedColumn, 'bottom')}
+            tiles={tiles}
             participants={participants}
             challenge={challenge}
             firstCompleters={firstCompleters}
+            completions={completions}
             onClose={() => setSelectedColumn(null)}
           />
         ))}

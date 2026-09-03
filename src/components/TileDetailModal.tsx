@@ -27,6 +27,13 @@ interface TeamLite {
   name: string;
 }
 
+interface CompletionLite {
+  participant_id: string;
+  kind: 'tile' | 'line' | 'board';
+  ref: string;
+  completed_at: string;
+}
+
 interface Props {
   tile: Tile;
   // Adventure boss rooms only ("First Boss"/"Second Boss"/"Final Boss") --
@@ -38,6 +45,12 @@ interface Props {
   participants: ParticipantLite[];
   challenge: Challenge;
   firstCompleters: Record<string, string>;
+  // The challenge's real tile_completions -- the authoritative "is this
+  // tile actually done" source (see `completedAtFor` below), rather than
+  // trusting a fresh live recompute of raw events, which can go stale
+  // once a later Adventure baseline reset moves the stats window past an
+  // event that already counted.
+  completions: CompletionLite[];
   // 'solo' (default) | 'coop' | 'team' -- BACKLOG.md #10. Coop pools
   // everyone into one aggregate row instead of ranking individuals; Team
   // pools per team_id and ranks one row per team. `teams` is only
@@ -69,10 +82,24 @@ interface Row {
   key: string;
   label: string;
   status: TileStatus;
+  // From tile_completions, not the live-recomputed status.done above --
+  // see the Props.completions comment. null means not actually done yet,
+  // regardless of what the live stats sweep says.
+  completedAt: string | null;
   isFirst: boolean;
 }
 
-export default function TileDetailModal({ tile, kicker, participants, challenge, firstCompleters, gameMode = 'solo', teams = [], onClose }: Props) {
+export default function TileDetailModal({
+  tile,
+  kicker,
+  participants,
+  challenge,
+  firstCompleters,
+  completions,
+  gameMode = 'solo',
+  teams = [],
+  onClose,
+}: Props) {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<Row[]>([]);
 
@@ -82,6 +109,17 @@ export default function TileDetailModal({ tile, kicker, participants, challenge,
     const supabase = getSupabase();
     const ids = participants.map((p) => p.id);
     const window = { start: challenge.start_date, end: challenge.end_date };
+
+    // The earliest completed_at among a set of participant ids for this
+    // tile, or null if none of them have completed it -- a pooled
+    // (Coop/Team) completion fans out to every pool member at once
+    // (challengeProgress.ts's insertForPool), so any member's row is
+    // proof the whole pool is done; the earliest one is the true moment.
+    function completedAtFor(memberIds: string[]): string | null {
+      const rows = completions.filter((c) => c.kind === 'tile' && c.ref === tile.id && memberIds.includes(c.participant_id));
+      if (rows.length === 0) return null;
+      return rows.reduce((min, r) => (r.completed_at < min ? r.completed_at : min), rows[0].completed_at);
+    }
 
     (async () => {
       if (ids.length === 0) {
@@ -136,16 +174,18 @@ export default function TileDetailModal({ tile, kicker, participants, challenge,
       let result: Row[];
       if (gameMode === 'coop') {
         const status = checkTile(tile.condition, poolStats(Object.values(statsById)));
-        result = [{ key: 'pooled', label: 'Everyone', status, isFirst: false }];
+        const completedAt = completedAtFor(ids);
+        result = [{ key: 'pooled', label: 'Everyone', status, completedAt, isFirst: false }];
       } else if (gameMode === 'team') {
         result = teams
           .map((t) => {
             const memberIds = participants.filter((p) => p.team_id === t.id).map((p) => p.id);
             if (memberIds.length === 0) return null;
             const status = checkTile(tile.condition, poolStats(memberIds.map((id) => statsById[id])));
+            const completedAt = completedAtFor(memberIds);
             const winnerId = firstCompleters[tile.id];
-            const isFirst = status.done && tile.condition.type !== 'freeSpace' && memberIds.includes(winnerId);
-            return { key: t.id, label: t.name, status, isFirst };
+            const isFirst = completedAt != null && tile.condition.type !== 'freeSpace' && memberIds.includes(winnerId);
+            return { key: t.id, label: t.name, status, completedAt, isFirst };
           })
           .filter((r): r is Row => r != null);
       } else {
@@ -153,10 +193,11 @@ export default function TileDetailModal({ tile, kicker, participants, challenge,
           key: p.id,
           label: p.rsn,
           status: checkTile(tile.condition, statsById[p.id]),
-          isFirst: false, // set below, once per row, for solo (needs `done` first)
+          completedAt: completedAtFor([p.id]),
+          isFirst: false, // set below, once per row, for solo (needs completedAt first)
         }));
         for (const row of result) {
-          row.isFirst = row.status.done && tile.condition.type !== 'freeSpace' && firstCompleters[tile.id] === row.key;
+          row.isFirst = row.completedAt != null && tile.condition.type !== 'freeSpace' && firstCompleters[tile.id] === row.key;
         }
       }
 
@@ -169,11 +210,18 @@ export default function TileDetailModal({ tile, kicker, participants, challenge,
     return () => {
       cancelled = true;
     };
-  }, [tile, participants, challenge, gameMode, teams, firstCompleters]);
+  }, [tile, participants, challenge, gameMode, teams, firstCompleters, completions]);
 
-  const ranked = [...rows].sort(
-    (a, b) => rankValue(b.status, progressPercent(tile.condition, b.status)) - rankValue(a.status, progressPercent(tile.condition, a.status)),
-  );
+  // Done rows (by completedAt, the authoritative tile_completions signal)
+  // sort earliest-first -- first to finish at the top, same as the
+  // leaderboard's own first-completer bonus rewards. Not-yet-done rows
+  // follow, ranked by live progress. A live-recomputed status.done is
+  // never trusted here -- see Row's completedAt comment.
+  const ranked = [...rows].sort((a, b) => {
+    if (a.completedAt != null && b.completedAt != null) return a.completedAt.localeCompare(b.completedAt);
+    if ((a.completedAt != null) !== (b.completedAt != null)) return a.completedAt != null ? -1 : 1;
+    return rankValue(b.status, progressPercent(tile.condition, b.status)) - rankValue(a.status, progressPercent(tile.condition, a.status));
+  });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
@@ -200,7 +248,8 @@ export default function TileDetailModal({ tile, kicker, participants, challenge,
           <ul className="space-y-3">
             {ranked.map((row) => {
               const status = row.status;
-              const percent = progressPercent(tile.condition, status);
+              const done = row.completedAt != null;
+              const percent = done ? 100 : progressPercent(tile.condition, status);
               const baseCaption = formatTileProgress(tile.condition, status) ?? formatTileGoal(tile.condition);
               const caption = status.resolvedSkill
                 ? `${baseCaption} (${status.resolvedSkill})`
@@ -215,7 +264,7 @@ export default function TileDetailModal({ tile, kicker, participants, challenge,
                       {caption}
                       {row.isFirst ? (
                         <span className="text-amber-400">⭐</span>
-                      ) : status.done ? (
+                      ) : done ? (
                         <span className="text-green-400">✓</span>
                       ) : null}
                     </span>

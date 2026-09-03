@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { getSupabase } from '../db/supabaseClient';
-import type { AdventureLayout, Challenge, Tile } from '../db/types';
+import type { Challenge, Tile } from '../db/types';
 import {
   checkTile,
   describeTileCondition,
@@ -12,6 +12,7 @@ import {
 import { computeParticipantStats, type RawParticipantData } from '../lib/participantStats';
 import { computeHiscoresRecap, computeHiscoresRecapFromBaseline, type SnapshotRow } from '../lib/hiscoresRecap';
 import { progressColor } from '../lib/progressColor';
+import { resolveFrontier } from '../lib/adventureProgress';
 
 interface ParticipantLite {
   id: string;
@@ -20,11 +21,18 @@ interface ParticipantLite {
   adventure_path: Record<string, 'top' | 'bottom'>;
   // Adventure logout-gated reset (BACKLOG.md #4) -- null means this
   // participant's next tile is locked, awaiting a qualifying Dink
-  // LOGOUT event. Never consulted for the very first column (column 0)
-  // of the very first fork, which always uses challenge-wide stats,
-  // same as challengeProgress.ts's own first-tile exemption.
+  // LOGOUT event. Never consulted for a participant's very first tile
+  // ever (doneTileIds.size === 0), same first-tile exemption
+  // challengeProgress.ts's own server-side check uses.
   adventure_baseline_at: string | null;
   adventure_baseline_snapshot: SnapshotRow | null;
+}
+
+interface CompletionLite {
+  participant_id: string;
+  kind: 'tile' | 'line' | 'board';
+  ref: string;
+  completed_at: string;
 }
 
 interface Props {
@@ -35,9 +43,21 @@ interface Props {
   roomNumber: number;
   topTile: Tile | null;
   bottomTile: Tile | null;
+  // The full board's tiles, not just this column's two -- resolveFrontier
+  // needs to walk a participant's entire path from the start to know
+  // whether they've actually reached this column yet, not just whether
+  // they've picked a lane for its fork (a fork's lane choice covers BOTH
+  // of its columns at once, so having one doesn't mean the second column
+  // has been reached -- see resolveFrontier's own comment).
+  tiles: Tile[];
   participants: ParticipantLite[];
   challenge: Challenge;
   firstCompleters: Record<string, string>;
+  // The challenge's real tile_completions -- the authoritative "is this
+  // tile actually done" source, rather than a fresh live recompute of
+  // raw events, which can go stale once a later baseline reset moves the
+  // stats window past an event that already counted.
+  completions: CompletionLite[];
   onClose: () => void;
 }
 
@@ -59,9 +79,40 @@ function rankValue(status: TileStatus, percent: number | null): number {
 // picked (not one shared condition applied to everyone, unlike a regular
 // tile) -- self-contained raw-data fetch/compute, same established
 // pattern as TileDetailModal, rather than reusing BoardPage's state.
-export default function AdventureColumnModal({ forkIndex, roomNumber, topTile, bottomTile, participants, challenge, firstCompleters, onClose }: Props) {
+export default function AdventureColumnModal({
+  forkIndex,
+  roomNumber,
+  topTile,
+  bottomTile,
+  tiles,
+  participants,
+  challenge,
+  firstCompleters,
+  completions,
+  onClose,
+}: Props) {
   const [loading, setLoading] = useState(true);
   const [statuses, setStatuses] = useState<Record<string, TileStatus>>({});
+
+  // useCallback with real dependencies, not a plain function -- these are
+  // called from the data-fetch effect below, so a fresh reference on
+  // every render (the same trap a default `teams = []` prop fell into on
+  // TileDetailModal's boss-tile call site) would restart that effect on
+  // every render forever, since setLoading/setRows/setStatuses trigger a
+  // re-render that would otherwise recreate them each time.
+  const tileFor = useCallback(
+    (p: ParticipantLite): Tile | null => {
+      const chosenLane = p.adventure_path[String(forkIndex)];
+      return chosenLane === 'top' ? topTile : chosenLane === 'bottom' ? bottomTile : null;
+    },
+    [forkIndex, topTile, bottomTile],
+  );
+
+  const doneTileIdsFor = useCallback(
+    (participantId: string): Set<string> =>
+      new Set(completions.filter((c) => c.kind === 'tile' && c.participant_id === participantId).map((c) => c.ref)),
+    [completions],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -104,9 +155,13 @@ export default function AdventureColumnModal({ forkIndex, roomNumber, topTile, b
 
       const result: Record<string, TileStatus> = {};
       for (const p of participants) {
-        const chosenLane = p.adventure_path[String(forkIndex)];
-        const tile = chosenLane === 'top' ? topTile : chosenLane === 'bottom' ? bottomTile : null;
-        if (!tile) continue; // hasn't reached/chosen this fork yet, or the host hasn't authored that slot
+        const tile = tileFor(p);
+        if (!tile) continue; // hasn't picked a lane for this fork yet, or the host hasn't authored that slot
+        const doneIds = doneTileIdsFor(p.id);
+        if (doneIds.has(tile.id)) continue; // done -- render uses tile_completions directly, no live stats needed
+        const frontier = resolveFrontier(tiles, p.adventure_path, doneIds);
+        if (frontier.kind !== 'tile' || frontier.tile.id !== tile.id) continue; // hasn't reached this column yet
+
         const raw: RawParticipantData = {
           bossKills: bossKillsByP.get(p.id) ?? [],
           slayerTasks: slayerByP.get(p.id) ?? [],
@@ -116,13 +171,15 @@ export default function AdventureColumnModal({ forkIndex, roomNumber, topTile, b
           petObtains: petsByP.get(p.id) ?? [],
         };
         const participantSnapshots = snapshotsByP.get(p.id) ?? [];
-        // The very first column of the very first fork is exempt from
-        // baseline gating (matches challengeProgress.ts's own
-        // done.size === 0 exemption) -- every other column, once a
-        // baseline is established, is checked since that baseline
-        // instead of since the challenge start.
-        const isVeryFirstColumn = (tile.layout as AdventureLayout).column === 0;
-        if (!isVeryFirstColumn && p.adventure_baseline_at) {
+        // Same first-tile-ever exemption as challengeProgress.ts's own
+        // done.size === 0 check -- a participant's very first tile is
+        // always challenge-wide, never baseline-scoped (there's nothing
+        // to have reset a baseline from yet).
+        if (doneIds.size === 0) {
+          const hiscoresRecap = computeHiscoresRecap(participantSnapshots, window);
+          const stats = computeParticipantStats(raw, window, hiscoresRecap, p.chosen_lowest_skill);
+          result[p.id] = checkTile(tile.condition, stats);
+        } else if (p.adventure_baseline_at) {
           const recap = p.adventure_baseline_snapshot
             ? computeHiscoresRecapFromBaseline(p.adventure_baseline_snapshot, participantSnapshots)
             : null;
@@ -133,12 +190,8 @@ export default function AdventureColumnModal({ forkIndex, roomNumber, topTile, b
             p.chosen_lowest_skill,
           );
           result[p.id] = checkTile(tile.condition, stats);
-        } else if (isVeryFirstColumn) {
-          const hiscoresRecap = computeHiscoresRecap(participantSnapshots, window);
-          const stats = computeParticipantStats(raw, window, hiscoresRecap, p.chosen_lowest_skill);
-          result[p.id] = checkTile(tile.condition, stats);
         }
-        // else: not the first column and no baseline yet -- awaiting a
+        // else: this IS their frontier, but no baseline yet -- awaiting a
         // qualifying logout, left out of `statuses` entirely so the
         // render below shows the dedicated "log out to start" state.
       }
@@ -151,29 +204,63 @@ export default function AdventureColumnModal({ forkIndex, roomNumber, topTile, b
     return () => {
       cancelled = true;
     };
-  }, [forkIndex, topTile, bottomTile, participants, challenge]);
+  }, [forkIndex, topTile, bottomTile, tiles, participants, challenge, completions, tileFor, doneTileIdsFor]);
 
-  function isVeryFirstColumn(tile: Tile): boolean {
-    return (tile.layout as AdventureLayout).column === 0;
+  // Three groups, each internally ordered: done (earliest completion
+  // first -- tile_completions is the source of truth, never a live
+  // recompute, which can go stale once a later baseline reset moves the
+  // stats window past an event that already counted), then this
+  // column's frontier for whoever's currently working on it (highest
+  // progress first), then "awaiting a logout" -- reached but blocked.
+  // Never reached at all renders separately, below all three.
+  // A participant "reaching" this column means their frontier has
+  // actually walked as far as this specific tile (or past it, i.e.
+  // done) -- NOT merely having picked a lane for this fork, which
+  // happens once for both of a fork's columns at once and says nothing
+  // about whether the first one is even finished yet (this is the exact
+  // gap that made "Log out to start" show for someone who hadn't
+  // actually reached this room).
+  interface RankedRow {
+    p: ParticipantLite;
+    tile: Tile;
+    completedAt: string | null;
+    awaitingBaselineReset: boolean;
   }
-
-  function tileFor(p: ParticipantLite): Tile | null {
-    const chosenLane = p.adventure_path[String(forkIndex)];
-    return chosenLane === 'top' ? topTile : chosenLane === 'bottom' ? bottomTile : null;
+  interface ReachRow {
+    p: ParticipantLite;
+    tile: Tile | null;
+    reached: boolean;
+    completedAt: string | null;
+    awaitingBaselineReset: boolean;
   }
-
-  const reached = participants.filter((p) => tileFor(p) != null);
-  const notReached = participants.filter((p) => tileFor(p) == null);
-  const ranked = [...reached].sort((a, b) => {
-    const tileA = tileFor(a);
-    const tileB = tileFor(b);
-    const statusA = statuses[a.id];
-    const statusB = statuses[b.id];
-    if (!statusA || !statusB || !tileA || !tileB) return 0;
-    return (
-      rankValue(statusB, progressPercent(tileB.condition, statusB)) - rankValue(statusA, progressPercent(tileA.condition, statusA))
-    );
+  const withReachStatus: ReachRow[] = participants.map((p) => {
+    const tile = tileFor(p);
+    if (!tile) return { p, tile: null, reached: false, completedAt: null, awaitingBaselineReset: false };
+    const doneIds = doneTileIdsFor(p.id);
+    if (doneIds.has(tile.id)) {
+      const completedAt = completions.find((c) => c.kind === 'tile' && c.ref === tile.id && c.participant_id === p.id)?.completed_at ?? null;
+      return { p, tile, reached: true, completedAt, awaitingBaselineReset: false };
+    }
+    const frontier = resolveFrontier(tiles, p.adventure_path, doneIds);
+    const isFrontierHere = frontier.kind === 'tile' && frontier.tile.id === tile.id;
+    if (!isFrontierHere) return { p, tile, reached: false, completedAt: null, awaitingBaselineReset: false };
+    const awaitingBaselineReset = doneIds.size > 0 && !p.adventure_baseline_at;
+    return { p, tile, reached: true, completedAt: null, awaitingBaselineReset };
   });
+
+  const notReached = withReachStatus.filter((r) => !r.reached).map((r) => r.p);
+  const rankedRows: RankedRow[] = withReachStatus
+    .filter((r) => r.reached && r.tile != null)
+    .map((r) => ({ p: r.p, tile: r.tile!, completedAt: r.completedAt, awaitingBaselineReset: r.awaitingBaselineReset }))
+    .sort((a, b) => {
+      if (a.completedAt != null && b.completedAt != null) return a.completedAt.localeCompare(b.completedAt);
+      if ((a.completedAt != null) !== (b.completedAt != null)) return a.completedAt != null ? -1 : 1;
+      if (a.awaitingBaselineReset !== b.awaitingBaselineReset) return a.awaitingBaselineReset ? 1 : -1;
+      const statusA = statuses[a.p.id];
+      const statusB = statuses[b.p.id];
+      if (!statusA || !statusB) return 0;
+      return rankValue(statusB, progressPercent(b.tile.condition, statusB)) - rankValue(statusA, progressPercent(a.tile.condition, statusA));
+    });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
@@ -190,19 +277,13 @@ export default function AdventureColumnModal({ forkIndex, roomNumber, topTile, b
           <p className="text-sm text-stone-500">Loading progress…</p>
         ) : (
           <ul className="space-y-3">
-            {ranked.map((p) => {
-              const tile = tileFor(p);
-              if (!tile) return null;
+            {rankedRows.map(({ p, tile, completedAt, awaitingBaselineReset }) => {
               const status = statuses[p.id];
               const chosenLane = p.adventure_path[String(forkIndex)];
-              // Missing from `statuses` means the fetch effect deliberately
-              // skipped this participant: not the very first column, and no
-              // adventure_baseline_at yet -- locked awaiting a logout.
-              const awaitingBaselineReset = !status && !isVeryFirstColumn(tile);
-              if (!status && !awaitingBaselineReset) return null;
-              const percent = status ? progressPercent(tile.condition, status) : null;
-              const isFirst = !!status?.done && tile.condition.type !== 'freeSpace' && firstCompleters[tile.id] === p.id;
-              const baseCaption = status ? formatTileProgress(tile.condition, status) ?? formatTileGoal(tile.condition) : '';
+              const done = completedAt != null;
+              const percent = done ? 100 : status ? progressPercent(tile.condition, status) : null;
+              const isFirst = done && tile.condition.type !== 'freeSpace' && firstCompleters[tile.id] === p.id;
+              const baseCaption = status ? formatTileProgress(tile.condition, status) ?? formatTileGoal(tile.condition) : formatTileGoal(tile.condition);
               const caption = awaitingBaselineReset
                 ? 'Log out to start'
                 : status?.resolvedSkill
@@ -223,7 +304,7 @@ export default function AdventureColumnModal({ forkIndex, roomNumber, topTile, b
                       {caption}
                       {isFirst ? (
                         <span className="text-amber-400">⭐</span>
-                      ) : status?.done ? (
+                      ) : done ? (
                         <span className="text-green-400">✓</span>
                       ) : null}
                     </span>
