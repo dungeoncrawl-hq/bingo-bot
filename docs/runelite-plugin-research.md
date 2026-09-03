@@ -8,8 +8,8 @@ one-line pointer.
 
 Today every event (kills, loot, deaths, XP, clog, pets, logout) reaches
 us through [Dink](https://github.com/pajlads/DinkPlugin), a third-party
-RuneLite plugin each host's players install and point at our
-per-challenge webhook URL. The concrete motivation for looking at a
+RuneLite plugin each player installs and points at their personal
+account webhook URL. The concrete motivation for looking at a
 first-party replacement: **Dink's "Send screenshot" option is a
 per-notifier setting on the player's own client, and we have no way to
 turn it off from our side.** Today's mitigation is entirely social — a

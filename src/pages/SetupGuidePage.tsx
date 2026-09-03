@@ -26,7 +26,6 @@ export default function SetupGuidePage() {
   const { slug } = useParams<{ slug: string }>();
   const { session } = useAuth();
   const [challenge, setChallenge] = useState<Challenge | null | 'not-found'>(null);
-  const [copied, setCopied] = useState(false);
   const [accountSecret, setAccountSecret] = useState<string | null>(null);
   const [accountCopied, setAccountCopied] = useState(false);
 
@@ -40,8 +39,8 @@ export default function SetupGuidePage() {
       .then(({ data }) => setChallenge((data as Challenge | null) ?? 'not-found'));
   }, [slug]);
 
-  // BACKLOG.md #13 -- signed-in visitors get their one-time-setup account
-  // URL surfaced right here, not just on /account, since this is the page
+  // BACKLOG.md #13 -- every player's Dink setup goes through one stable
+  // account-wide webhook URL, surfaced right here since this is the page
   // people actually land on to configure Dink.
   useEffect(() => {
     if (!session) {
@@ -61,7 +60,6 @@ export default function SetupGuidePage() {
     return <p className="mx-auto max-w-lg py-24 text-center text-stone-400">Challenge not found.</p>;
   }
 
-  const webhookUrl = `${window.location.origin}/api/dink/${challenge.dink_secret}`;
   const accountWebhookUrl = accountSecret ? `${window.location.origin}/api/dink/${accountSecret}` : null;
 
   return (
@@ -78,12 +76,12 @@ export default function SetupGuidePage() {
       </p>
 
       <div className="mt-6 rounded-lg border border-amber-800/60 bg-amber-950/10 p-4">
-        <h2 className="text-sm font-semibold text-amber-400">Set up Dink once, ever</h2>
+        <h2 className="text-sm font-semibold text-amber-400">Your webhook URL</h2>
         {accountWebhookUrl ? (
           <>
             <p className="mt-1 text-xs text-stone-400">
-              Use your personal account URL instead of this challenge's own link below -- it works for every
-              challenge you join, current and future, so you never paste in a new one again.
+              One URL, set up once -- it works for every challenge you join, current and future, so you never paste
+              in a new one again.
             </p>
             <div className="mt-2 flex gap-2">
               <input
@@ -104,9 +102,6 @@ export default function SetupGuidePage() {
                 {accountCopied ? 'Copied!' : 'Copy'}
               </button>
             </div>
-            <p className="mt-2 text-xs text-stone-500">
-              Use this in place of the URL in every step below -- everything else about setup is identical.
-            </p>
           </>
         ) : (
           <p className="mt-1 text-xs text-stone-400">
@@ -116,44 +111,18 @@ export default function SetupGuidePage() {
                 <Link to="/account" className="text-amber-400 underline hover:text-amber-300">
                   your Account page
                 </Link>{' '}
-                and use it in place of the one below -- set up once, works for every challenge you join from now on.
+                and use it in the steps below.
               </>
             ) : (
               <>
                 <Link to="/login" className="text-amber-400 underline hover:text-amber-300">
                   Sign in
                 </Link>{' '}
-                to grab a personal webhook URL that works for every challenge you join, current and future, instead
-                of pasting in a new one each time.
+                to grab your personal webhook URL -- it works for every challenge you join, current and future.
               </>
             )}
           </p>
         )}
-      </div>
-
-      <div className="mt-6">
-        <label className="block text-sm text-stone-400">
-          {accountWebhookUrl ? "This challenge's own webhook URL" : 'Your webhook URL'}
-        </label>
-        <div className="mt-1 flex gap-2">
-          <input
-            readOnly
-            value={webhookUrl}
-            onClick={(e) => e.currentTarget.select()}
-            className="flex-1 rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 font-mono text-xs text-stone-300"
-          />
-          <button
-            type="button"
-            onClick={async () => {
-              await navigator.clipboard.writeText(webhookUrl);
-              setCopied(true);
-              setTimeout(() => setCopied(false), 2000);
-            }}
-            className="shrink-0 rounded-lg border border-stone-700 px-4 py-2 text-sm text-stone-300"
-          >
-            {copied ? 'Copied!' : 'Copy'}
-          </button>
-        </div>
       </div>
 
       <div className="mt-8 space-y-5 rounded-lg border border-stone-800 bg-stone-900/50 p-4">
@@ -167,11 +136,6 @@ export default function SetupGuidePage() {
           <Box>Kill Count</Box>, <Box>Death</Box>, <Box>Collection Log</Box>, and <Box>Loot</Box> -- paste your
           webhook URL (above) into the box labeled <Box>Webhook URL</Box>. Don't check any boxes yet, just paste the
           link into all 6.
-          <p className="mt-2 rounded-lg border border-stone-800 bg-stone-950/60 p-2 text-xs text-stone-500">
-            Already tracking another Dungeon Crawl challenge? Each <Box>Webhook URL</Box> box accepts more than one
-            link -- go to the end of what's already there, press Enter, and paste this challenge's link on its own
-            new line underneath. Don't replace what's already pasted in.
-          </p>
         </Step>
 
         <Step n={3} title="Turn on 5 of those sections">
@@ -196,15 +160,13 @@ export default function SetupGuidePage() {
               unlock the next room, only a real logout does. Skip this step and you'll be stuck on the first room no
               matter how much progress you make.
             </p>
-            Same as step 2 -- if you're tracking multiple challenges, add each one's link on its own line here too.
           </Step>
         ) : (
           <Step n={5} title="Optional: instant sync when you log out">
             Find the <Box>Advanced</Box> section (near the bottom). Paste the same link into the box labeled{' '}
             <Box>Custom Metadata Handler</Box>. There's no checkbox to enable -- pasting the link there is enough. This
             makes your XP/skill/clue stats refresh the instant you log out, instead of waiting for the once-daily
-            automatic sync everyone gets regardless. Same as step 2 -- if you're tracking multiple challenges, add each
-            one's link on its own line here too.
+            automatic sync everyone gets regardless.
           </Step>
         )}
       </div>

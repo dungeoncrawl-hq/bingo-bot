@@ -22,9 +22,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const parsed = contentType.includes('multipart/form-data')
       ? await parseDinkPayload(contentType, await readRawBody(req))
       : { data: req.body, image: null };
-    // Resolves either a single challenge (today's per-challenge secret) or
-    // an account (BACKLOG.md #13's profile_secrets) and fans the event out
-    // accordingly -- see resolveAndProcessDinkWebhook's own comment.
+    // Resolves the account secret (BACKLOG.md #13's profile_secrets) and
+    // fans the event out to every challenge it currently matches -- see
+    // resolveAndProcessDinkWebhook's own comment.
     const { status, body } = await resolveAndProcessDinkWebhook(secret, parsed.data, parsed.image);
     res.status(status).json(body);
   } catch (err) {

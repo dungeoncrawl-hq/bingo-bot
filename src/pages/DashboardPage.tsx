@@ -5,7 +5,7 @@ import { getSupabase } from '../db/supabaseClient';
 import type { Challenge } from '../db/types';
 import { displayStatus, formatDateRange, countdownText, type DisplayStatus } from '../lib/dungeonStatus';
 
-type ChallengeRow = Pick<Challenge, 'id' | 'name' | 'slug' | 'status' | 'start_date' | 'end_date' | 'created_at' | 'dink_secret'> & {
+type ChallengeRow = Pick<Challenge, 'id' | 'name' | 'slug' | 'status' | 'start_date' | 'end_date' | 'created_at'> & {
   isHost: boolean;
 };
 
@@ -16,17 +16,7 @@ const STATUS_STYLE: Record<DisplayStatus, { label: string; className: string }> 
   past: { label: 'Past', className: 'border-stone-800 bg-stone-950 text-stone-600' },
 };
 
-function DungeonRow({
-  c,
-  today,
-  copied,
-  onCopyWebhook,
-}: {
-  c: ChallengeRow;
-  today: string;
-  copied: boolean;
-  onCopyWebhook: (c: ChallengeRow) => void;
-}) {
+function DungeonRow({ c, today }: { c: ChallengeRow; today: string }) {
   const navigate = useNavigate();
   const status = displayStatus(c, today);
   const style = STATUS_STYLE[status];
@@ -53,8 +43,8 @@ function DungeonRow({
           {formatDateRange(c.start_date, c.end_date)}
           {countdown && <span className="text-stone-600"> · {countdown}</span>}
         </p>
-        <div className="flex shrink-0 items-center gap-3 text-xs" onClick={(e) => e.stopPropagation()}>
-          {c.isHost && (
+        {c.isHost && (
+          <div className="flex shrink-0 items-center gap-3 text-xs" onClick={(e) => e.stopPropagation()}>
             <Link
               to={`/c/${c.slug}/edit`}
               className="text-stone-400 underline decoration-dotted hover:text-stone-200"
@@ -62,15 +52,8 @@ function DungeonRow({
             >
               Edit
             </Link>
-          )}
-          <button
-            type="button"
-            onClick={() => onCopyWebhook(c)}
-            className="text-stone-400 underline decoration-dotted hover:text-stone-200"
-          >
-            {copied ? 'Copied!' : 'Copy webhook'}
-          </button>
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -80,12 +63,11 @@ export default function DashboardPage() {
   const { session, loading } = useAuth();
   const [challenges, setChallenges] = useState<ChallengeRow[] | null>(null);
   const [loadError, setLoadError] = useState(false);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!session) return;
     const supabase = getSupabase();
-    const fields = 'id, name, slug, status, start_date, end_date, created_at, dink_secret';
+    const fields = 'id, name, slug, status, start_date, end_date, created_at';
     Promise.all([
       supabase.from('challenges').select(fields).eq('host_id', session.user.id),
       supabase.from('challenge_participants').select(`challenges(${fields})`).eq('profile_id', session.user.id),
@@ -120,21 +102,6 @@ export default function DashboardPage() {
   const current = (challenges ?? []).filter((c) => displayStatus(c, today) !== 'past');
   const past = (challenges ?? []).filter((c) => displayStatus(c, today) === 'past');
 
-  async function copyWebhook(c: ChallengeRow) {
-    const url = `${window.location.origin}/api/dink/${c.dink_secret}`;
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopiedId(c.id);
-      setTimeout(() => setCopiedId((id) => (id === c.id ? null : id)), 2000);
-    } catch (err) {
-      // Clipboard access can be denied by the browser (permissions policy,
-      // an unfocused document, etc.) -- fail visibly instead of the button
-      // silently doing nothing.
-      console.error('Failed to copy webhook URL', err);
-      window.alert(`Couldn't copy automatically. Here's the URL:\n\n${url}`);
-    }
-  }
-
   return (
     <div className="mx-auto max-w-3xl py-12">
       <div className="flex items-center justify-between">
@@ -144,18 +111,18 @@ export default function DashboardPage() {
         </Link>
       </div>
       <p className="mt-2 text-xs text-stone-500">
-        Tip: each dungeon below has its own webhook link, but{' '}
+        Tip: grab your one-time Dink webhook URL from{' '}
         <Link to="/account" className="text-stone-400 underline hover:text-stone-200">
-          your account has one stable URL
+          your Account page
         </Link>{' '}
-        that works for all of them, current and future -- set up Dink once and forget it.
+        -- it works for every dungeon you join, current and future.
       </p>
       <div className="mt-6 space-y-2">
         {loadError && <p className="text-sm text-red-400">Couldn't load your dungeons. Try refreshing the page.</p>}
         {!loadError && challenges === null && <p className="text-stone-500">Loading…</p>}
         {!loadError && challenges?.length === 0 && <p className="text-stone-500">No dungeons yet.</p>}
         {current.map((c) => (
-          <DungeonRow key={c.id} c={c} today={today} copied={copiedId === c.id} onCopyWebhook={copyWebhook} />
+          <DungeonRow key={c.id} c={c} today={today} />
         ))}
       </div>
 
@@ -164,7 +131,7 @@ export default function DashboardPage() {
           <h2 className="text-sm font-semibold uppercase text-stone-500">Past</h2>
           <div className="mt-3 space-y-2">
             {past.map((c) => (
-              <DungeonRow key={c.id} c={c} today={today} copied={copiedId === c.id} onCopyWebhook={copyWebhook} />
+              <DungeonRow key={c.id} c={c} today={today} />
             ))}
           </div>
         </div>

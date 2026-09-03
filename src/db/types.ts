@@ -28,7 +28,6 @@ export interface Challenge {
   start_date: string;
   end_date: string;
   status: 'draft' | 'active' | 'ended';
-  dink_secret: string;
   discord_webhook_url: string | null;
   created_at: string;
 }

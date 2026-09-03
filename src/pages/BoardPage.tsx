@@ -17,7 +17,6 @@ import { computeHiscoresRecap, computeHiscoresRecapFromBaseline, type SnapshotRo
 import { computeLeaderboard } from '../lib/leaderboard';
 import { computeFirstCompleters } from '../lib/firstCompletions';
 import { progressColor } from '../lib/progressColor';
-import { displayStatus } from '../lib/dungeonStatus';
 import TileDetailModal from '../components/TileDetailModal';
 import AdventureColumnModal from '../components/AdventureColumnModal';
 import AdventureConnector from '../components/AdventureConnector';
@@ -385,8 +384,6 @@ export default function BoardPage() {
     challenge.game_mode === 'team' ? [...representativeIdByTeam.values()] : participants.map((p) => p.id);
   const leaderboard = computeLeaderboard(tiles, completions, leaderboardParticipantIds, firstCompleters);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const isPast = displayStatus(challenge, today) === 'past';
   const tilesInPlay = challenge.board_type === 'adventure' ? ADVENTURE_SMALL_TILES_IN_PLAY : tiles.length;
   const teamGateBlocksJoining = challenge.game_mode === 'team' && teams.length === 0;
 
@@ -397,14 +394,6 @@ export default function BoardPage() {
         {challenge.start_date} – {challenge.end_date}
       </p>
       {viewedParticipant && <p className="mt-2 text-sm font-medium text-stone-400">{viewedParticipant.rsn}'s board</p>}
-      {isPast && myParticipant && (
-        <p className="mt-3 rounded-lg border border-stone-700 bg-stone-900/60 px-3 py-2 text-sm text-stone-400">
-          This challenge has ended -- no more progress counts toward it. If you set this up with this challenge's own
-          webhook URL, you can turn it off in Dink's settings now. Using your personal account URL instead? Nothing
-          to clean up -- it already stopped mattering for this challenge on its own, and still works for whatever
-          you join next.
-        </p>
-      )}
 
       <div className="mt-8 flex flex-col gap-8 lg:flex-row lg:items-start">
         {/* Board -- above the leaderboard on mobile, left column (~80%) on desktop. */}

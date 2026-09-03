@@ -33,9 +33,8 @@ function devApi(): Plugin {
         try {
           const contentType = req.headers['content-type'] ?? ''
           const parsed = await parseDinkPayload(contentType, await readRawBody(req))
-          // Resolves either a single challenge (today's per-challenge
-          // secret) or an account (BACKLOG.md #13's profile_secrets) and
-          // fans the event out accordingly.
+          // Resolves the account secret (BACKLOG.md #13's profile_secrets)
+          // and fans the event out to every challenge it currently matches.
           const { status, body } = await resolveAndProcessDinkWebhook(secret, parsed.data, parsed.image)
           res.statusCode = status
           res.setHeader('Content-Type', 'application/json')

@@ -23,14 +23,16 @@ create policy "own row write" on profiles for all
   to authenticated using (id = auth.uid()) with check (id = auth.uid());
 
 -- A challenge/board a host runs. slug is the public URL segment
--- (dungeoncrawl.lol/c/<slug>). dink_secret is the per-challenge Dink
--- webhook token (Milestone 2) -- unlike rs's one-shared-URL-for-everyone
--- pattern, every challenge gets its own webhook URL so events route to the
--- right challenge without needing player-level auth on the webhook path.
--- board_type is deliberately an unconstrained text, not a CHECK enum --
--- v1 only ever sets 'grid5x5', but future irregular formats (e.g. a
--- dungeon hallway with rooms above/below) just need a new string and new
--- app code to interpret it, not a migration.
+-- (dungeoncrawl.lol/c/<slug>). board_type is deliberately an
+-- unconstrained text, not a CHECK enum -- v1 only ever sets 'grid5x5',
+-- but future irregular formats (e.g. a dungeon hallway with rooms
+-- above/below) just need a new string and new app code to interpret it,
+-- not a migration.
+--
+-- Dink webhook auth is per-account (profile_secrets, BACKLOG.md #13),
+-- not per-challenge -- this table originally also carried its own
+-- dink_secret column (Milestone 2), removed once the account-wide
+-- secret became the only supported mechanism.
 create table if not exists challenges (
   id uuid primary key default gen_random_uuid(),
   host_id uuid not null references profiles(id) on delete cascade,
@@ -40,7 +42,6 @@ create table if not exists challenges (
   start_date date not null,
   end_date date not null,
   status text not null default 'draft' check (status in ('draft', 'active', 'ended')),
-  dink_secret text not null unique default encode(gen_random_bytes(16), 'hex'),
   discord_webhook_url text,
   created_at timestamptz not null default now()
 );
@@ -172,7 +173,8 @@ on conflict (id) do nothing;
 -- every table above, none of these get a client write policy -- not even
 -- for the authenticated host. The only writer is the Dink webhook route,
 -- which uses the Supabase service role key (bypasses RLS entirely) after
--- independently validating the per-challenge dink_secret. Public read only.
+-- independently validating the per-account dink_secret (profile_secrets).
+-- Public read only.
 
 create table if not exists boss_kills (
   id uuid primary key default gen_random_uuid(),
@@ -650,3 +652,13 @@ $$ language plpgsql security definer set search_path = public;
 insert into profile_secrets (profile_id)
 select id from profiles
 on conflict (profile_id) do nothing;
+
+-- BACKLOG.md #13, 2026-09-03 -- per-challenge Dink URLs removed entirely
+-- now that the account-wide URL above is the only supported mechanism.
+-- Safe to leave in permanently (drop column if exists is a no-op once
+-- run). IMPORTANT: run this only after the code deploy that stops
+-- reading challenges.dink_secret is live -- running it earlier makes
+-- every webhook (per-challenge and per-account both) 500 instead of
+-- cleanly 404ing/succeeding, for as long as the old build is still
+-- serving requests.
+alter table challenges drop column if exists dink_secret;

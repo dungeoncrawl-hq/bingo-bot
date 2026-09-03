@@ -1,11 +1,10 @@
-// Per-challenge Dink webhook processing -- multi-tenant equivalent of
+// Per-account Dink webhook processing -- multi-tenant equivalent of
 // rs/src/server/dinkWebhook.ts. processDinkWebhook itself is scoped to
 // one already-resolved challenge and the participant the event's
 // playerName matches within it; resolveAndProcessDinkWebhook (bottom of
-// this file) is the entry point that actually resolves a secret -- either
-// a single challenge (today's per-challenge dink_secret) or an account
-// (BACKLOG.md #13's profile_secrets, fanning one event out to every
-// challenge that profile currently participates in).
+// this file) is the entry point that resolves a secret against
+// profile_secrets (BACKLOG.md #13) and fans one event out to every
+// challenge that profile currently participates in.
 import { selectRows, upsertRow, insertRowUnlessRecentDuplicate, callRpc, callRpcReturning } from './supabaseAdmin.js';
 import { checkChallengeProgress } from './challengeProgress.js';
 import { syncOneParticipant } from './participantSync.js';
@@ -332,24 +331,16 @@ function extractPlayerName(payload: unknown): string | undefined {
 }
 
 // The one entry point both api/dink/[secret].ts and vite.config.ts's dev
-// mirror call -- resolves a secret against either table so the lookup/
-// fan-out logic lives in exactly one place instead of being duplicated
-// across those two files (as the simpler single-lookup version already
-// was, before this).
+// mirror call -- lives here (rather than inlined in both) so the lookup/
+// fan-out logic exists in exactly one place.
 export async function resolveAndProcessDinkWebhook(
   secret: string,
   payload: unknown,
   image: DinkImage | null,
 ): Promise<WebhookResult> {
-  const [challenge] = await selectRows<Challenge>('challenges', `dink_secret=eq.${encodeURIComponent(secret)}&select=*`);
-  if (challenge) {
-    if (challenge.status === 'ended') return { status: 200, body: { ok: true, note: 'challenge has ended' } };
-    return processDinkWebhook(challenge, payload, image);
-  }
-
   // BACKLOG.md #13 -- an account-scoped secret fans this one event out to
   // every challenge this profile currently participates in under a
-  // matching RSN, instead of needing a URL per challenge.
+  // matching RSN.
   const [secretRow] = await selectRows<{ profile_id: string }>(
     'profile_secrets',
     `dink_secret=eq.${encodeURIComponent(secret)}&select=profile_id`,
@@ -366,9 +357,9 @@ export async function resolveAndProcessDinkWebhook(
   );
   const matchingIds = memberships.filter((m) => m.rsn.trim().toLowerCase() === name).map((m) => m.challenge_id);
   if (matchingIds.length === 0) {
-    // The normal steady state for an account-wide URL (nothing currently
-    // needs this event) -- not an error, unlike a per-challenge URL
-    // getting an unrecognized playerName, which usually means a typo.
+    // Normal steady state (nothing currently needs this event), not an
+    // error -- e.g. between challenges, or events for a different RSN
+    // than the ones this profile has joined with.
     return { status: 200, body: { ok: true, note: 'not currently participating in any challenge as this RSN' } };
   }
 

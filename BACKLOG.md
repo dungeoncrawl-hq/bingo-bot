@@ -300,50 +300,17 @@ instead of renumbering the existing list.
 
 ## Webhook setup UX
 13. **One stable per-account Dink URL instead of one per challenge.**
-    Today, every challenge gets its own `dink_secret`/webhook URL
-    (`challenges.dink_secret`), so a player joining N challenges pastes
-    N different URLs across Dink's 6-7 fields (per `SetupGuidePage.tsx`),
-    and re-does that whole process every time they join something new.
-    A dead URL from an ended challenge isn't actually harmful --
-    `api/dink/[secret].ts` already no-ops on `status === 'ended'`
-    (`{ok: true, note: 'challenge has ended'}`) -- so this is really
-    about ongoing setup friction, not cleanup. A reminder to manually
-    prune old URLs would help tidiness but wouldn't touch that.
-
-    **Resolved direction**: a second, additive secret type -- new
-    `profiles.dink_secret` (generated once at account creation, same
-    `encode(gen_random_bytes(16), 'hex')` pattern as
-    `challenges.dink_secret` today), surfaced on `/account`. The
-    webhook route resolves it against `profiles` when it doesn't match
-    any `challenges` row (both keep working forever, no breaking
-    migration -- a host's already-configured per-challenge URLs for
-    existing players don't need to change). Once resolved to a
-    profile instead of a single challenge, `matchParticipant` changes
-    from "the one participant row in *this* challenge matching
-    playerName" to "every `challenge_participants` row across *any*
-    challenge for this profile_id where rsn matches playerName" --
-    `processDinkWebhook` then loops the same per-(challenge,
-    participant) processing it already does today once per match,
-    instead of assuming exactly one.
-
-    **The one real behavior change**: a per-challenge URL getting an
-    unrecognized playerName is genuinely surprising (400, likely a
-    typo'd RSN) -- a per-account URL matching *zero* challenges is the
-    normal, expected steady state (nothing currently needs this event),
-    so that path needs to return 200, not reuse today's 400 "Unrecognized
-    playerName" response.
-
-    **What this actually buys**, beyond no dead URLs: a player sets up
-    Dink *once*, ever, the first time they make a Dungeon Crawl account
-    -- joining a new challenge later needs zero Dink reconfiguration on
-    their end, and a host no longer needs to hand out (or players
-    re-paste) a challenge-specific URL at all. Bigger win than the
-    cleanup-reminders framing this started from.
-
-    **Not yet resolved**: whether `/account`'s webhook URL should be
-    the *only* thing `SetupGuidePage.tsx` shows going forward, or
-    whether per-challenge URLs stay as a documented alternative (e.g.
-    for a player who wants one OSRS account's events routed to a
-    specific subset of challenges only, which a single account-wide
-    URL can't express -- it always fans out to everything that
-    account is currently participating in).
+    **Shipped 2026-09-03.** Originally landed as a second, additive
+    secret type (`profile_secrets.dink_secret`) alongside the original
+    per-challenge `challenges.dink_secret`, so both kept working side
+    by side. The "not yet resolved" question from that first pass --
+    whether per-challenge URLs should stick around as a documented
+    alternative -- was answered the same day: no. The per-challenge
+    mechanism was removed entirely (`challenges.dink_secret` dropped,
+    `resolveAndProcessDinkWebhook` now only resolves account secrets,
+    `SetupGuidePage.tsx`/`DashboardPage.tsx`/`BoardPage.tsx` no longer
+    mention it anywhere). One account-wide URL, set up once, is now the
+    only way to configure Dink. Accepted, known cost of that cutover:
+    any player already using a challenge's own URL (from before this
+    feature existed) had to switch to their account URL manually --
+    there was no dual-running transition window.
