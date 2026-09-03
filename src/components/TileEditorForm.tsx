@@ -5,6 +5,60 @@ import type { Tile } from '../db/types';
 import { SKILL_ORDER, defaultIconFor, defaultLabelFor } from '../lib/tileIcons';
 import { PRESET_ITEM_SETS, type PresetItemSet } from '../lib/itemSets';
 import { BOSS_ACTIVITIES } from '../lib/bossActivities';
+import { decomposeMoneyXp, recomposeMoneyXp, type MoneyXpUnit } from '../lib/format';
+
+// BACKLOG.md #3 -- these 5 condition types share the generic `threshold`
+// field below, but it's a GP/XP amount for exactly these, not a plain
+// count/level -- they get the K/M control instead of a bare number input.
+// bigDropsCount's own dropValueThreshold field (rendered separately) gets
+// the same control; its `threshold` (how many such drops) does not, since
+// that one's a small count, not an amount.
+const MONEY_XP_THRESHOLD_TYPES: ReadonlySet<TileCondition['type']> = new Set([
+  'xpGained',
+  'skillXpGained',
+  'xpGainedLowestSkill',
+  'lootValueGained',
+  'singleDropValue',
+]);
+
+// A value + K/M unit pair that recomposes to the actual stored number --
+// used for both the generic threshold field (for the 5 types above) and
+// bigDropsCount's separate dropValueThreshold field. Derives its displayed
+// value/unit fresh from `value` on every render rather than keeping its
+// own state, so it never needs to be kept in sync across a condition-type
+// switch -- there's only ever one source of truth (the number itself).
+function MoneyXpThresholdInput({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+  disabled: boolean;
+}) {
+  const decomposed = decomposeMoneyXp(value);
+  return (
+    <div className="mt-1 flex gap-2">
+      <input
+        type="number"
+        min={1}
+        value={decomposed.value}
+        onChange={(e) => onChange(recomposeMoneyXp(Number(e.target.value), decomposed.unit))}
+        disabled={disabled}
+        className="w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+      />
+      <select
+        value={decomposed.unit}
+        onChange={(e) => onChange(recomposeMoneyXp(decomposed.value, e.target.value as MoneyXpUnit))}
+        disabled={disabled}
+        className="w-20 shrink-0 rounded-lg border border-stone-700 bg-stone-900 px-2 py-2 text-sm focus:border-amber-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <option value="K">K</option>
+        <option value="M">M</option>
+      </select>
+    </div>
+  );
+}
 
 // A host can't set a "big drop" threshold below this -- otherwise most
 // drops would clear it and defeat loot_drops bucketing (see
@@ -291,14 +345,7 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
         {type === 'bigDropsCount' && (
           <div>
             <label className="block text-sm text-stone-400">Drop value (minimum 100,000)</label>
-            <input
-              type="number"
-              min={MIN_DROP_VALUE_THRESHOLD}
-              value={dropValueThreshold}
-              onChange={(e) => setDropValueThreshold(Number(e.target.value))}
-              disabled={fieldsLocked}
-              className={inputClass}
-            />
+            <MoneyXpThresholdInput value={dropValueThreshold} onChange={setDropValueThreshold} disabled={fieldsLocked} />
           </div>
         )}
         {(type === 'itemCount' || type === 'itemSetCollected') && (
@@ -326,14 +373,18 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
             <label className="block text-sm text-stone-400">
               {type === 'maxDeaths' ? 'Max deaths allowed' : type === 'bigDropsCount' ? 'How many such drops' : 'Goal'}
             </label>
-            <input
-              type="number"
-              min={0}
-              value={threshold}
-              onChange={(e) => setThreshold(Number(e.target.value))}
-              disabled={fieldsLocked}
-              className={inputClass}
-            />
+            {MONEY_XP_THRESHOLD_TYPES.has(type) ? (
+              <MoneyXpThresholdInput value={threshold} onChange={setThreshold} disabled={fieldsLocked} />
+            ) : (
+              <input
+                type="number"
+                min={0}
+                value={threshold}
+                onChange={(e) => setThreshold(Number(e.target.value))}
+                disabled={fieldsLocked}
+                className={inputClass}
+              />
+            )}
             {type !== 'maxDeaths' && type !== 'bigDropsCount' && (
               <p className="mt-1 text-xs text-stone-500">The amount a player needs to reach to complete this tile.</p>
             )}

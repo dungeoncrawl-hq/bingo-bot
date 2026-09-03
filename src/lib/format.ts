@@ -25,6 +25,25 @@ export function formatCompactNumber(n: number, options: { roundDown?: boolean } 
   return `${sign}${trimmed}M`;
 }
 
+// BACKLOG.md #3 -- inverse of formatCompactNumber's display rounding: an
+// exact (value, unit) pair for an editable K/M threshold control
+// (TileEditorForm.tsx), not just a rounded-for-display string. Exact when
+// the number is a clean multiple of 1,000,000 (M) or 1,000 (K); a value
+// saved before this control existed, or hand-edited to an odd number,
+// falls back to K with the value rounded -- a best-effort display only,
+// re-quantized to a clean multiple the moment the host re-saves it via
+// recomposeMoneyXp below.
+export type MoneyXpUnit = 'K' | 'M';
+
+export function decomposeMoneyXp(n: number): { value: number; unit: MoneyXpUnit } {
+  if (n !== 0 && n % 1_000_000 === 0) return { value: n / 1_000_000, unit: 'M' };
+  return { value: Math.max(1, Math.round(n / 1_000)), unit: 'K' };
+}
+
+export function recomposeMoneyXp(value: number, unit: MoneyXpUnit): number {
+  return Math.max(0, Math.round(value)) * (unit === 'M' ? 1_000_000 : 1_000);
+}
+
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
