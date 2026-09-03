@@ -17,7 +17,7 @@ import { computeHiscoresRecap, computeHiscoresRecapFromBaseline, type SnapshotRo
 import { computeLeaderboard } from '../lib/leaderboard';
 import { computeFirstCompleters } from '../lib/firstCompletions';
 import { progressColor } from '../lib/progressColor';
-import { formatDateRange, formatLocalRange, preciseCountdownText } from '../lib/dungeonStatus';
+import { formatLocalRange, preciseCountdownText } from '../lib/dungeonStatus';
 import TileDetailModal from '../components/TileDetailModal';
 import AdventureColumnModal from '../components/AdventureColumnModal';
 import AdventureConnector from '../components/AdventureConnector';
@@ -396,8 +396,7 @@ export default function BoardPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-12">
       <h1 className="text-2xl font-semibold">{challenge.name}</h1>
-      <p className="text-sm text-stone-500">{formatDateRange(challenge.start_date, challenge.end_date)}</p>
-      <p className="text-xs text-stone-600">Your time: {formatLocalRange(challenge.start_date, challenge.end_date, VIEWER_TIMEZONE)}</p>
+      <p className="text-sm text-stone-500">{formatLocalRange(challenge.start_date, challenge.end_date, VIEWER_TIMEZONE)}</p>
       {countdown && <p className="mt-1 text-xs font-medium text-amber-500">{countdown}</p>}
       {viewedParticipant && <p className="mt-2 text-sm font-medium text-stone-400">{viewedParticipant.rsn}'s board</p>}
 
