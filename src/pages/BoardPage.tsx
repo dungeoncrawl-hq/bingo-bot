@@ -16,7 +16,7 @@ import {
 import { computeParticipantStats, type RawParticipantData } from '../lib/participantStats';
 import { computeHiscoresRecap, type SnapshotRow } from '../lib/hiscoresRecap';
 import { computeLeaderboard } from '../lib/leaderboard';
-import { computeFirstCompleters } from '../lib/firstCompletions';
+import { computeAdventureFirstCompleters, computeFirstCompleters } from '../lib/firstCompletions';
 import { progressColor } from '../lib/progressColor';
 import { formatLocalRange, preciseCountdownText } from '../lib/dungeonStatus';
 import { formatRelativeTime } from '../lib/format';
@@ -459,7 +459,15 @@ export default function BoardPage() {
   const myTileStatuses = myParticipant ? tileStatusesByParticipant[myParticipant.id] : undefined;
   const pendingSkillChoice = myTileStatuses ? Object.values(myTileStatuses).find((s) => s.needsSkillChoice) : undefined;
 
-  const firstCompleters = computeFirstCompleters(completions);
+  // Adventure boards score "first" per room (every tile sharing a
+  // column, i.e. both lanes of a fork), not per individual tile --
+  // otherwise two participants who picked opposite lanes through the
+  // same room could both show as "first" for it. Standard boards have
+  // no room/lane concept at all, so they keep the plain per-tile rule.
+  const firstCompleters =
+    challenge.board_type === 'adventure'
+      ? computeAdventureFirstCompleters(completions, tiles.map((t) => ({ id: t.id, layout: t.layout as AdventureLayout })))
+      : computeFirstCompleters(completions);
 
   // Team: one representative id per team (lexicographically smallest,
   // matching computeLeaderboard's own tie-break convention), relabeled

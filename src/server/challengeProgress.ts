@@ -17,10 +17,10 @@ import type { ParticipantStats } from '../lib/tileConditions.js';
 import { computeHiscoresRecap } from '../lib/hiscoresRecap.js';
 import type { SnapshotRow } from '../lib/hiscoresRecap.js';
 import { computeLeaderboard } from '../lib/leaderboard.js';
-import { computeFirstCompleters } from '../lib/firstCompletions.js';
+import { computeAdventureFirstCompleters, computeFirstCompleters } from '../lib/firstCompletions.js';
 import { resolveFrontier, resolveAdventureTileWindow } from '../lib/adventureProgress.js';
 import type { AdventurePath } from '../lib/adventureProgress.js';
-import type { Challenge, GridLayout, Team, Tile } from '../db/types.js';
+import type { AdventureLayout, Challenge, GridLayout, Team, Tile } from '../db/types.js';
 
 interface ParticipantRow {
   id: string;
@@ -369,7 +369,12 @@ export async function checkChallengeProgress(participantId: string, isLogout: bo
       ? selectRows<Team>('teams', `challenge_id=eq.${encodeURIComponent(challenge.id)}&select=*`)
       : Promise.resolve([] as Team[]),
   ]);
-  const firstCompleters = computeFirstCompleters(challengeCompletions);
+  // Same room-scoped "first" rule as BoardPage.tsx's own computation --
+  // see computeAdventureFirstCompleters's comment.
+  const firstCompleters =
+    challenge.board_type === 'adventure'
+      ? computeAdventureFirstCompleters(challengeCompletions, tiles.map((t) => ({ id: t.id, layout: t.layout as AdventureLayout })))
+      : computeFirstCompleters(challengeCompletions);
   const participantLite: ParticipantLite = { id: participant.id, rsn: participant.rsn };
   const challengeLite = { name: challenge.name, slug: challenge.slug, board_type: challenge.board_type };
   const teamNameById = new Map(allTeams.map((t) => [t.id, t.name]));
