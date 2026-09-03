@@ -76,12 +76,16 @@ describe('formatLocalRange', () => {
     // 2026-09-03T00:00:00Z is 2026-09-02, 8:00 PM in America/New_York
     // (EDT, UTC-4 in September) -- the exact WheresMyGear scenario this
     // was built for (BACKLOG.md #14).
-    // Node's ICU renders a narrow no-break space (U+202F) before AM/PM.
-    expect(formatLocalRange('2026-09-03', '2026-09-12', 'America/New_York')).toBe('Sep 2, 8:00 PM – Sep 12, 7:59 PM');
+    // formatLocalRange normalizes Intl's AM/PM space itself -- some ICU
+    // versions render a narrow no-break space (U+202F) there and others
+    // a plain one (observed to differ between this repo's local dev
+    // Node and its CI runner), so this is safe to assert as a plain
+    // space regardless of which ICU actually ran it.
+    expect(formatLocalRange('2026-09-03', '2026-09-12', 'America/New_York')).toBe('Sep 2, 8:00 PM – Sep 12, 7:59 PM');
   });
 
   it('matches formatDateRange\'s day boundaries when the timezone is UTC itself', () => {
-    expect(formatLocalRange('2026-09-03', '2026-09-12', 'UTC')).toBe('Sep 3, 12:00 AM – Sep 12, 11:59 PM');
+    expect(formatLocalRange('2026-09-03', '2026-09-12', 'UTC')).toBe('Sep 3, 12:00 AM – Sep 12, 11:59 PM');
   });
 });
 

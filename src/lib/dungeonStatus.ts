@@ -75,7 +75,14 @@ export function formatLocalRange(start: string, end: string, timeZone: string): 
     new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone }).format(
       new Date(iso),
     );
-  return `${fmt(`${start}T00:00:00.000Z`)} – ${fmt(`${end}T23:59:59.999Z`)}`;
+  // Intl.DateTimeFormat puts a narrow no-break space (U+202F) before
+  // AM/PM on some ICU versions and a plain space on others -- observed
+  // to differ between this repo's local dev Node and its CI runner
+  // (both "current" versions, no upgrade in between), so this can't be
+  // pinned to a Node version. Normalized to a plain space so the output
+  // -- and any test asserting against it -- doesn't depend on which
+  // ICU happens to be running it.
+  return `${fmt(`${start}T00:00:00.000Z`)} – ${fmt(`${end}T23:59:59.999Z`)}`.replace(new RegExp("\u202f", "g"), " ");
 }
 
 // Days when there's at least one full day left, otherwise hours (down to
