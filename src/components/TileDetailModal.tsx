@@ -11,7 +11,7 @@ import {
   type TileStatus,
 } from '../lib/tileConditions';
 import { computeParticipantStats, poolStats, type RawParticipantData } from '../lib/participantStats';
-import { computeHiscoresRecap, type SnapshotRow } from '../lib/hiscoresRecap';
+import { computeHiscoresRecap, computeHiscoresRecapFromBaseline, type SnapshotRow } from '../lib/hiscoresRecap';
 import { progressColor } from '../lib/progressColor';
 
 interface ParticipantLite {
@@ -20,6 +20,14 @@ interface ParticipantLite {
   chosen_lowest_skill: string | null;
   // Only meaningful for gameMode='team' -- null/absent otherwise.
   team_id?: string | null;
+  // Adventure logout-gated reset (BACKLOG.md #4) -- only meaningful when
+  // challenge.board_type === 'adventure' (this modal's boss-tile usage).
+  // null means either this is the participant's very first tile ever
+  // (challenge-wide stats still apply, no baseline needed yet) or their
+  // next tile is locked, awaiting a qualifying Dink LOGOUT event --
+  // doneTileIdsFor distinguishes the two, same as AdventureColumnModal.
+  adventure_baseline_at: string | null;
+  adventure_baseline_snapshot: SnapshotRow | null;
 }
 
 interface TeamLite {
@@ -87,6 +95,12 @@ interface Row {
   // regardless of what the live stats sweep says.
   completedAt: string | null;
   isFirst: boolean;
+  // Adventure only (BACKLOG.md #4): this participant has completed at
+  // least one earlier tile but hasn't logged out since, so no baseline
+  // exists yet to measure progress from -- `status` above is meaningless
+  // (computed against a zeroed-out/empty stats object) and must not be
+  // shown as if it were real.
+  awaitingBaselineReset: boolean;
 }
 
 export default function TileDetailModal({
@@ -119,6 +133,14 @@ export default function TileDetailModal({
       const rows = completions.filter((c) => c.kind === 'tile' && c.ref === tile.id && memberIds.includes(c.participant_id));
       if (rows.length === 0) return null;
       return rows.reduce((min, r) => (r.completed_at < min ? r.completed_at : min), rows[0].completed_at);
+    }
+
+    // Every tile this participant has completed so far, across the whole
+    // challenge -- not just this one -- used only to tell "very first
+    // tile ever" (challenge-wide stats, no baseline exists yet) apart
+    // from "has completed something, needs a baseline" below.
+    function doneTileIdsFor(participantId: string): Set<string> {
+      return new Set(completions.filter((c) => c.kind === 'tile' && c.participant_id === participantId).map((c) => c.ref));
     }
 
     (async () => {
@@ -156,7 +178,21 @@ export default function TileDetailModal({
       // Every participant's own raw ParticipantStats, computed exactly as
       // today -- pooling (Coop/Team) happens afterward, on these results,
       // never on the raw event rows themselves.
+      //
+      // Adventure boss tiles (BACKLOG.md #4): once a participant has
+      // completed at least one earlier tile, their progress toward
+      // whatever's next -- including a boss room -- counts only since
+      // their last logout-established baseline, not since the challenge
+      // started, same as BoardPage.tsx's own main-grid frontier override
+      // and AdventureColumnModal's room tiles. Without this, a boss
+      // tile's XP/KC/etc. kept including everything gained since day
+      // one, even after the participant had already reset their
+      // baseline for it -- exactly the display bug reported live.
+      // Standard boards (challenge.board_type !== 'adventure') have no
+      // baseline concept at all and always use the challenge-wide window
+      // below, unchanged.
       const statsById: Record<string, ParticipantStats> = {};
+      const awaitingBaselineResetById: Record<string, boolean> = {};
       for (const id of ids) {
         const raw: RawParticipantData = {
           bossKills: bossKillsByP.get(id) ?? [],
@@ -166,16 +202,45 @@ export default function TileDetailModal({
           collectionLogEntries: clogByP.get(id) ?? [],
           petObtains: petsByP.get(id) ?? [],
         };
-        const hiscoresRecap = computeHiscoresRecap(snapshotsByP.get(id) ?? [], window);
         const chosenLowestSkill = participants.find((p) => p.id === id)?.chosen_lowest_skill ?? null;
-        statsById[id] = computeParticipantStats(raw, window, hiscoresRecap, chosenLowestSkill);
+        const participant = participants.find((p) => p.id === id);
+        const participantSnapshots = snapshotsByP.get(id) ?? [];
+
+        if (challenge.board_type === 'adventure' && doneTileIdsFor(id).size > 0) {
+          if (participant?.adventure_baseline_at) {
+            const recap = participant.adventure_baseline_snapshot
+              ? computeHiscoresRecapFromBaseline(participant.adventure_baseline_snapshot, participantSnapshots)
+              : null;
+            statsById[id] = computeParticipantStats(raw, { start: participant.adventure_baseline_at, end: window.end }, recap, chosenLowestSkill);
+          } else {
+            // No baseline yet -- there is no valid window to measure
+            // from at all (not even the challenge-wide one, which would
+            // just reproduce the same stale-progress bug this exists to
+            // fix). Zeroed-out raw data guarantees no progress shows
+            // regardless of window; the render below replaces the
+            // caption with "Log out to start" and skips the bar entirely.
+            awaitingBaselineResetById[id] = true;
+            const empty: RawParticipantData = {
+              bossKills: [],
+              slayerTasks: [],
+              lootDrops: [],
+              deaths: [],
+              collectionLogEntries: [],
+              petObtains: [],
+            };
+            statsById[id] = computeParticipantStats(empty, window, null, chosenLowestSkill);
+          }
+        } else {
+          const hiscoresRecap = computeHiscoresRecap(participantSnapshots, window);
+          statsById[id] = computeParticipantStats(raw, window, hiscoresRecap, chosenLowestSkill);
+        }
       }
 
       let result: Row[];
       if (gameMode === 'coop') {
         const status = checkTile(tile.condition, poolStats(Object.values(statsById)));
         const completedAt = completedAtFor(ids);
-        result = [{ key: 'pooled', label: 'Everyone', status, completedAt, isFirst: false }];
+        result = [{ key: 'pooled', label: 'Everyone', status, completedAt, isFirst: false, awaitingBaselineReset: false }];
       } else if (gameMode === 'team') {
         result = teams
           .map((t) => {
@@ -185,12 +250,13 @@ export default function TileDetailModal({
             const completedAt = completedAtFor(memberIds);
             const winnerId = firstCompleters[tile.id];
             const isFirst = completedAt != null && tile.condition.type !== 'freeSpace' && memberIds.includes(winnerId);
-            return { key: t.id, label: t.name, status, completedAt, isFirst };
+            return { key: t.id, label: t.name, status, completedAt, isFirst, awaitingBaselineReset: false };
           })
           .filter((r): r is Row => r != null);
       } else {
         result = participants.map((p) => ({
           key: p.id,
+          awaitingBaselineReset: awaitingBaselineResetById[p.id] ?? false,
           label: p.rsn,
           status: checkTile(tile.condition, statsById[p.id]),
           completedAt: completedAtFor([p.id]),
@@ -249,18 +315,20 @@ export default function TileDetailModal({
             {ranked.map((row) => {
               const status = row.status;
               const done = row.completedAt != null;
-              const percent = done ? 100 : progressPercent(tile.condition, status);
+              const percent = done ? 100 : row.awaitingBaselineReset ? null : progressPercent(tile.condition, status);
               const baseCaption = formatTileProgress(tile.condition, status) ?? formatTileGoal(tile.condition);
-              const caption = status.resolvedSkill
-                ? `${baseCaption} (${status.resolvedSkill})`
-                : status.needsSkillChoice
-                  ? 'tied -- pick a skill'
-                  : baseCaption;
+              const caption = row.awaitingBaselineReset
+                ? 'Log out to start'
+                : status.resolvedSkill
+                  ? `${baseCaption} (${status.resolvedSkill})`
+                  : status.needsSkillChoice
+                    ? 'tied -- pick a skill'
+                    : baseCaption;
               return (
                 <li key={row.key}>
                   <div className="flex items-center justify-between text-sm">
                     <span className="font-medium">{row.label}</span>
-                    <span className="flex items-center gap-1 text-stone-400">
+                    <span className={`flex items-center gap-1 ${row.awaitingBaselineReset ? 'text-sky-400' : 'text-stone-400'}`}>
                       {caption}
                       {row.isFirst ? (
                         <span className="text-amber-400">⭐</span>
