@@ -14,6 +14,8 @@ describe('isNotableLootItem', () => {
     expect(isNotableLootItem('Bandos hilt')).toBe(true);
     expect(isNotableLootItem('Zamorak hilt')).toBe(true);
     expect(isNotableLootItem('dual macuahuitl')).toBe(true);
+    expect(isNotableLootItem("Scurrius' spine")).toBe(true);
+    expect(isNotableLootItem('Giantsoul amulet')).toBe(true);
   });
 
   it('does not match an item outside every catalog set', () => {

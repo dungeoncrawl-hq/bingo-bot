@@ -67,6 +67,26 @@ export const PRESET_ITEM_SETS: PresetItemSet[] = [
     ],
   },
   {
+    name: 'Brutus uniques',
+    items: ['Mooleta', 'Bottomless milk bucket (empty)', 'Cow slippers', 'Beef'],
+  },
+  {
+    name: 'Scurrius uniques',
+    items: ["Scurrius' spine", 'Long bone', 'Curved bone'],
+  },
+  {
+    name: 'Amoxliatl uniques',
+    items: ['Glacial temotli', 'Pendant of Ates (inert)', 'Tooth half of key (moon key)'],
+  },
+  {
+    name: 'Hueycoatl uniques',
+    items: ['Dragon hunter wand', 'Hueycoatl hide', 'Tome of earth (empty)', 'Tooth half of key (moon key)'],
+  },
+  {
+    name: 'Royal Titans uniques',
+    items: ['Giantsoul amulet', 'Fire element staff crown', 'Ice element staff crown', 'Mystic vigour prayer scroll', 'Deadeye prayer scroll'],
+  },
+  {
     name: 'Theatre of Blood uniques',
     items: [
       'Scythe of vitur (uncharged)',
