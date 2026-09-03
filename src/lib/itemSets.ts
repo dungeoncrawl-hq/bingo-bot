@@ -43,6 +43,69 @@ export const PRESET_ITEM_SETS: PresetItemSet[] = [
       "Verac's flail",
     ],
   },
+  // Item names below verified against the OSRS Wiki's own drop-table
+  // pages for each source (not guessed from memory) -- an exact-string
+  // mismatch here would silently make a tile impossible to complete, so
+  // these were checked one boss/raid at a time rather than bulk-copied
+  // from a summary page.
+  {
+    name: 'Chambers of Xeric uniques',
+    items: [
+      'Twisted bow',
+      'Elder maul',
+      'Kodai insignia',
+      'Dragon claws',
+      'Ancestral hat',
+      'Ancestral robe top',
+      'Ancestral robe bottom',
+      "Dinh's bulwark",
+      'Dragon hunter crossbow',
+      'Twisted buckler',
+      'Torva full helm',
+      'Torva platebody',
+      'Torva platelegs',
+    ],
+  },
+  {
+    name: 'Theatre of Blood uniques',
+    items: [
+      'Scythe of vitur (uncharged)',
+      'Ghrazi rapier',
+      'Sanguinesti staff (uncharged)',
+      'Justiciar faceguard',
+      'Justiciar chestguard',
+      'Justiciar legguards',
+      'Avernic defender hilt',
+    ],
+  },
+  {
+    name: 'Tombs of Amascut uniques',
+    items: [
+      "Tumeken's shadow (uncharged)",
+      "Elidinis' ward",
+      'Masori mask',
+      'Masori body',
+      'Masori chaps',
+      'Lightbearer',
+      "Osmumten's fang",
+    ],
+  },
+  {
+    name: 'Bandos armour (God Wars)',
+    items: ['Bandos chestplate', 'Bandos tassets', 'Bandos boots', 'Bandos hilt'],
+  },
+  {
+    name: 'Armadyl armour (God Wars)',
+    items: ['Armadyl helmet', 'Armadyl chestplate', 'Armadyl chainskirt', 'Armadyl hilt'],
+  },
+  {
+    name: 'Saradomin Wars uniques (God Wars)',
+    items: ["Saradomin sword", "Saradomin's light", 'Armadyl crossbow', 'Saradomin hilt'],
+  },
+  {
+    name: 'Zamorak Wars uniques (God Wars)',
+    items: ['Steam battlestaff', 'Zamorakian spear', 'Staff of the dead', 'Zamorak hilt'],
+  },
 ];
 
 const NOTABLE_LOOT_ITEMS_LOWER = new Set(

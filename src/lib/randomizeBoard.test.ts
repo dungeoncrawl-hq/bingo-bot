@@ -121,9 +121,10 @@ describe('randomizeBoard', () => {
 
   it("itemSetCollected's threshold is a rounded percentage of the preset's item count, per difficulty", () => {
     // group index 2 (Loot) -> type index 4 within it (itemSetCollected,
-    // the last of 5 Loot entries) -> any value for the single-entry
-    // PRESET_ITEM_SETS pick.
-    const rng = sequence([0.4, 0.9, 0.9]);
+    // the last of 5 Loot entries) -> index 0 (Barrows uniques) of
+    // PRESET_ITEM_SETS, pinned via rng()=0 so this stays deterministic
+    // regardless of how many entries the catalog grows to.
+    const rng = sequence([0.4, 0.9, 0]);
     const setSize = PRESET_ITEM_SETS[0].items.length;
     for (const [difficulty, percent] of Object.entries(DEFAULT_RANDOMIZE_SETTINGS.itemSetCollectedPercent) as [
       keyof typeof DEFAULT_RANDOMIZE_SETTINGS.itemSetCollectedPercent,
