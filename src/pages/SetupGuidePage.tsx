@@ -109,13 +109,27 @@ export default function SetupGuidePage() {
           just the big ones.
         </Step>
 
-        <Step n={5} title="Optional: instant sync when you log out">
-          Find the <Box>Advanced</Box> section (near the bottom). Paste the same link into the box labeled{' '}
-          <Box>Custom Metadata Handler</Box>. There's no checkbox to enable -- pasting the link there is enough. This
-          makes your XP/skill/clue stats refresh the instant you log out, instead of waiting for the once-daily
-          automatic sync everyone gets regardless. Same as step 2 -- if you're tracking multiple challenges, add each
-          one's link on its own line here too.
-        </Step>
+        {challenge.board_type === 'adventure' ? (
+          <Step n={5} title="Required: sync when you log out">
+            Find the <Box>Advanced</Box> section (near the bottom). Paste the same link into the box labeled{' '}
+            <Box>Custom Metadata Handler</Box>. There's no checkbox to enable -- pasting the link there is enough.
+            <p className="mt-2 rounded-lg border border-amber-900/50 bg-amber-950/20 p-2 text-xs text-amber-500/90">
+              This one isn't optional for an Adventure board. Each room only starts counting progress once you've
+              logged out at least once after reaching it -- the once-daily automatic sync everyone else gets doesn't
+              unlock the next room, only a real logout does. Skip this step and you'll be stuck on the first room no
+              matter how much progress you make.
+            </p>
+            Same as step 2 -- if you're tracking multiple challenges, add each one's link on its own line here too.
+          </Step>
+        ) : (
+          <Step n={5} title="Optional: instant sync when you log out">
+            Find the <Box>Advanced</Box> section (near the bottom). Paste the same link into the box labeled{' '}
+            <Box>Custom Metadata Handler</Box>. There's no checkbox to enable -- pasting the link there is enough. This
+            makes your XP/skill/clue stats refresh the instant you log out, instead of waiting for the once-daily
+            automatic sync everyone gets regardless. Same as step 2 -- if you're tracking multiple challenges, add each
+            one's link on its own line here too.
+          </Step>
+        )}
       </div>
     </div>
   );
