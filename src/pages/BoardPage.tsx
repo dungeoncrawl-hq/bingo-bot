@@ -430,11 +430,23 @@ export default function BoardPage() {
                         const awaitingBaselineReset = isFrontier && viewedCompletedTileIds.size > 0 && !viewedParticipant?.adventure_baseline_at;
                         const locked = tile != null && isOnPath && !done && !isFrontier;
                         const status = tile ? viewedTileStatuses[tile.id] : undefined;
+                        // Only the frontier tile's status reflects the
+                        // logout-gated baseline (BACKLOG.md #4) -- every
+                        // other on-path tile still has a real checkTile
+                        // result sitting in viewedTileStatuses (computed
+                        // against cumulative challenge-wide stats, same as
+                        // every non-Adventure board), it's just never
+                        // actually awarded server-side. Showing it here
+                        // would visually "complete" a room the player
+                        // hasn't even reached yet, so a locked tile only
+                        // ever shows its goal, never live progress.
                         const percent =
-                          tile && status && isOnPath && !done && !awaitingBaselineReset ? progressPercent(tile.condition, status) : null;
+                          tile && status && isFrontier && !awaitingBaselineReset ? progressPercent(tile.condition, status) : null;
                         const baseCaption =
                           tile && isOnPath && !awaitingBaselineReset
-                            ? (status && formatTileProgress(tile.condition, status)) ?? formatTileGoal(tile.condition)
+                            ? isFrontier || done
+                              ? (status && formatTileProgress(tile.condition, status)) ?? formatTileGoal(tile.condition)
+                              : formatTileGoal(tile.condition)
                             : null;
                         const caption = awaitingBaselineReset
                           ? 'Log out to start'
