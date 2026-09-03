@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Link, Navigate, useParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { getSupabase } from '../db/supabaseClient';
 import type { Challenge, GridLayout, Team, Tile, TileLayout } from '../db/types';
@@ -25,6 +25,7 @@ interface ParticipantRow {
 
 export default function EditChallengePage() {
   const { slug } = useParams<{ slug: string }>();
+  const navigate = useNavigate();
   const { session, loading: authLoading } = useAuth();
   const [challenge, setChallenge] = useState<Challenge | null | 'not-found'>(null);
   const [tiles, setTiles] = useState<Tile[]>([]);
@@ -174,6 +175,23 @@ export default function EditChallengePage() {
     await load();
   }
 
+  // Draft-only: once published, a challenge can have real players/progress
+  // riding on it, so deletion isn't offered at all past that point --
+  // matches the same "nothing can have counted yet" reasoning tilesLocked
+  // below already applies to draft/not-yet-started challenges.
+  async function handleDeleteChallenge() {
+    if (!challenge || challenge === 'not-found') return;
+    if (
+      !window.confirm(
+        `Delete "${challenge.name}"? This can't be undone -- the challenge, its tiles, and any join history will be permanently gone.`,
+      )
+    ) {
+      return;
+    }
+    await getSupabase().from('challenges').delete().eq('id', challenge.id);
+    navigate('/dashboard');
+  }
+
   async function handleRemoveParticipant(participant: ParticipantRow) {
     const name = participant.profiles?.display_name ?? participant.rsn;
     if (!window.confirm(`Remove ${name} (${participant.rsn})? Their progress history on this board will be deleted.`)) {
@@ -241,9 +259,20 @@ export default function EditChallengePage() {
             /c/{challenge.slug}
           </Link>
         </div>
-        <button onClick={togglePublish} className="rounded-lg border border-stone-700 px-4 py-2 text-sm text-stone-300">
-          {challenge.status === 'draft' ? 'Publish' : 'Unpublish'}
-        </button>
+        <div className="flex shrink-0 gap-2">
+          {challenge.status === 'draft' && (
+            <button
+              type="button"
+              onClick={handleDeleteChallenge}
+              className="rounded-lg border border-red-900 px-4 py-2 text-sm text-red-400"
+            >
+              Delete
+            </button>
+          )}
+          <button onClick={togglePublish} className="rounded-lg border border-stone-700 px-4 py-2 text-sm text-stone-300">
+            {challenge.status === 'draft' ? 'Publish' : 'Unpublish'}
+          </button>
+        </div>
       </div>
 
       <div className="mt-6 max-w-md">
