@@ -399,8 +399,10 @@ export default function BoardPage() {
       {viewedParticipant && <p className="mt-2 text-sm font-medium text-stone-400">{viewedParticipant.rsn}'s board</p>}
       {isPast && myParticipant && (
         <p className="mt-3 rounded-lg border border-stone-700 bg-stone-900/60 px-3 py-2 text-sm text-stone-400">
-          This challenge has ended -- no more progress counts toward it. You can turn off its webhook URL in Dink's
-          settings now.
+          This challenge has ended -- no more progress counts toward it. If you set this up with this challenge's own
+          webhook URL, you can turn it off in Dink's settings now. Using your personal account URL instead? Nothing
+          to clean up -- it already stopped mattering for this challenge on its own, and still works for whatever
+          you join next.
         </p>
       )}
 

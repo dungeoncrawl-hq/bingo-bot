@@ -143,6 +143,13 @@ export default function DashboardPage() {
           New challenge
         </Link>
       </div>
+      <p className="mt-2 text-xs text-stone-500">
+        Tip: each dungeon below has its own webhook link, but{' '}
+        <Link to="/account" className="text-stone-400 underline hover:text-stone-200">
+          your account has one stable URL
+        </Link>{' '}
+        that works for all of them, current and future -- set up Dink once and forget it.
+      </p>
       <div className="mt-6 space-y-2">
         {loadError && <p className="text-sm text-red-400">Couldn't load your dungeons. Try refreshing the page.</p>}
         {!loadError && challenges === null && <p className="text-stone-500">Loading…</p>}

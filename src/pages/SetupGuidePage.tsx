@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
+import { useAuth } from '../auth/useAuth';
 import { getSupabase } from '../db/supabaseClient';
 import type { Challenge } from '../db/types';
 
@@ -23,8 +24,11 @@ function Box({ children }: { children: React.ReactNode }) {
 
 export default function SetupGuidePage() {
   const { slug } = useParams<{ slug: string }>();
+  const { session } = useAuth();
   const [challenge, setChallenge] = useState<Challenge | null | 'not-found'>(null);
   const [copied, setCopied] = useState(false);
+  const [accountSecret, setAccountSecret] = useState<string | null>(null);
+  const [accountCopied, setAccountCopied] = useState(false);
 
   useEffect(() => {
     if (!slug) return;
@@ -36,12 +40,29 @@ export default function SetupGuidePage() {
       .then(({ data }) => setChallenge((data as Challenge | null) ?? 'not-found'));
   }, [slug]);
 
+  // BACKLOG.md #13 -- signed-in visitors get their one-time-setup account
+  // URL surfaced right here, not just on /account, since this is the page
+  // people actually land on to configure Dink.
+  useEffect(() => {
+    if (!session) {
+      setAccountSecret(null);
+      return;
+    }
+    getSupabase()
+      .from('profile_secrets')
+      .select('dink_secret')
+      .eq('profile_id', session.user.id)
+      .maybeSingle()
+      .then(({ data }) => setAccountSecret((data as { dink_secret: string } | null)?.dink_secret ?? null));
+  }, [session]);
+
   if (challenge === null) return null;
   if (challenge === 'not-found') {
     return <p className="mx-auto max-w-lg py-24 text-center text-stone-400">Challenge not found.</p>;
   }
 
   const webhookUrl = `${window.location.origin}/api/dink/${challenge.dink_secret}`;
+  const accountWebhookUrl = accountSecret ? `${window.location.origin}/api/dink/${accountSecret}` : null;
 
   return (
     <div className="mx-auto max-w-2xl py-12">
@@ -56,8 +77,64 @@ export default function SetupGuidePage() {
         It's all copy-pasting a link and checking boxes in Dink's settings, no technical know-how needed.
       </p>
 
+      <div className="mt-6 rounded-lg border border-amber-800/60 bg-amber-950/10 p-4">
+        <h2 className="text-sm font-semibold text-amber-400">Set up Dink once, ever</h2>
+        {accountWebhookUrl ? (
+          <>
+            <p className="mt-1 text-xs text-stone-400">
+              Use your personal account URL instead of this challenge's own link below -- it works for every
+              challenge you join, current and future, so you never paste in a new one again.
+            </p>
+            <div className="mt-2 flex gap-2">
+              <input
+                readOnly
+                value={accountWebhookUrl}
+                onClick={(e) => e.currentTarget.select()}
+                className="flex-1 rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 font-mono text-xs text-stone-300"
+              />
+              <button
+                type="button"
+                onClick={async () => {
+                  await navigator.clipboard.writeText(accountWebhookUrl);
+                  setAccountCopied(true);
+                  setTimeout(() => setAccountCopied(false), 2000);
+                }}
+                className="shrink-0 rounded-lg border border-stone-700 px-4 py-2 text-sm text-stone-300"
+              >
+                {accountCopied ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-stone-500">
+              Use this in place of the URL in every step below -- everything else about setup is identical.
+            </p>
+          </>
+        ) : (
+          <p className="mt-1 text-xs text-stone-400">
+            {session ? (
+              <>
+                Grab your personal webhook URL from{' '}
+                <Link to="/account" className="text-amber-400 underline hover:text-amber-300">
+                  your Account page
+                </Link>{' '}
+                and use it in place of the one below -- set up once, works for every challenge you join from now on.
+              </>
+            ) : (
+              <>
+                <Link to="/login" className="text-amber-400 underline hover:text-amber-300">
+                  Sign in
+                </Link>{' '}
+                to grab a personal webhook URL that works for every challenge you join, current and future, instead
+                of pasting in a new one each time.
+              </>
+            )}
+          </p>
+        )}
+      </div>
+
       <div className="mt-6">
-        <label className="block text-sm text-stone-400">Your webhook URL</label>
+        <label className="block text-sm text-stone-400">
+          {accountWebhookUrl ? "This challenge's own webhook URL" : 'Your webhook URL'}
+        </label>
         <div className="mt-1 flex gap-2">
           <input
             readOnly
