@@ -607,3 +607,46 @@ select * from (values
   ('boardCompletion', 'Not a single tile left to do.', 4)
 ) as seed(pool, template, sort_order)
 where not exists (select 1 from discord_banter_lines);
+
+-- BACKLOG.md #13 -- one stable per-account Dink webhook secret, separate
+-- from `profiles` (public-read) since this secret lets whoever holds it
+-- inject webhook events into every challenge that profile currently
+-- participates in -- a much bigger blast radius than a single challenge's
+-- own dink_secret, so it needs its own narrowly-scoped table/policy
+-- instead of living as a plain profiles column.
+create table if not exists profile_secrets (
+  profile_id uuid primary key references profiles(id) on delete cascade,
+  dink_secret text not null unique default encode(gen_random_bytes(16), 'hex')
+);
+
+alter table profile_secrets enable row level security;
+drop policy if exists "self read only" on profile_secrets;
+create policy "self read only" on profile_secrets for select
+  to authenticated using (profile_id = auth.uid());
+-- No client write policy at all -- generated once, never user-editable
+-- (regenerating it is a possible future feature, not built here).
+
+-- Redefines handle_new_user (original definition earlier in this file) to
+-- also create a profile_secrets row for every new signup -- create or
+-- replace updates the function in place; the existing
+-- on_auth_user_created trigger already calls it by name, so it doesn't
+-- need to be recreated.
+create or replace function public.handle_new_user()
+returns trigger as $$
+begin
+  insert into public.profiles (id, display_name)
+  values (new.id, split_part(new.email, '@', 1))
+  on conflict (id) do nothing;
+  insert into public.profile_secrets (profile_id)
+  values (new.id)
+  on conflict (profile_id) do nothing;
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public;
+
+-- One-time backfill for every existing account, same reasoning as the
+-- profiles backfill earlier in this file -- harmless/idempotent to leave
+-- here permanently.
+insert into profile_secrets (profile_id)
+select id from profiles
+on conflict (profile_id) do nothing;

@@ -3,12 +3,11 @@ import react from '@vitejs/plugin-react'
 import { config as loadDotenv } from 'dotenv'
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
-import { processDinkWebhook } from './src/server/dinkWebhook.js'
+import { resolveAndProcessDinkWebhook } from './src/server/dinkWebhook.js'
 import { parseDinkPayload, readRawBody } from './src/server/dinkPayload.js'
 import { selectRows } from './src/server/supabaseAdmin.js'
 import { syncAllParticipants, syncOneParticipant } from './src/server/participantSync.js'
 import { checkChallengeProgress } from './src/server/challengeProgress.js'
-import type { Challenge } from './src/db/types.js'
 
 // vite.config.ts runs in a plain Node context -- unlike client code, it
 // doesn't get .env.local values injected automatically, so the webhook's
@@ -32,21 +31,12 @@ function devApi(): Plugin {
         const url = new URL(req.url ?? '', 'http://localhost')
         const secret = url.pathname.replace(/^\/+|\/+$/g, '')
         try {
-          const [challenge] = await selectRows<Challenge>('challenges', `dink_secret=eq.${encodeURIComponent(secret)}&select=*`)
-          if (!challenge) {
-            res.statusCode = 404
-            res.end(JSON.stringify({ error: 'Unknown webhook' }))
-            return
-          }
-          if (challenge.status === 'ended') {
-            res.statusCode = 200
-            res.setHeader('Content-Type', 'application/json')
-            res.end(JSON.stringify({ ok: true, note: 'challenge has ended' }))
-            return
-          }
           const contentType = req.headers['content-type'] ?? ''
           const parsed = await parseDinkPayload(contentType, await readRawBody(req))
-          const { status, body } = await processDinkWebhook(challenge, parsed.data, parsed.image)
+          // Resolves either a single challenge (today's per-challenge
+          // secret) or an account (BACKLOG.md #13's profile_secrets) and
+          // fans the event out accordingly.
+          const { status, body } = await resolveAndProcessDinkWebhook(secret, parsed.data, parsed.image)
           res.statusCode = status
           res.setHeader('Content-Type', 'application/json')
           res.end(JSON.stringify(body))

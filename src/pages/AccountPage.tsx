@@ -14,6 +14,8 @@ export default function AccountPage() {
   const [rsnSaving, setRsnSaving] = useState(false);
   const [rsnSaved, setRsnSaved] = useState(false);
   const [rsnError, setRsnError] = useState('');
+  const [dinkSecret, setDinkSecret] = useState<string | null>(null);
+  const [webhookCopied, setWebhookCopied] = useState(false);
 
   useEffect(() => {
     if (session?.user.email) setEmail(session.user.email);
@@ -22,6 +24,21 @@ export default function AccountPage() {
   useEffect(() => {
     if (profile) setDefaultRsn(profile.default_rsn ?? '');
   }, [profile]);
+
+  // BACKLOG.md #13 -- one stable per-account webhook, separate from
+  // profiles (which is public-read) since this secret lets whoever holds
+  // it inject events into every challenge this account participates in.
+  // "self read only" RLS (profile_secrets) is what makes this fetch work
+  // for the signed-in user and no one else.
+  useEffect(() => {
+    if (!session) return;
+    getSupabase()
+      .from('profile_secrets')
+      .select('dink_secret')
+      .eq('profile_id', session.user.id)
+      .maybeSingle()
+      .then(({ data }) => setDinkSecret((data as { dink_secret: string } | null)?.dink_secret ?? null));
+  }, [session]);
 
   if (loading) return null;
   if (!session) return <Navigate to="/login" replace />;
@@ -113,6 +130,36 @@ export default function AccountPage() {
         </form>
         {rsnError && <p className="mt-1 text-sm text-red-400">{rsnError}</p>}
       </div>
+
+      {dinkSecret && (
+        <div className="mt-8 max-w-md">
+          <h2 className="text-sm font-semibold text-stone-300">Your Dink webhook URL</h2>
+          <p className="mt-1 text-xs text-stone-500">
+            Paste this into the same Dink fields any challenge's setup guide lists (Slayer, Pets, Kill Count, Death,
+            Collection Log, Loot -- plus Advanced &gt; Custom Metadata Handler for instant logout sync). It works for
+            every challenge you join, now and in the future -- no need to add a new link each time.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <input
+              readOnly
+              value={`${window.location.origin}/api/dink/${dinkSecret}`}
+              onClick={(e) => e.currentTarget.select()}
+              className="flex-1 rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 font-mono text-xs text-stone-300"
+            />
+            <button
+              type="button"
+              onClick={async () => {
+                await navigator.clipboard.writeText(`${window.location.origin}/api/dink/${dinkSecret}`);
+                setWebhookCopied(true);
+                setTimeout(() => setWebhookCopied(false), 2000);
+              }}
+              className="shrink-0 rounded-lg border border-stone-700 px-4 py-2 text-sm text-stone-300"
+            >
+              {webhookCopied ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

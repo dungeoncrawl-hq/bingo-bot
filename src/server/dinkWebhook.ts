@@ -1,7 +1,11 @@
 // Per-challenge Dink webhook processing -- multi-tenant equivalent of
-// rs/src/server/dinkWebhook.ts. The challenge is already resolved (by
-// dink_secret) before this runs; everything here is scoped to that one
-// challenge and the participant the event's playerName matches within it.
+// rs/src/server/dinkWebhook.ts. processDinkWebhook itself is scoped to
+// one already-resolved challenge and the participant the event's
+// playerName matches within it; resolveAndProcessDinkWebhook (bottom of
+// this file) is the entry point that actually resolves a secret -- either
+// a single challenge (today's per-challenge dink_secret) or an account
+// (BACKLOG.md #13's profile_secrets, fanning one event out to every
+// challenge that profile currently participates in).
 import { selectRows, upsertRow, insertRowUnlessRecentDuplicate, callRpc, callRpcReturning } from './supabaseAdmin.js';
 import { checkChallengeProgress } from './challengeProgress.js';
 import { syncOneParticipant } from './participantSync.js';
@@ -319,4 +323,61 @@ export async function processDinkWebhook(challenge: Challenge, payload: unknown,
   } catch (err) {
     return { status: 500, body: { error: err instanceof Error ? err.message : 'Webhook processing failed' } };
   }
+}
+
+function extractPlayerName(payload: unknown): string | undefined {
+  if (typeof payload !== 'object' || payload === null) return undefined;
+  const p = payload as { playerName?: unknown };
+  return typeof p.playerName === 'string' ? p.playerName : undefined;
+}
+
+// The one entry point both api/dink/[secret].ts and vite.config.ts's dev
+// mirror call -- resolves a secret against either table so the lookup/
+// fan-out logic lives in exactly one place instead of being duplicated
+// across those two files (as the simpler single-lookup version already
+// was, before this).
+export async function resolveAndProcessDinkWebhook(
+  secret: string,
+  payload: unknown,
+  image: DinkImage | null,
+): Promise<WebhookResult> {
+  const [challenge] = await selectRows<Challenge>('challenges', `dink_secret=eq.${encodeURIComponent(secret)}&select=*`);
+  if (challenge) {
+    if (challenge.status === 'ended') return { status: 200, body: { ok: true, note: 'challenge has ended' } };
+    return processDinkWebhook(challenge, payload, image);
+  }
+
+  // BACKLOG.md #13 -- an account-scoped secret fans this one event out to
+  // every challenge this profile currently participates in under a
+  // matching RSN, instead of needing a URL per challenge.
+  const [secretRow] = await selectRows<{ profile_id: string }>(
+    'profile_secrets',
+    `dink_secret=eq.${encodeURIComponent(secret)}&select=profile_id`,
+  );
+  if (!secretRow) return { status: 404, body: { error: 'Unknown webhook' } };
+
+  const playerName = extractPlayerName(payload);
+  if (!playerName) return { status: 200, body: { ok: true, note: 'no playerName in payload' } };
+  const name = playerName.trim().toLowerCase();
+
+  const memberships = await selectRows<{ challenge_id: string; rsn: string }>(
+    'challenge_participants',
+    `profile_id=eq.${encodeURIComponent(secretRow.profile_id)}&select=challenge_id,rsn`,
+  );
+  const matchingIds = memberships.filter((m) => m.rsn.trim().toLowerCase() === name).map((m) => m.challenge_id);
+  if (matchingIds.length === 0) {
+    // The normal steady state for an account-wide URL (nothing currently
+    // needs this event) -- not an error, unlike a per-challenge URL
+    // getting an unrecognized playerName, which usually means a typo.
+    return { status: 200, body: { ok: true, note: 'not currently participating in any challenge as this RSN' } };
+  }
+
+  const challenges = await selectRows<Challenge>('challenges', `id=in.(${matchingIds.join(',')})&select=*`);
+  const results: WebhookResult[] = [];
+  for (const c of challenges) {
+    if (c.status === 'ended') continue;
+    results.push(await processDinkWebhook(c, payload, image));
+  }
+  const failed = results.find((r) => r.status >= 400);
+  return failed ?? { status: 200, body: { ok: true, processed: results.length } };
 }
