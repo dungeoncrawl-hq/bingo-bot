@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
@@ -20,7 +20,17 @@ import { progressColor } from '../lib/progressColor';
 import { displayStatus } from '../lib/dungeonStatus';
 import TileDetailModal from '../components/TileDetailModal';
 import AdventureColumnModal from '../components/AdventureColumnModal';
-import { ADVENTURE_SMALL_COLUMNS, forkIndexForColumn, isBossColumn, resolveFrontier } from '../lib/adventureProgress';
+import AdventureConnector from '../components/AdventureConnector';
+import {
+  ADVENTURE_SMALL_COLUMNS,
+  ADVENTURE_SMALL_FINAL_BOSS_COLUMN,
+  bossLabelForColumn,
+  forkIndexForColumn,
+  isBossColumn,
+  laneCountForColumn,
+  resolveFrontier,
+  roomNumberForColumn,
+} from '../lib/adventureProgress';
 
 const GRID_SIZE = 5;
 // Every small-dungeon participant always has exactly 9 tiles in play (3
@@ -402,17 +412,28 @@ export default function BoardPage() {
               <div className="flex gap-2" style={{ minWidth: `${ADVENTURE_SMALL_COLUMNS * 90}px` }}>
                 {Array.from({ length: ADVENTURE_SMALL_COLUMNS }, (_, column) => {
                   const boss = isBossColumn(column);
+                  const isFinalBoss = column === ADVENTURE_SMALL_FINAL_BOSS_COLUMN;
+                  // Extra visual weight on top of (not instead of) each
+                  // tile's own state-driven border color below -- a boss
+                  // room still needs to read as done/frontier/locked just
+                  // like any other tile, this just makes it look heavier.
+                  const bossExtra = boss
+                    ? isFinalBoss
+                      ? 'border-2 shadow-[0_0_20px_rgba(239,68,68,0.5)]'
+                      : 'border-2 shadow-[0_0_14px_rgba(220,38,38,0.35)]'
+                    : '';
                   const lanes: ('top' | 'bottom' | 'center')[] = boss ? ['center'] : ['top', 'bottom'];
                   const fork = boss ? null : forkIndexForColumn(column);
                   const chosenLane = fork !== null ? viewedParticipant?.adventure_path?.[String(fork)] : undefined;
                   const columnHasAnyTile = lanes.some((lane) => adventureTileAt(column, lane) != null);
 
                   return (
-                    <div
-                      key={column}
-                      onClick={columnHasAnyTile ? () => setSelectedColumn(column) : undefined}
-                      className={`flex w-20 shrink-0 flex-col justify-center gap-2 ${columnHasAnyTile ? 'cursor-pointer' : ''}`}
-                    >
+                    <Fragment key={column}>
+                      {column > 0 && <AdventureConnector from={laneCountForColumn(column - 1)} to={laneCountForColumn(column)} />}
+                      <div
+                        onClick={columnHasAnyTile ? () => setSelectedColumn(column) : undefined}
+                        className={`flex w-20 shrink-0 flex-col justify-center gap-2 ${columnHasAnyTile ? 'cursor-pointer' : ''}`}
+                      >
                       {lanes.map((lane) => {
                         const tile = adventureTileAt(column, lane);
                         const isOtherLane = !boss && chosenLane != null && chosenLane !== lane;
@@ -462,7 +483,7 @@ export default function BoardPage() {
                           <div
                             key={lane}
                             title={tile ? describeTileCondition(tile.condition) : undefined}
-                            className={`relative flex aspect-square min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden rounded-lg border p-2 text-center shadow-inner before:pointer-events-none before:absolute before:inset-0 before:bg-[url('/stone-texture.svg')] before:bg-cover before:bg-center before:opacity-30 before:content-[''] ${
+                            className={`relative flex aspect-square min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden rounded-lg border p-2 text-center shadow-inner before:pointer-events-none before:absolute before:inset-0 before:bg-[url('/stone-texture.svg')] before:bg-cover before:bg-center before:opacity-30 before:content-[''] ${bossExtra} ${
                               isOtherLane || isPendingChoice
                                 ? 'border-stone-800/40 bg-stone-950/30 opacity-40'
                                 : done
@@ -501,7 +522,8 @@ export default function BoardPage() {
                           </div>
                         );
                       })}
-                    </div>
+                      </div>
+                    </Fragment>
                   );
                 })}
               </div>
@@ -844,6 +866,7 @@ export default function BoardPage() {
             return bossTile ? (
               <TileDetailModal
                 tile={bossTile}
+                kicker={bossLabelForColumn(selectedColumn)}
                 participants={participants}
                 challenge={challenge}
                 firstCompleters={firstCompleters}
@@ -854,6 +877,7 @@ export default function BoardPage() {
         ) : (
           <AdventureColumnModal
             forkIndex={forkIndexForColumn(selectedColumn)}
+            roomNumber={roomNumberForColumn(selectedColumn)}
             topTile={adventureTileAt(selectedColumn, 'top')}
             bottomTile={adventureTileAt(selectedColumn, 'bottom')}
             participants={participants}

@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { getSupabase } from '../db/supabaseClient';
 import type { Challenge, GridLayout, Team, Tile, TileLayout } from '../db/types';
 import TileEditorForm from '../components/TileEditorForm';
+import AdventureConnector from '../components/AdventureConnector';
 import { formatTileGoal, type TileCondition } from '../lib/tileConditions';
 import { displayStatus } from '../lib/dungeonStatus';
 import { formatBytes } from '../lib/format';
-import { ADVENTURE_SMALL_COLUMNS, isBossColumn } from '../lib/adventureProgress';
+import { ADVENTURE_SMALL_COLUMNS, ADVENTURE_SMALL_FINAL_BOSS_COLUMN, isBossColumn, laneCountForColumn } from '../lib/adventureProgress';
 import { randomizeBoard } from '../lib/randomizeBoard';
 import { DEFAULT_RANDOMIZE_SETTINGS, type Difficulty, type RandomizeSettings } from '../lib/randomizeSettings';
 
@@ -344,39 +345,45 @@ export default function EditChallengePage() {
           <div className="flex gap-2" style={{ minWidth: `${ADVENTURE_SMALL_COLUMNS * 90}px` }}>
             {Array.from({ length: ADVENTURE_SMALL_COLUMNS }, (_, column) => {
               const lanes = isBossColumn(column) ? (['center'] as const) : (['top', 'bottom'] as const);
+              const isFinalBoss = column === ADVENTURE_SMALL_FINAL_BOSS_COLUMN;
               return (
-                <div key={column} className="flex w-20 shrink-0 flex-col justify-center gap-2">
-                  {lanes.map((lane) => {
-                    const tile = tileAt({ column, lane });
-                    return (
-                      <button
-                        key={lane}
-                        onClick={() => setEditingCell({ column, lane })}
-                        className={`relative flex aspect-square min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden rounded-lg border p-2 text-center shadow-inner transition-colors hover:border-amber-500 before:pointer-events-none before:absolute before:inset-0 before:bg-[url('/stone-texture.svg')] before:bg-cover before:bg-center before:opacity-30 before:content-[''] ${
-                          lane === 'center'
-                            ? tile
-                              ? 'border-amber-700 bg-amber-950/20'
-                              : 'border-amber-900/50 bg-stone-950/50'
-                            : tile
-                              ? 'border-stone-700 bg-stone-900'
-                              : 'border-stone-800/60 bg-stone-950/50'
-                        }`}
-                      >
-                        {tile ? (
-                          <>
-                            {tile.icon && <img src={tile.icon} alt="" className="h-6 w-6 shrink-0" />}
-                            <span className="mt-1 line-clamp-2 w-full break-words text-[11px]">{tile.label}</span>
-                            {formatTileGoal(tile.condition) && (
-                              <span className="w-full break-words text-[9px] text-stone-500">{formatTileGoal(tile.condition)}</span>
-                            )}
-                          </>
-                        ) : (
-                          <span className="text-xs text-stone-600">{lane === 'center' ? '+ Boss' : '+ Add tile'}</span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
+                <Fragment key={column}>
+                  {column > 0 && <AdventureConnector from={laneCountForColumn(column - 1)} to={laneCountForColumn(column)} />}
+                  <div className="flex w-20 shrink-0 flex-col justify-center gap-2">
+                    {lanes.map((lane) => {
+                      const tile = tileAt({ column, lane });
+                      return (
+                        <button
+                          key={lane}
+                          onClick={() => setEditingCell({ column, lane })}
+                          className={`relative flex aspect-square min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden rounded-lg border p-2 text-center shadow-inner transition-colors hover:border-amber-500 before:pointer-events-none before:absolute before:inset-0 before:bg-[url('/stone-texture.svg')] before:bg-cover before:bg-center before:opacity-30 before:content-[''] ${
+                            lane === 'center'
+                              ? tile
+                                ? isFinalBoss
+                                  ? 'border-2 border-red-600 bg-gradient-to-b from-red-950/70 to-stone-950 shadow-[0_0_22px_rgba(239,68,68,0.55)]'
+                                  : 'border-2 border-red-700 bg-gradient-to-b from-red-950/50 to-stone-950 shadow-[0_0_16px_rgba(220,38,38,0.4)]'
+                                : 'border-2 border-red-900/40 bg-stone-950/50'
+                              : tile
+                                ? 'border-stone-700 bg-stone-900'
+                                : 'border-stone-800/60 bg-stone-950/50'
+                          }`}
+                        >
+                          {tile ? (
+                            <>
+                              {tile.icon && <img src={tile.icon} alt="" className="h-6 w-6 shrink-0" />}
+                              <span className="mt-1 line-clamp-2 w-full break-words text-[11px]">{tile.label}</span>
+                              {formatTileGoal(tile.condition) && (
+                                <span className="w-full break-words text-[9px] text-stone-500">{formatTileGoal(tile.condition)}</span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-xs text-stone-600">{lane === 'center' ? '+ Boss' : '+ Add tile'}</span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </Fragment>
               );
             })}
           </div>

@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { resolveFrontier, ADVENTURE_SMALL_LAYOUT, forkIndexForColumn, isBossColumn } from './adventureProgress';
+import {
+  resolveFrontier,
+  ADVENTURE_SMALL_LAYOUT,
+  forkIndexForColumn,
+  isBossColumn,
+  laneCountForColumn,
+  roomNumberForColumn,
+  bossLabelForColumn,
+} from './adventureProgress';
 import type { AdventurePath } from './adventureProgress';
 import type { AdventureLayout, Tile } from '../db/types';
 
@@ -35,6 +43,35 @@ describe('forkIndexForColumn / isBossColumn', () => {
     expect(isBossColumn(5)).toBe(true);
     expect(isBossColumn(8)).toBe(true);
     expect(isBossColumn(0)).toBe(false);
+  });
+});
+
+describe('laneCountForColumn', () => {
+  it('is 1 for a boss column, 2 for a fork column', () => {
+    expect(laneCountForColumn(2)).toBe(1);
+    expect(laneCountForColumn(5)).toBe(1);
+    expect(laneCountForColumn(8)).toBe(1);
+    expect(laneCountForColumn(0)).toBe(2);
+    expect(laneCountForColumn(7)).toBe(2);
+  });
+});
+
+describe('roomNumberForColumn', () => {
+  it('numbers the 6 non-boss columns sequentially, left to right, skipping bosses', () => {
+    expect(roomNumberForColumn(0)).toBe(1);
+    expect(roomNumberForColumn(1)).toBe(2);
+    expect(roomNumberForColumn(3)).toBe(3);
+    expect(roomNumberForColumn(4)).toBe(4);
+    expect(roomNumberForColumn(6)).toBe(5);
+    expect(roomNumberForColumn(7)).toBe(6);
+  });
+});
+
+describe('bossLabelForColumn', () => {
+  it('labels the three boss columns First/Second/Final', () => {
+    expect(bossLabelForColumn(2)).toBe('First Boss');
+    expect(bossLabelForColumn(5)).toBe('Second Boss');
+    expect(bossLabelForColumn(8)).toBe('Final Boss');
   });
 });
 

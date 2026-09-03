@@ -29,6 +29,10 @@ interface ParticipantLite {
 
 interface Props {
   forkIndex: number;
+  // "Room 1" through "Room 6" -- distinct from forkIndex, which two
+  // columns of the same fork share (both use it to look up the same lane
+  // choice); the title shows each column's own room number instead.
+  roomNumber: number;
   topTile: Tile | null;
   bottomTile: Tile | null;
   participants: ParticipantLite[];
@@ -55,7 +59,7 @@ function rankValue(status: TileStatus, percent: number | null): number {
 // picked (not one shared condition applied to everyone, unlike a regular
 // tile) -- self-contained raw-data fetch/compute, same established
 // pattern as TileDetailModal, rather than reusing BoardPage's state.
-export default function AdventureColumnModal({ forkIndex, topTile, bottomTile, participants, challenge, firstCompleters, onClose }: Props) {
+export default function AdventureColumnModal({ forkIndex, roomNumber, topTile, bottomTile, participants, challenge, firstCompleters, onClose }: Props) {
   const [loading, setLoading] = useState(true);
   const [statuses, setStatuses] = useState<Record<string, TileStatus>>({});
 
@@ -178,7 +182,7 @@ export default function AdventureColumnModal({ forkIndex, topTile, bottomTile, p
         className="w-full max-w-md space-y-4 rounded-xl border border-stone-800 bg-stone-950 p-6"
       >
         <div>
-          <h2 className="text-lg font-semibold">Fork {forkIndex + 1}</h2>
+          <h2 className="text-lg font-semibold">Room {roomNumber}</h2>
           <p className="text-sm text-stone-400">Everyone's progress toward whichever path they picked.</p>
         </div>
 

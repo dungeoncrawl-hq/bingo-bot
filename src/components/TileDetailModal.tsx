@@ -29,6 +29,12 @@ interface TeamLite {
 
 interface Props {
   tile: Tile;
+  // Adventure boss rooms only ("First Boss"/"Second Boss"/"Final Boss") --
+  // a small label above the tile's own name, since that name is whatever
+  // the host chose for the condition (e.g. "Wintertodt KC") and doesn't
+  // otherwise say this is a boss room at all. Absent for a Standard-board
+  // tile, which this modal is also used for.
+  kicker?: string;
   participants: ParticipantLite[];
   challenge: Challenge;
   firstCompleters: Record<string, string>;
@@ -66,7 +72,7 @@ interface Row {
   isFirst: boolean;
 }
 
-export default function TileDetailModal({ tile, participants, challenge, firstCompleters, gameMode = 'solo', teams = [], onClose }: Props) {
+export default function TileDetailModal({ tile, kicker, participants, challenge, firstCompleters, gameMode = 'solo', teams = [], onClose }: Props) {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<Row[]>([]);
 
@@ -178,6 +184,7 @@ export default function TileDetailModal({ tile, participants, challenge, firstCo
         <div className="flex items-start gap-3">
           {tile.icon && <img src={tile.icon} alt="" className="h-8 w-8 shrink-0" />}
           <div>
+            {kicker && <p className="text-xs font-semibold uppercase tracking-wide text-red-500">{kicker}</p>}
             <h2 className="text-lg font-semibold">{tile.label}</h2>
             <p className="text-sm text-stone-400">{describeTileCondition(tile.condition)}</p>
             <p className="text-xs text-stone-500">

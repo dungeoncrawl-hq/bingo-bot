@@ -33,6 +33,37 @@ export function isBossColumn(column: number): boolean {
   return ADVENTURE_SMALL_BOSS_COLUMNS.includes(column);
 }
 
+// 1 (boss, a single centered slot) or 2 (fork column, top+bottom) -- how
+// many lane slots a column actually has, used by the connector graphic
+// between columns to know whether to draw a straight, converging, or
+// diverging hallway.
+export function laneCountForColumn(column: number): 1 | 2 {
+  return isBossColumn(column) ? 1 : 2;
+}
+
+// "Room 1" through "Room 6" for the small layout's 6 non-boss columns, in
+// left-to-right order -- distinct from forkIndexForColumn below, which
+// groups a fork's two lane-columns (e.g. 0 and 1) under the same fork
+// number since they share one lane choice. Each individual column still
+// gets its own room number: column 0 is Room 1, column 1 is Room 2, etc.
+export function roomNumberForColumn(column: number): number {
+  let n = 0;
+  for (let c = 0; c <= column; c++) {
+    if (!isBossColumn(c)) n++;
+  }
+  return n;
+}
+
+// "First Boss"/"Second Boss"/"Final Boss" for the small layout's 3 boss
+// columns specifically -- ordinal-by-position rather than a lookup by
+// column number, though this is still tied to the small layout's exact 3
+// bosses (not a generalized "Nth boss" namer for an arbitrary count).
+export function bossLabelForColumn(column: number): string {
+  const idx = ADVENTURE_SMALL_BOSS_COLUMNS.indexOf(column);
+  if (idx === ADVENTURE_SMALL_BOSS_COLUMNS.length - 1) return 'Final Boss';
+  return idx === 0 ? 'First Boss' : 'Second Boss';
+}
+
 // Fork index (0/1/2 for small) a given fork-lane column belongs to --
 // which lane-choice this column's progress is gated behind. Columns 0-1
 // -> fork 0, 3-4 -> fork 1, 6-7 -> fork 2; boss columns (2/5/8) aren't
