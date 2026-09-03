@@ -314,3 +314,114 @@ instead of renumbering the existing list.
     any player already using a challenge's own URL (from before this
     feature existed) had to switch to their account URL manually --
     there was no dual-running transition window.
+
+## Timezone handling
+14. **Let hosts set a per-dungeon timezone instead of implicit UTC.**
+    Prompted by a real report (2026-09-02, ~11:28pm Eastern): WheresMyGear
+    completed a tile on `adventure-test` (`start_date: '2026-09-03'`)
+    that evening, before the challenge "felt" started. Root cause,
+    confirmed against production data: every bare date in this codebase
+    is anchored to UTC midnight, both for server-side gating
+    (`src/lib/participantStats.ts`'s `boundaryMs`, called from
+    `challengeProgress.ts`) and for client-side display
+    (`dungeonStatus.ts`'s `displayStatus`, driven by
+    `new Date().toISOString().slice(0, 10)`). UTC midnight on Sept 3 fell
+    at 8:00pm Eastern on Sept 2 -- 3+ hours before the completion. Not a
+    bug (`src/lib/participantStats.ts` even has a comment anticipating
+    exactly this: "Revisit if hosts in other timezones report boundary
+    tiles completing a day early/late") -- but confusing enough to be
+    worth fixing.
+
+    **Resolved direction**: `challenges.timezone`, an IANA identifier
+    (e.g. `'America/New_York'`), `not null default 'UTC'` -- every
+    existing challenge (including the live `adventure-test`) keeps
+    behaving exactly as it does today unless a host explicitly changes
+    it. A new small helper module, `src/lib/timezone.ts`, built on
+    vanilla `Intl` (no new dependency, same pattern `dungeonStatus.ts`'s
+    `formatDateRange` already uses for UTC formatting):
+    - `zonedDateToInstant(date, timeZone, edge: 'start' | 'end')` -- a
+      bare `"YYYY-MM-DD"` plus a zone, resolved to the UTC instant of
+      that zone's midnight (`edge: 'start'`) or end-of-day
+      (`edge: 'end'`), via the standard double-format-and-adjust trick
+      against `Intl.DateTimeFormat`.
+    - `todayInZone(timeZone)` -- "today" as a bare date, as observed in
+      that zone (`Intl.DateTimeFormat('en-CA', { timeZone }).format(new
+      Date())` conveniently formats as `YYYY-MM-DD`).
+
+    **The non-obvious part**: the four places that build a challenge's
+    stats window today --
+    `src/server/challengeProgress.ts:190` (server, authoritative),
+    `src/pages/BoardPage.tsx:148`, `src/components/TileDetailModal.tsx:84`,
+    `src/components/AdventureColumnModal.tsx:71` (client, all three
+    near-identical duplicates) -- each build one `{ start, end }` window
+    that feeds *two* different consumers with different needs:
+    `computeHiscoresRecap` (`src/lib/hiscoresRecap.ts`) wants bare UTC
+    calendar-date strings, since `participant_snapshots.recorded_on` is
+    stamped once per UTC day regardless of any challenge's timezone
+    (`participantSync.ts`'s `recorded_on: todayUtc()`) -- while
+    `computeParticipantStats`/`inWindow`/`kcGainedByBoss`
+    (`participantStats.ts`) want a real zoned instant. Naively
+    zone-converting the whole window would silently corrupt
+    `computeHiscoresRecap`'s day-1-baseline lookup (a lexicographic
+    string comparison against bare `recorded_on` dates). Each of the
+    four sites needs to keep its existing bare-date window for
+    `computeHiscoresRecap` untouched and add a second, new zoned-instant
+    window (via `zonedDateToInstant`) for everything else -- worth
+    factoring the duplicated block into one shared function while
+    touching all four anyway.
+
+    `dungeonStatus.ts`'s `displayStatus`/`countdownText` keep their
+    existing signature (still just take a plain `today` string) --
+    `DungeonDates` gains `timezone`, and callers (`DashboardPage.tsx`,
+    `EditChallengePage.tsx`) compute `today` per-challenge via
+    `todayInZone(c.timezone)` instead of one shared UTC `today` for
+    every row.
+
+    `challengeLifecycle.ts`'s `closeEndedChallenges()` cron can't stay
+    one blanket `end_date=lt.${todayUtc()}` filter across every active
+    challenge once timezones differ. Keep that UTC filter as a cheap
+    first-pass candidate list (anything more than a day past end_date in
+    UTC is over in every zone, no exceptions), then for the remaining
+    handful of borderline rows, check `now >= zonedDateToInstant(end_date,
+    timezone, 'end')` per challenge before actually closing it -- low
+    volume, since only challenges near their end date ever reach this
+    check.
+
+    UI: `NewChallengePage.tsx` and `EditChallengePage.tsx` get a
+    timezone `<select>` next to the date inputs. A short curated list
+    (US Eastern/Central/Mountain/Pacific, UK, and a few other
+    OSRS-community-common zones, plus UTC) keeps this a plain `<select>`
+    instead of needing a searchable combobox for the full ~400-zone IANA
+    list. Default it to `Intl.DateTimeFormat().resolvedOptions().timeZone`
+    (the host's own browser-detected zone) on the New Challenge form --
+    very likely what they already mean by "today." `BoardPage.tsx`'s
+    plain `{start_date} – {end_date}` header could also append the zone
+    (e.g. "Sep 3 – Sep 12 (Eastern)") so players in a different zone than
+    the host know which clock the dates are on -- a clarity nice-to-have,
+    not required for correctness.
+
+    **Explicitly out of scope / unaffected**:
+    - `hiscoresRecap.ts`'s own window stays on bare UTC dates, per the
+      dual-window split above -- `participant_snapshots` are already
+      only UTC-day granular (one per day, whenever the sync cron runs),
+      so zone-aligning that window wouldn't add real precision, and its
+      existing before/after fallback logic already tolerates a day or so
+      of slop by design.
+    - This is a per-*dungeon* (host-set) setting, not a per-viewer one --
+      two players in different zones looking at the same board see the
+      same status/dates/gating, anchored to the host's chosen zone
+      instead of a hardcoded one. Same "one shared reference clock for
+      everyone" model as today, just host-configurable instead of
+      always UTC.
+    - DST transitions mid-challenge need no special handling -- IANA
+      zone identifiers already encode DST rules, so `Intl` resolves them
+      correctly on its own.
+
+    **Testing**: `src/lib/timezone.ts` gets its own unit tests (a
+    non-UTC zone, a DST-boundary date, an end-of-day edge case);
+    `dungeonStatus.test.ts` and `participantStats.test.ts` each gain a
+    timezone-aware case alongside their existing UTC ones.
+
+    **Migration**: `alter table challenges add column timezone text not
+    null default 'UTC';` -- additive, zero behavior change for every
+    existing challenge until a host explicitly edits it.
