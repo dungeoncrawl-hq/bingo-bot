@@ -49,3 +49,22 @@ export function formatBytes(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
+
+// "just now" / "5 minutes ago" / "3 hours ago" / "2 days ago" -- used for
+// the "last Dink event" indicator (AccountPage.tsx, BoardPage.tsx).
+// `nowMs` is a parameter rather than read internally (Date.now()) so this
+// stays pure/testable, same reasoning as every other time-dependent
+// helper this session (dungeonStatus.ts's preciseCountdownText). Caps out
+// at days -- nothing here needs week/month/year granularity, and this is
+// always about a recent event or a clearly-stale one, never a precise
+// old date.
+export function formatRelativeTime(iso: string, nowMs: number): string {
+  const deltaMs = Math.max(0, nowMs - Date.parse(iso));
+  const minutes = Math.floor(deltaMs / (1000 * 60));
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  const days = Math.floor(hours / 24);
+  return `${days} day${days === 1 ? '' : 's'} ago`;
+}

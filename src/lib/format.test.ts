@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decomposeMoneyXp, formatBytes, formatCompactNumber, recomposeMoneyXp } from './format';
+import { decomposeMoneyXp, formatBytes, formatCompactNumber, formatRelativeTime, recomposeMoneyXp } from './format';
 
 describe('formatCompactNumber', () => {
   it('matches the exact examples given for this feature', () => {
@@ -102,5 +102,33 @@ describe('formatBytes', () => {
   it('switches to MB with one decimal at 1 MB and above', () => {
     expect(formatBytes(1024 * 1024)).toBe('1.0 MB');
     expect(formatBytes(5 * 1024 * 1024)).toBe('5.0 MB');
+  });
+});
+
+describe('formatRelativeTime', () => {
+  const NOW = Date.parse('2026-09-03T12:00:00.000Z');
+
+  it('says "just now" for anything under a minute old', () => {
+    expect(formatRelativeTime('2026-09-03T11:59:30.000Z', NOW)).toBe('just now');
+    expect(formatRelativeTime(new Date(NOW).toISOString(), NOW)).toBe('just now');
+  });
+
+  it('shows minutes, singular vs plural', () => {
+    expect(formatRelativeTime('2026-09-03T11:59:00.000Z', NOW)).toBe('1 minute ago');
+    expect(formatRelativeTime('2026-09-03T11:55:00.000Z', NOW)).toBe('5 minutes ago');
+  });
+
+  it('switches to hours once an hour or more has passed', () => {
+    expect(formatRelativeTime('2026-09-03T11:00:00.000Z', NOW)).toBe('1 hour ago');
+    expect(formatRelativeTime('2026-09-03T09:00:00.000Z', NOW)).toBe('3 hours ago');
+  });
+
+  it('switches to days once 24 hours or more has passed', () => {
+    expect(formatRelativeTime('2026-09-02T12:00:00.000Z', NOW)).toBe('1 day ago');
+    expect(formatRelativeTime('2026-09-01T12:00:00.000Z', NOW)).toBe('2 days ago');
+  });
+
+  it('never goes negative for a timestamp at or after now (clock skew)', () => {
+    expect(formatRelativeTime('2026-09-03T12:05:00.000Z', NOW)).toBe('just now');
   });
 });
