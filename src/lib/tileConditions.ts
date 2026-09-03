@@ -449,15 +449,16 @@ export function formatTileGoal(cond: TileCondition): string | null {
   }
 }
 
-// A compact "620K / 1.5M XP" caption combining current progress with the
-// goal, replacing formatTileGoal's goal-only text for the condition types
-// where the running total is large enough that shorthand actually helps
-// (XP and loot value -- other types' numbers are small enough that a
-// combined caption would just be clutter for no benefit). Current progress
-// is always rounded down (formatCompactNumber's roundDown) so a tile never
-// visually reads as having reached the threshold before it actually has.
-// null for every other condition type -- callers should fall back to
-// formatTileGoal in that case.
+// A "620K / 1.5M XP"-style caption combining current progress with the
+// goal, replacing formatTileGoal's goal-only text so a tile's caption
+// actually reflects how close someone is, not just what the target is.
+// XP/gp-scale numbers use formatCompactNumber's shorthand (current
+// progress always rounded down, so a tile never visually reads as having
+// reached the threshold before it actually has); every other type's
+// numbers are small enough to show exactly. null only for the handful of
+// condition types with no meaningful running count -- callers fall back
+// to formatTileGoal for those (freeSpace/tbd: nothing to measure;
+// singleDropValue: a yes/no, not a running total).
 export function formatTileProgress(cond: TileCondition, status: TileStatus): string | null {
   switch (cond.type) {
     case 'xpGained':
@@ -470,6 +471,30 @@ export function formatTileProgress(cond: TileCondition, status: TileStatus): str
       return `${status.progress}/${status.goal} items`;
     case 'bigDropsCount':
       return `${status.progress}/${status.goal} big drops`;
+    case 'bossKcGained':
+    case 'kcGained':
+      return `${status.progress} / ${status.goal} KC`;
+    case 'slayerTasksCompleted':
+      return `${status.progress} / ${status.goal} tasks`;
+    case 'cluesCompleted':
+    case 'beginnerCluesCompleted':
+    case 'easyCluesCompleted':
+    case 'mediumCluesCompleted':
+    case 'hardCluesCompleted':
+    case 'eliteCluesCompleted':
+    case 'masterCluesCompleted':
+      return `${status.progress} / ${status.goal} clues`;
+    case 'collectionLogGained':
+      return `${status.progress} / ${status.goal} items`;
+    case 'skillLevelGained':
+    case 'levelsGainedLowestSkill':
+      return `${status.progress} / ${status.goal} level${status.goal === 1 ? '' : 's'}`;
+    case 'petsObtained':
+      return `${status.progress} / ${status.goal} pet${status.goal === 1 ? '' : 's'}`;
+    case 'itemCount':
+      return `${status.progress}/${status.goal}x`;
+    case 'maxDeaths':
+      return `${status.progress} / ${status.goal} deaths`;
     default:
       return null;
   }
