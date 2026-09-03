@@ -23,6 +23,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         <NavLink to="/dungeon-master-admin" end className={tabClass}>
           Dashboard
         </NavLink>
+        <NavLink to="/dungeon-master-admin/accounts" className={tabClass}>
+          Accounts
+        </NavLink>
         <NavLink to="/dungeon-master-admin/participants" className={tabClass}>
           Participants
         </NavLink>

@@ -24,12 +24,20 @@ interface FlagRow {
   challenges: { name: string; slug: string } | null;
 }
 
-function KpiCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-stone-800 bg-stone-900 px-4 py-3">
+function KpiCard({ label, value, to }: { label: string; value: string; to?: string }) {
+  const className = `rounded-lg border border-stone-800 bg-stone-900 px-4 py-3 ${to ? 'transition-colors hover:border-stone-700' : ''}`;
+  const content = (
+    <>
       <p className="text-xs uppercase text-stone-500">{label}</p>
       <p className="mt-1 text-2xl font-semibold">{value}</p>
-    </div>
+    </>
+  );
+  return to ? (
+    <Link to={to} className={className}>
+      {content}
+    </Link>
+  ) : (
+    <div className={className}>{content}</div>
   );
 }
 
@@ -115,7 +123,7 @@ export default function AdminDashboardPage() {
       {kpis && (
         <>
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-5">
-            <KpiCard label="Accounts" value={String(kpis.totalUsers)} />
+            <KpiCard label="Accounts" value={String(kpis.totalUsers)} to="/dungeon-master-admin/accounts" />
             <KpiCard label="Draft" value={String(kpis.challengesByStatus.draft)} />
             <KpiCard label="Active" value={String(kpis.challengesByStatus.active)} />
             <KpiCard label="Ended" value={String(kpis.challengesByStatus.ended)} />
