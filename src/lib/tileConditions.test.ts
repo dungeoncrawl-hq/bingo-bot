@@ -25,6 +25,7 @@ const ZERO_STATS: ParticipantStats = {
   hardCluesCompleted: 0,
   eliteCluesCompleted: 0,
   masterCluesCompleted: 0,
+  gotrCompleted: 0,
   collectionLogGained: 0,
   skillLevelsGained: {},
   skillXpGained: {},
@@ -46,6 +47,12 @@ describe('checkTile', () => {
     expect(checkTile(cond, stats({ xpGained: 999 })).done).toBe(false);
     expect(checkTile(cond, stats({ xpGained: 1000 })).done).toBe(true);
     expect(checkTile(cond, stats({ xpGained: 5000 })).done).toBe(true);
+  });
+
+  it('gotrCompleted is not done below threshold and done at/above it', () => {
+    const cond: TileCondition = { type: 'gotrCompleted', threshold: 2 };
+    expect(checkTile(cond, stats({ gotrCompleted: 1 })).done).toBe(false);
+    expect(checkTile(cond, stats({ gotrCompleted: 2 })).done).toBe(true);
   });
 
   it('kcGained reads only its own activity, not bossKcGained', () => {
@@ -272,6 +279,11 @@ describe('formatTileProgress', () => {
     expect(formatTileProgress(cond, checkTile(cond, stats({ collectionLogGained: 1 })))).toBe('1 / 3 items');
   });
 
+  it('formats gotrCompleted as a plain progress/goal rift count', () => {
+    const cond: TileCondition = { type: 'gotrCompleted', threshold: 2 };
+    expect(formatTileProgress(cond, checkTile(cond, stats({ gotrCompleted: 1 })))).toBe('1 / 2 rifts');
+  });
+
   it('formats skillLevelGained/levelsGainedLowestSkill with goal-driven pluralization', () => {
     const multi: TileCondition = { type: 'skillLevelGained', skill: 'Attack', threshold: 3 };
     expect(formatTileProgress(multi, checkTile(multi, stats({ skillLevelsGained: { Attack: 1 } })))).toBe('1 / 3 levels');
@@ -414,6 +426,7 @@ describe('conditionNeedsBaseline', () => {
       { type: 'hardCluesCompleted', threshold: 1 },
       { type: 'eliteCluesCompleted', threshold: 1 },
       { type: 'masterCluesCompleted', threshold: 1 },
+      { type: 'gotrCompleted', threshold: 1 },
     ];
     for (const cond of hiscoresBacked) expect(conditionNeedsBaseline(cond)).toBe(true);
   });

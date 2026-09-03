@@ -24,6 +24,11 @@ export interface HiscoresRecap {
   hardCluesCompleted: number;
   eliteCluesCompleted: number;
   masterCluesCompleted: number;
+  // Guardians of the Rift completions gained -- see GOTR_ACTIVITY below
+  // and tileConditions.ts's gotrCompleted for why this rides the same
+  // hiscores-activities-diff machinery as a clue tier, rather than
+  // Dink's Kill Count notifier like every other minigame/boss.
+  gotrCompleted: number;
   // Every skill tied for lowest XP in the `before` baseline snapshot (see
   // xpGainedLowestSkill/levelsGainedLowestSkill in tileConditions.ts) --
   // length 1 when there's a single unambiguous lowest skill, >1 on a
@@ -52,6 +57,11 @@ const CLUE_TIER_ACTIVITY: Record<ClueField, string> = {
   eliteCluesCompleted: 'Clue Scrolls (elite)',
   masterCluesCompleted: 'Clue Scrolls (master)',
 };
+
+// Exact OSRS hiscores activity name for Guardians of the Rift -- verified
+// live against the real index_lite.json response (not just the wiki),
+// same as every CLUE_TIER_ACTIVITY entry above.
+const GOTR_ACTIVITY = 'Rifts closed';
 
 function activityScore(snapshot: SnapshotRow, activityName: string): number {
   return snapshot.activities[activityName]?.score ?? 0;
@@ -93,11 +103,14 @@ function diffSnapshots(before: SnapshotRow, after: SnapshotRow): HiscoresRecap {
     ]),
   ) as Record<ClueField, number>;
 
+  const gotrCompleted = Math.max(0, activityScore(after, GOTR_ACTIVITY) - activityScore(before, GOTR_ACTIVITY));
+
   return {
     xpGained,
     skillXpGained,
     skillLevelsGained,
     ...clueDeltas,
+    gotrCompleted,
     lowestSkillCandidates: resolveLowestSkillCandidates(before),
   };
 }

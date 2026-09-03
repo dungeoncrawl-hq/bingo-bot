@@ -35,12 +35,14 @@ describe('computeParticipantStats', () => {
       hardCluesCompleted: 1,
       eliteCluesCompleted: 0,
       masterCluesCompleted: 0,
+      gotrCompleted: 3,
       lowestSkillCandidates: ['Farming'],
     };
     const s = computeParticipantStats(EMPTY_RAW, WINDOW, recap);
     expect(s.xpGained).toBe(50_000);
     expect(s.skillLevelsGained).toEqual({ Attack: 2 });
     expect(s.hardCluesCompleted).toBe(1);
+    expect(s.gotrCompleted).toBe(3);
     expect(s.lowestSkillCandidates).toEqual(['Farming']);
   });
 
@@ -62,6 +64,7 @@ describe('computeParticipantStats', () => {
       hardCluesCompleted: 0,
       eliteCluesCompleted: 0,
       masterCluesCompleted: 0,
+      gotrCompleted: 0,
       lowestSkillCandidates: ['Farming', 'Runecraft'],
     };
     const s = computeParticipantStats(EMPTY_RAW, WINDOW, recap, 'Runecraft');
@@ -227,6 +230,7 @@ function stats(overrides: Partial<ParticipantStats> = {}): ParticipantStats {
     hardCluesCompleted: 0,
     eliteCluesCompleted: 0,
     masterCluesCompleted: 0,
+    gotrCompleted: 0,
     collectionLogGained: 0,
     skillLevelsGained: {},
     skillXpGained: {},

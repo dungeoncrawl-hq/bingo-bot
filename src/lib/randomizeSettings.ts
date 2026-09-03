@@ -16,11 +16,15 @@ export type KcTier = 'fast' | 'slow' | 'verySlow';
 
 // Every non-placeholder TileCondition type except 'kcGained' (its own
 // per-boss tier lookup below, since one flat KC number can't span 72 bosses
-// of wildly different farm rates) and 'itemSetCollected' (a percentage of
+// of wildly different farm rates), 'itemSetCollected' (a percentage of
 // the chosen item-set's size, not a flat number -- see
 // itemSetCollectedPercent below, kept separate so it stays sane as more
-// PRESET_ITEM_SETS entries get added beyond today's single one).
-export type ThresholdConditionType = Exclude<TileCondition['type'], 'freeSpace' | 'tbd' | 'kcGained' | 'itemSetCollected'>;
+// PRESET_ITEM_SETS entries get added beyond today's single one), and
+// 'gotrCompleted' (deliberately left out of the auto-randomizer for now --
+// a single-activity condition doesn't carry its own weight here the way a
+// whole threshold tier does; a host can still add it by hand via
+// TileEditorForm.tsx).
+export type ThresholdConditionType = Exclude<TileCondition['type'], 'freeSpace' | 'tbd' | 'kcGained' | 'itemSetCollected' | 'gotrCompleted'>;
 
 export interface RandomizeSettings {
   thresholds: Record<ThresholdConditionType, Record<Difficulty, number>>;

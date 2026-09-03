@@ -108,6 +108,13 @@ describe('computeHiscoresRecap', () => {
     expect(recap?.mediumCluesCompleted).toBe(0);
   });
 
+  it('diffs gotrCompleted from the "Rifts closed" hiscores activity', () => {
+    const before = snapshot('2026-08-30', 0, { activities: { 'Rifts closed': { rank: 1, score: 108 } } });
+    const after = snapshot('2026-09-01', 0, { activities: { 'Rifts closed': { rank: 1, score: 110 } } });
+    const recap = computeHiscoresRecap([before, after], WINDOW);
+    expect(recap?.gotrCompleted).toBe(2);
+  });
+
   it('resolves a single unambiguous lowest-XP skill from the "before" baseline snapshot', () => {
     const before = snapshot('2026-08-30', 0, {
       skills: { Attack: { level: 50, xp: 100_000 }, Farming: { level: 1, xp: 0 } },

@@ -117,6 +117,10 @@ const CONDITION_GROUPS: { group: string; options: { value: TileCondition['type']
     options: [{ value: 'collectionLogGained', label: 'New collection log items' }],
   },
   {
+    group: 'Minigames',
+    options: [{ value: 'gotrCompleted', label: 'Guardians of the Rift completions' }],
+  },
+  {
     group: 'Pets',
     options: [{ value: 'petsObtained', label: 'Pets obtained' }],
   },

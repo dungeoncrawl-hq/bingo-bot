@@ -32,6 +32,7 @@ const DEATH_ICON_URL = 'https://oldschool.runescape.wiki/images/Items_kept_on_de
 // Baby Mole -- one of the most recognizable pets in OSRS, standing in for
 // "a pet" generically since the wiki has no single generic pet icon.
 const PETS_ICON_URL = 'https://oldschool.runescape.wiki/images/Baby_Mole.png';
+const GOTR_ICON_URL = 'https://oldschool.runescape.wiki/images/Abyssal_lantern.png';
 
 // The label is entirely derived from the condition (and its skill/activity/
 // item-catalog parameters) -- not a separate host-editable field in
@@ -80,6 +81,8 @@ export function defaultLabelFor(type: TileCondition['type'], skill: string, acti
       return 'Elite Clues';
     case 'masterCluesCompleted':
       return 'Master Clues';
+    case 'gotrCompleted':
+      return 'Rifts Closed';
     case 'collectionLogGained':
       return 'Collection Log';
     case 'petsObtained':
@@ -137,6 +140,8 @@ export function defaultIconFor(type: TileCondition['type'], skill?: string, acti
       return MASTER_CLUE_ICON_URL;
     case 'collectionLogGained':
       return COLLECTION_LOG_ICON_URL;
+    case 'gotrCompleted':
+      return GOTR_ICON_URL;
     case 'skillLevelGained':
     case 'skillXpGained':
       return skill ? skillIconUrl(skill) : null;

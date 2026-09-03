@@ -69,6 +69,17 @@ export type TileCondition =
   // Same per-participant lowest-skill resolution as xpGainedLowestSkill
   // above, tracking levels gained instead of XP gained.
   | { type: 'levelsGainedLowestSkill'; threshold: number }
+  // Guardians of the Rift completions gained ("Rifts closed" on OSRS
+  // hiscores). Unlike every other minigame/boss (kcGained), Dink's Kill
+  // Count notifier can't drive this one directly -- its regex requires
+  // the word before "count is:" to be kill/chest/completion/harvest/
+  // success/opened, and GOTR's own chat message uses "closed", which
+  // matches none of those (verified against DinkPlugin's
+  // KillCountNotifier.java source; zero "Rifts closed"/"Guardians"
+  // boss_kills rows have ever landed site-wide despite other minigames
+  // working fine). So this is hiscores-backed instead, exactly like a
+  // clue-scroll tier -- see GOTR_ACTIVITY in hiscoresRecap.ts.
+  | { type: 'gotrCompleted'; threshold: number }
   // Always complete for every participant, the moment checkTile ever runs
   // for them (typically right on joining -- see api/sync-participant.ts) --
   // no stats involved, nothing to earn. Points/first_completer_bonus are
@@ -94,6 +105,7 @@ export interface ParticipantStats {
   hardCluesCompleted: number;
   eliteCluesCompleted: number;
   masterCluesCompleted: number;
+  gotrCompleted: number;
   collectionLogGained: number;
   skillLevelsGained: Record<string, number>;
   skillXpGained: Record<string, number>;
@@ -193,6 +205,8 @@ export function checkTile(cond: TileCondition, stats: ParticipantStats): TileSta
         progress: stats.collectionLogGained,
         goal: cond.threshold,
       };
+    case 'gotrCompleted':
+      return { done: stats.gotrCompleted >= cond.threshold, progress: stats.gotrCompleted, goal: cond.threshold };
     case 'skillLevelGained': {
       const progress = stats.skillLevelsGained[cond.skill] ?? 0;
       return { done: progress >= cond.threshold, progress, goal: cond.threshold };
@@ -278,6 +292,7 @@ export function conditionNeedsBaseline(cond: TileCondition): boolean {
     case 'hardCluesCompleted':
     case 'eliteCluesCompleted':
     case 'masterCluesCompleted':
+    case 'gotrCompleted':
       return true;
     default:
       return false;
@@ -318,6 +333,10 @@ export function describeTileCondition(cond: TileCondition): string {
       return `${cond.threshold.toLocaleString()} Master clue scrolls`;
     case 'collectionLogGained':
       return `${cond.threshold.toLocaleString()} new collection log items`;
+    case 'gotrCompleted':
+      return cond.threshold > 1
+        ? `${cond.threshold.toLocaleString()} Guardians of the Rift completions`
+        : 'a Guardians of the Rift completion';
     case 'skillLevelGained':
       return cond.threshold > 1 ? `${cond.threshold} levels in ${cond.skill}` : `a level in ${cond.skill}`;
     case 'skillXpGained':
@@ -386,6 +405,8 @@ export function tileTaskPhrase(cond: TileCondition): string {
       return `${cond.threshold.toLocaleString()} Master clue scrolls`;
     case 'collectionLogGained':
       return `${cond.threshold.toLocaleString()} new collection log items`;
+    case 'gotrCompleted':
+      return cond.threshold === 1 ? '1 Guardians of the Rift completion' : `${cond.threshold.toLocaleString()} Guardians of the Rift completions`;
     case 'skillLevelGained':
       return cond.threshold === 1 ? `1 ${cond.skill} level` : `${cond.threshold} ${cond.skill} levels`;
     case 'skillXpGained':
@@ -476,6 +497,8 @@ export function formatTileGoal(cond: TileCondition): string | null {
       return `${cond.threshold.toLocaleString()} clues`;
     case 'collectionLogGained':
       return `${cond.threshold.toLocaleString()} items`;
+    case 'gotrCompleted':
+      return `${cond.threshold.toLocaleString()} rifts`;
     case 'petsObtained':
       return `${cond.threshold.toLocaleString()} pet${cond.threshold === 1 ? '' : 's'}`;
   }
@@ -518,6 +541,8 @@ export function formatTileProgress(cond: TileCondition, status: TileStatus): str
       return `${status.progress} / ${status.goal} clues`;
     case 'collectionLogGained':
       return `${status.progress} / ${status.goal} items`;
+    case 'gotrCompleted':
+      return `${status.progress} / ${status.goal} rifts`;
     case 'skillLevelGained':
     case 'levelsGainedLowestSkill':
       return `${status.progress} / ${status.goal} level${status.goal === 1 ? '' : 's'}`;

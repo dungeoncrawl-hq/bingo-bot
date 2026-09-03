@@ -10,6 +10,14 @@
 // match against it), so a name here that doesn't match Hiscores exactly
 // means that tile can simply never complete.
 //
+// Deliberately excludes "Rifts closed" (Guardians of the Rift) even
+// though it's a real Hiscores activity name -- Dink's Kill Count
+// notifier can never actually report it (its regex requires the word
+// before "count is:" to be kill/chest/completion/harvest/success/
+// opened; GOTR's own message uses "closed", matching none of those).
+// See tileConditions.ts's gotrCompleted for the hiscores-backed
+// condition type that replaces it instead.
+//
 // Icon precedence: a boss/raid's own pet (from rs/src/lib/petIcons.ts's
 // PET_ICON_FILE, already wiki-verified/production-tested there) whenever it
 // has one -- immediately recognizable, and consistent with how this catalog
@@ -66,7 +74,6 @@ export const BOSS_ACTIVITIES: BossActivity[] = [
   { name: 'Obor', icon: `${WIKI}Hill_giant_club.png` },
   { name: 'Phantom Muspah', icon: `${WIKI}Muphin_(follower,_ranged).png` },
   { name: "Phosani's Nightmare", icon: `${WIKI}Little_Nightmare_(follower).png` },
-  { name: 'Rifts closed', icon: `${WIKI}Abyssal_lantern.png` },
   { name: 'Sarachnis', icon: `${WIKI}Sraracha_(follower).png` },
   { name: 'Scorpia', icon: `${WIKI}Scorpia's_offspring_(follower).png` },
   { name: 'Scurrius', icon: `${WIKI}Scurry_(follower).png` },

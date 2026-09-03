@@ -32,7 +32,10 @@ interface RandomizeParams {
   rng?: () => number;
 }
 
-type RandomizableType = Exclude<TileCondition['type'], 'freeSpace' | 'tbd'>;
+// 'gotrCompleted' is excluded same as randomizeSettings.ts's
+// ThresholdConditionType -- deliberately left out of the auto-randomizer
+// for now, a host adds it by hand via TileEditorForm.tsx instead.
+type RandomizableType = Exclude<TileCondition['type'], 'freeSpace' | 'tbd' | 'gotrCompleted'>;
 
 // Grouped the same way TileEditorForm.tsx's CONDITION_GROUPS presents them
 // to a host -- picking the group first, then a type within it, keeps a
