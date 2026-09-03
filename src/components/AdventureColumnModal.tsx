@@ -3,6 +3,7 @@ import { getSupabase } from '../db/supabaseClient';
 import type { Challenge, Tile } from '../db/types';
 import {
   checkTile,
+  conditionNeedsBaseline,
   describeTileCondition,
   formatTileGoal,
   formatTileProgress,
@@ -10,9 +11,9 @@ import {
   type TileStatus,
 } from '../lib/tileConditions';
 import { computeParticipantStats, type RawParticipantData } from '../lib/participantStats';
-import { computeHiscoresRecap, computeHiscoresRecapFromBaseline, type SnapshotRow } from '../lib/hiscoresRecap';
+import type { SnapshotRow } from '../lib/hiscoresRecap';
 import { progressColor } from '../lib/progressColor';
-import { resolveFrontier } from '../lib/adventureProgress';
+import { resolveAdventureTileWindow, resolveFrontier } from '../lib/adventureProgress';
 
 interface ParticipantLite {
   id: string;
@@ -171,28 +172,28 @@ export default function AdventureColumnModal({
           petObtains: petsByP.get(p.id) ?? [],
         };
         const participantSnapshots = snapshotsByP.get(p.id) ?? [];
-        // Same first-tile-ever exemption as challengeProgress.ts's own
-        // done.size === 0 check -- a participant's very first tile is
-        // always challenge-wide, never baseline-scoped (there's nothing
-        // to have reset a baseline from yet).
-        if (doneIds.size === 0) {
-          const hiscoresRecap = computeHiscoresRecap(participantSnapshots, window);
-          const stats = computeParticipantStats(raw, window, hiscoresRecap, p.chosen_lowest_skill);
-          result[p.id] = checkTile(tile.condition, stats);
-        } else if (p.adventure_baseline_at) {
-          const recap = p.adventure_baseline_snapshot
-            ? computeHiscoresRecapFromBaseline(p.adventure_baseline_snapshot, participantSnapshots)
-            : null;
-          const stats = computeParticipantStats(
-            raw,
-            { start: p.adventure_baseline_at, end: window.end },
-            recap,
-            p.chosen_lowest_skill,
-          );
+        const lastCompletionAt =
+          completions
+            .filter((c) => c.kind === 'tile' && c.participant_id === p.id)
+            .map((c) => c.completed_at)
+            .sort()
+            .at(-1) ?? null;
+        const resolved = resolveAdventureTileWindow(
+          tile.condition,
+          doneIds.size,
+          window,
+          p.adventure_baseline_at,
+          p.adventure_baseline_snapshot,
+          lastCompletionAt,
+          participantSnapshots,
+        );
+        if (resolved.kind === 'ready') {
+          const stats = computeParticipantStats(raw, resolved.window, resolved.recap, p.chosen_lowest_skill);
           result[p.id] = checkTile(tile.condition, stats);
         }
-        // else: this IS their frontier, but no baseline yet -- awaiting a
-        // qualifying logout, left out of `statuses` entirely so the
+        // else: 'awaiting-baseline' -- this IS their frontier, but a
+        // hiscores-backed tile with no baseline yet, awaiting a
+        // qualifying logout. Left out of `statuses` entirely so the
         // render below shows the dedicated "log out to start" state.
       }
       if (!cancelled) {
@@ -244,7 +245,7 @@ export default function AdventureColumnModal({
     const frontier = resolveFrontier(tiles, p.adventure_path, doneIds);
     const isFrontierHere = frontier.kind === 'tile' && frontier.tile.id === tile.id;
     if (!isFrontierHere) return { p, tile, reached: false, completedAt: null, awaitingBaselineReset: false };
-    const awaitingBaselineReset = doneIds.size > 0 && !p.adventure_baseline_at;
+    const awaitingBaselineReset = doneIds.size > 0 && conditionNeedsBaseline(tile.condition) && !p.adventure_baseline_at;
     return { p, tile, reached: true, completedAt: null, awaitingBaselineReset };
   });
 

@@ -6,6 +6,7 @@ import { getSupabase } from '../db/supabaseClient';
 import type { AdventureLayout, Challenge, Team, Tile } from '../db/types';
 import {
   checkTile,
+  conditionNeedsBaseline,
   describeTileCondition,
   formatTileGoal,
   formatTileProgress,
@@ -13,7 +14,7 @@ import {
   type TileStatus,
 } from '../lib/tileConditions';
 import { computeParticipantStats, type RawParticipantData } from '../lib/participantStats';
-import { computeHiscoresRecap, computeHiscoresRecapFromBaseline, type SnapshotRow } from '../lib/hiscoresRecap';
+import { computeHiscoresRecap, type SnapshotRow } from '../lib/hiscoresRecap';
 import { computeLeaderboard } from '../lib/leaderboard';
 import { computeFirstCompleters } from '../lib/firstCompletions';
 import { progressColor } from '../lib/progressColor';
@@ -29,6 +30,7 @@ import {
   forkIndexForColumn,
   isBossColumn,
   laneCountForColumn,
+  resolveAdventureTileWindow,
   resolveFrontier,
   roomNumberForColumn,
 } from '../lib/adventureProgress';
@@ -256,29 +258,46 @@ export default function BoardPage() {
 
         // Adventure's logout-gated baseline reset (BACKLOG.md #4): once
         // a participant is past their first tile, their frontier tile's
-        // live progress must reflect stats since their baseline, not
-        // since the challenge started -- mirrors
-        // challengeProgress.ts's own server-side distinction. Every
-        // other tile (done, locked, other-lane) keeps using the
-        // challenge-wide computation above, since only the frontier
-        // tile's number is ever actually shown. If no baseline is
-        // established yet, this is left alone -- the render below shows
-        // the "awaiting logout" state instead of any number for it.
+        // live progress must reflect stats since it actually became
+        // reachable, not since the challenge started -- mirrors
+        // challengeProgress.ts's own server-side use of
+        // resolveAdventureTileWindow. Every other tile (done, locked,
+        // other-lane) keeps using the challenge-wide computation above,
+        // since only the frontier tile's number is ever actually shown.
+        // A hiscores-backed frontier tile with no baseline yet
+        // ('awaiting-baseline') is left alone -- the render below shows
+        // the "log out to start" state instead of any number for it. A
+        // Dink-driven frontier tile never returns 'awaiting-baseline' at
+        // all (see conditionNeedsBaseline/resolveAdventureTileWindow).
         if (challenge.board_type === 'adventure') {
           const p = participants.find((pp) => pp.id === pid);
           const doneIds = new Set(completions.filter((c) => c.kind === 'tile' && c.participant_id === pid).map((c) => c.ref));
           const frontier = resolveFrontier(tiles, p?.adventure_path ?? {}, doneIds);
-          if (frontier.kind === 'tile' && doneIds.size > 0 && p?.adventure_baseline_at) {
-            const recap = p.adventure_baseline_snapshot
-              ? computeHiscoresRecapFromBaseline(p.adventure_baseline_snapshot, snapshotsByParticipant[pid] ?? [])
-              : null;
-            const sinceBaselineStats = computeParticipantStats(
-              rawByParticipant[pid],
-              { start: p.adventure_baseline_at, end: window.end },
-              recap,
-              chosenSkillByParticipant.get(pid) ?? null,
+          if (frontier.kind === 'tile' && doneIds.size > 0 && p) {
+            const lastCompletionAt =
+              completions
+                .filter((c) => c.kind === 'tile' && c.participant_id === pid)
+                .map((c) => c.completed_at)
+                .sort()
+                .at(-1) ?? null;
+            const resolved = resolveAdventureTileWindow(
+              frontier.tile.condition,
+              doneIds.size,
+              window,
+              p.adventure_baseline_at,
+              p.adventure_baseline_snapshot,
+              lastCompletionAt,
+              snapshotsByParticipant[pid] ?? [],
             );
-            tileStatuses[frontier.tile.id] = checkTile(frontier.tile.condition, sinceBaselineStats);
+            if (resolved.kind === 'ready') {
+              const sinceBaselineStats = computeParticipantStats(
+                rawByParticipant[pid],
+                resolved.window,
+                resolved.recap,
+                chosenSkillByParticipant.get(pid) ?? null,
+              );
+              tileStatuses[frontier.tile.id] = checkTile(frontier.tile.condition, sinceBaselineStats);
+            }
           }
         }
       }
@@ -396,9 +415,14 @@ export default function BoardPage() {
   const pendingLaneChoice = myFrontier && myFrontier.kind === 'needsLaneChoice' ? myFrontier : null;
   // Reached a new room, but locked until a qualifying Dink LOGOUT event
   // establishes a fresh baseline (BACKLOG.md #4) -- never true for a
-  // participant's very first tile ever, matching challengeProgress.ts.
+  // participant's very first tile ever, and never true for a Dink-driven
+  // tile at all (conditionNeedsBaseline), matching
+  // challengeProgress.ts/resolveAdventureTileWindow.
   const myAwaitingBaselineReset =
-    myFrontier?.kind === 'tile' && doneTileIdsFor(myParticipant?.id ?? '').size > 0 && !myParticipant?.adventure_baseline_at;
+    myFrontier?.kind === 'tile' &&
+    doneTileIdsFor(myParticipant?.id ?? '').size > 0 &&
+    conditionNeedsBaseline(myFrontier.tile.condition) &&
+    !myParticipant?.adventure_baseline_at;
 
   // Every participant's current frontier tile, regardless of whose board
   // is being viewed -- an always-on "where's everyone right now" layer
@@ -566,8 +590,14 @@ export default function BoardPage() {
                         // (BACKLOG.md #4) -- distinct from "locked" below,
                         // which means "not reached yet." Never true for a
                         // participant's very first tile ever (nothing to
-                        // reset from), matching challengeProgress.ts.
-                        const awaitingBaselineReset = isFrontier && viewedCompletedTileIds.size > 0 && !viewedParticipant?.adventure_baseline_at;
+                        // reset from) or for a Dink-driven tile at all
+                        // (conditionNeedsBaseline), matching
+                        // challengeProgress.ts/resolveAdventureTileWindow.
+                        const awaitingBaselineReset =
+                          isFrontier &&
+                          viewedCompletedTileIds.size > 0 &&
+                          conditionNeedsBaseline(tile!.condition) &&
+                          !viewedParticipant?.adventure_baseline_at;
                         const locked = tile != null && isOnPath && !done && !isFrontier;
                         const status = tile ? viewedTileStatuses[tile.id] : undefined;
                         // Only the frontier tile's status reflects the

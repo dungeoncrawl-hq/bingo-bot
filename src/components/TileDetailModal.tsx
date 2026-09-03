@@ -11,8 +11,9 @@ import {
   type TileStatus,
 } from '../lib/tileConditions';
 import { computeParticipantStats, poolStats, type RawParticipantData } from '../lib/participantStats';
-import { computeHiscoresRecap, computeHiscoresRecapFromBaseline, type SnapshotRow } from '../lib/hiscoresRecap';
+import { computeHiscoresRecap, type SnapshotRow } from '../lib/hiscoresRecap';
 import { progressColor } from '../lib/progressColor';
+import { resolveAdventureTileWindow } from '../lib/adventureProgress';
 
 interface ParticipantLite {
   id: string;
@@ -206,17 +207,31 @@ export default function TileDetailModal({
         const participant = participants.find((p) => p.id === id);
         const participantSnapshots = snapshotsByP.get(id) ?? [];
 
-        if (challenge.board_type === 'adventure' && doneTileIdsFor(id).size > 0) {
-          if (participant?.adventure_baseline_at) {
-            const recap = participant.adventure_baseline_snapshot
-              ? computeHiscoresRecapFromBaseline(participant.adventure_baseline_snapshot, participantSnapshots)
-              : null;
-            statsById[id] = computeParticipantStats(raw, { start: participant.adventure_baseline_at, end: window.end }, recap, chosenLowestSkill);
+        if (challenge.board_type === 'adventure' && participant) {
+          const doneIds = doneTileIdsFor(id);
+          const lastCompletionAt =
+            completions
+              .filter((c) => c.kind === 'tile' && c.participant_id === id)
+              .map((c) => c.completed_at)
+              .sort()
+              .at(-1) ?? null;
+          const resolved = resolveAdventureTileWindow(
+            tile.condition,
+            doneIds.size,
+            window,
+            participant.adventure_baseline_at,
+            participant.adventure_baseline_snapshot,
+            lastCompletionAt,
+            participantSnapshots,
+          );
+          if (resolved.kind === 'ready') {
+            statsById[id] = computeParticipantStats(raw, resolved.window, resolved.recap, chosenLowestSkill);
           } else {
-            // No baseline yet -- there is no valid window to measure
-            // from at all (not even the challenge-wide one, which would
-            // just reproduce the same stale-progress bug this exists to
-            // fix). Zeroed-out raw data guarantees no progress shows
+            // 'awaiting-baseline' -- a hiscores-backed tile with no
+            // baseline yet, so there's no valid window to measure from
+            // at all (not even the challenge-wide one, which would just
+            // reproduce the same stale-progress bug this exists to fix).
+            // Zeroed-out raw data guarantees no progress shows
             // regardless of window; the render below replaces the
             // caption with "Log out to start" and skips the bar entirely.
             awaitingBaselineResetById[id] = true;

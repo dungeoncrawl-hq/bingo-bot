@@ -14,11 +14,11 @@ import { checkTile, gridLines } from '../lib/tileConditions.js';
 import { computeParticipantStats, poolStats } from '../lib/participantStats.js';
 import type { RawParticipantData } from '../lib/participantStats.js';
 import type { ParticipantStats } from '../lib/tileConditions.js';
-import { computeHiscoresRecap, computeHiscoresRecapFromBaseline } from '../lib/hiscoresRecap.js';
+import { computeHiscoresRecap } from '../lib/hiscoresRecap.js';
 import type { SnapshotRow } from '../lib/hiscoresRecap.js';
 import { computeLeaderboard } from '../lib/leaderboard.js';
 import { computeFirstCompleters } from '../lib/firstCompletions.js';
-import { resolveFrontier } from '../lib/adventureProgress.js';
+import { resolveFrontier, resolveAdventureTileWindow } from '../lib/adventureProgress.js';
 import type { AdventurePath } from '../lib/adventureProgress.js';
 import type { Challenge, GridLayout, Team, Tile } from '../db/types.js';
 
@@ -36,6 +36,7 @@ interface ParticipantRow {
 interface CompletionRow {
   kind: 'tile' | 'line' | 'board';
   ref: string;
+  completed_at: string;
 }
 
 interface ChallengeCompletionRow {
@@ -190,7 +191,7 @@ export async function checkChallengeProgress(participantId: string, isLogout: bo
   const window = { start: challenge.start_date, end: challenge.end_date };
   const [{ statsList, rawByMember, snapshotsByMember }, existingCompletions] = await Promise.all([
     fetchPoolStats(poolMembers, window),
-    selectRows<CompletionRow>('tile_completions', `participant_id=eq.${pid}&select=kind,ref`),
+    selectRows<CompletionRow>('tile_completions', `participant_id=eq.${pid}&select=kind,ref,completed_at`),
   ]);
   // Pooled or not, feed checkTile the exact same ParticipantStats shape
   // it always has -- poolStats is only needed once there's more than one
@@ -213,7 +214,7 @@ export async function checkChallengeProgress(participantId: string, isLogout: bo
   async function insertForPool(kind: string, ref: string): Promise<boolean> {
     let landed = false;
     for (const pid2 of poolParticipantIds) {
-      if (await insertCompletion(challenge.id, pid2, kind, ref)) landed = true;
+      if ((await insertCompletion(challenge.id, pid2, kind, ref)).landed) landed = true;
     }
     return landed;
   }
@@ -253,16 +254,21 @@ export async function checkChallengeProgress(participantId: string, isLogout: bo
     // tile's bar before an earlier one is even reached, so (unlike
     // grid5x5 above) completions are never driven by sweeping every tile
     // against `stats` at once. Only the participant's current frontier is
-    // ever checked.
+    // ever checked, and the loop still stops after at most one non-logout
+    // completion (see below) -- that pacing is unchanged by BACKLOG.md #4's
+    // update distinguishing Dink-driven tiles from hiscores-backed ones.
     //
-    // The participant's very first tile ever (done.size === 0 below)
-    // keeps today's behavior verbatim -- cumulative since the challenge
-    // started, using the same `stats` grid5x5 uses -- since there's no
-    // prior tile to reset from. From the second tile onward,
-    // BACKLOG.md #4's logout-gated baseline reset applies: the tile
-    // isn't even evaluated until a qualifying Dink LOGOUT event
-    // establishes a fresh baseline, which the loop then checks stats
-    // against instead of the challenge-wide `stats`.
+    // The participant's very first tile ever (done.size === 0) keeps
+    // today's behavior verbatim -- cumulative since the challenge started,
+    // using the same `stats` grid5x5 uses -- since there's no prior tile
+    // to reset from. From the second tile onward,
+    // resolveAdventureTileWindow (adventureProgress.ts) decides the
+    // window: a Dink-driven tile (backed by raw event rows with real
+    // timestamps -- tileConditions.ts's conditionNeedsBaseline) is
+    // checked against everything since the previous tile's own
+    // completion, no logout needed; a hiscores-backed tile still isn't
+    // evaluated at all until a qualifying Dink LOGOUT event establishes a
+    // fresh baseline.
     const path = participant.adventure_path ?? {};
     const done = new Set(alreadyTileIds);
     // Adventure is always solo (Coop/Team combined with it is
@@ -272,6 +278,16 @@ export async function checkChallengeProgress(participantId: string, isLogout: bo
     const memberSnapshots = snapshotsByMember.get(participant.id) ?? [];
     let baselineAt = participant.adventure_baseline_at;
     let baselineSnapshot = participant.adventure_baseline_snapshot;
+    // Seeded from this participant's existing tile completions, advanced
+    // as new ones land below -- Adventure is solo-only, so completions
+    // land strictly in path order, meaning "most recent overall" and
+    // "the tile immediately preceding the frontier" are the same thing.
+    let lastCompletionAt =
+      existingCompletions
+        .filter((c) => c.kind === 'tile')
+        .map((c) => c.completed_at)
+        .sort()
+        .at(-1) ?? null;
 
     async function establishBaseline(): Promise<void> {
       const latest = [...memberSnapshots].sort((a, b) => a.recorded_on.localeCompare(b.recorded_on)).at(-1) ?? null;
@@ -286,43 +302,53 @@ export async function checkChallengeProgress(participantId: string, isLogout: bo
       const frontier = resolveFrontier(tiles, path, done);
       if (frontier.kind !== 'tile') break;
 
-      let tileStats: ParticipantStats;
-      if (done.size === 0) {
-        tileStats = stats; // first tile ever -- unchanged behavior
-      } else {
-        if (!baselineAt) {
-          if (!isLogout) break; // still awaiting a qualifying logout
-          await establishBaseline();
-          break; // just reset -- nothing could have happened in this same instant
-        }
-        const recap = baselineSnapshot ? computeHiscoresRecapFromBaseline(baselineSnapshot, memberSnapshots) : null;
-        tileStats = computeParticipantStats(raw, { start: baselineAt, end: window.end }, recap, participant.chosen_lowest_skill);
+      const resolved = resolveAdventureTileWindow(
+        frontier.tile.condition,
+        done.size,
+        window,
+        baselineAt,
+        baselineSnapshot,
+        lastCompletionAt,
+        memberSnapshots,
+      );
+      if (resolved.kind === 'awaiting-baseline') {
+        if (!isLogout) break; // still awaiting a qualifying logout
+        await establishBaseline();
+        break; // just reset -- nothing could have happened in this same instant
       }
+      const tileStats =
+        done.size === 0 ? stats : computeParticipantStats(raw, resolved.window, resolved.recap, participant.chosen_lowest_skill);
 
       if (!checkTile(frontier.tile.condition, tileStats).done) break;
-      if (await insertCompletion(challenge.id, participant.id, 'tile', frontier.tile.id)) {
+      const inserted = await insertCompletion(challenge.id, participant.id, 'tile', frontier.tile.id);
+      if (inserted.landed) {
         insertedTileIds.push(frontier.tile.id);
+        if (inserted.completedAt) lastCompletionAt = inserted.completedAt;
       }
       done.add(frontier.tile.id);
 
+      // Pacing is unchanged from today, for every tile type: only a
+      // logout can chain straight into evaluating the next tile in this
+      // same pass (and even then, in practice only a freeSpace-style
+      // tile could complete instantly against a freshly-reset baseline).
+      // Any other completion -- Dink-driven or not -- stops here; the
+      // next tile is picked up by whatever real Dink event happens next.
+      // This is the one property BACKLOG.md #4 exists to guarantee and
+      // this change deliberately leaves untouched: one webhook event
+      // never clears more than one not-yet-reached tile.
       if (isLogout) {
-        // This same logout immediately becomes the *next* tile's
-        // baseline too -- no need to wait for a second one. The loop
-        // continues, but a freshly-reset baseline means ~zero elapsed
-        // time, so only a freeSpace-style tile could complete
-        // immediately -- same as freeSpace already can everywhere else.
         await establishBaseline();
       } else {
         await callRpc('clear_adventure_baseline', { p_participant_id: participant.id });
         baselineAt = null;
         baselineSnapshot = null;
-        break; // next tile now locked, awaiting a fresh logout
+        break;
       }
     }
 
     const alreadyBoard = existingCompletions.some((c) => c.kind === 'board');
     if (!alreadyBoard && resolveFrontier(tiles, path, done).kind === 'clear') {
-      boardInserted = await insertCompletion(challenge.id, participant.id, 'board', 'board');
+      boardInserted = (await insertCompletion(challenge.id, participant.id, 'board', 'board')).landed;
     }
   }
 
@@ -439,11 +465,20 @@ export async function checkChallengeProgress(participantId: string, isLogout: bo
   }
 }
 
-async function insertCompletion(challengeId: string, participantId: string, kind: string, ref: string): Promise<boolean> {
-  const rows = await insertRowReturning<{ id: string }>(
+interface InsertCompletionResult {
+  landed: boolean;
+  // The DB-assigned completed_at of the row that just landed, or null on
+  // a conflict (already existed -- see insertRowReturning's own comment)
+  // or if nothing landed at all. Adventure's Dink-driven tiles use this
+  // to advance lastCompletionAt for whatever tile the loop checks next.
+  completedAt: string | null;
+}
+
+async function insertCompletion(challengeId: string, participantId: string, kind: string, ref: string): Promise<InsertCompletionResult> {
+  const rows = await insertRowReturning<{ id: string; completed_at: string }>(
     'tile_completions',
     { challenge_id: challengeId, participant_id: participantId, kind, ref },
     'participant_id,challenge_id,kind,ref',
   );
-  return rows.length > 0;
+  return { landed: rows.length > 0, completedAt: rows[0]?.completed_at ?? null };
 }

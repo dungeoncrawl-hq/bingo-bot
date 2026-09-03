@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   checkTile,
+  conditionNeedsBaseline,
   formatTileProgress,
   gridLines,
   progressPercent,
@@ -395,5 +396,44 @@ describe('tileTaskDetail', () => {
 
   it('is null for condition types whose phrase is already self-contained', () => {
     expect(tileTaskDetail({ type: 'xpGained', threshold: 500_000 })).toBeNull();
+  });
+});
+
+describe('conditionNeedsBaseline', () => {
+  it('is true for every hiscores-backed condition type', () => {
+    const hiscoresBacked: TileCondition[] = [
+      { type: 'xpGained', threshold: 1 },
+      { type: 'skillXpGained', skill: 'Attack', threshold: 1 },
+      { type: 'skillLevelGained', skill: 'Attack', threshold: 1 },
+      { type: 'xpGainedLowestSkill', threshold: 1 },
+      { type: 'levelsGainedLowestSkill', threshold: 1 },
+      { type: 'cluesCompleted', threshold: 1 },
+      { type: 'beginnerCluesCompleted', threshold: 1 },
+      { type: 'easyCluesCompleted', threshold: 1 },
+      { type: 'mediumCluesCompleted', threshold: 1 },
+      { type: 'hardCluesCompleted', threshold: 1 },
+      { type: 'eliteCluesCompleted', threshold: 1 },
+      { type: 'masterCluesCompleted', threshold: 1 },
+    ];
+    for (const cond of hiscoresBacked) expect(conditionNeedsBaseline(cond)).toBe(true);
+  });
+
+  it('is false for every Dink-event-driven condition type', () => {
+    const dinkDriven: TileCondition[] = [
+      { type: 'bossKcGained', threshold: 1 },
+      { type: 'kcGained', activity: 'Zulrah', threshold: 1 },
+      { type: 'slayerTasksCompleted', threshold: 1 },
+      { type: 'lootValueGained', threshold: 1 },
+      { type: 'singleDropValue', threshold: 1 },
+      { type: 'bigDropsCount', dropValueThreshold: 100_000, threshold: 1 },
+      { type: 'itemCount', itemNames: ['a'], setName: 'Set', threshold: 1 },
+      { type: 'itemSetCollected', itemNames: ['a'], setName: 'Set', threshold: 1 },
+      { type: 'collectionLogGained', threshold: 1 },
+      { type: 'maxDeaths', threshold: 1 },
+      { type: 'petsObtained', threshold: 1 },
+      { type: 'freeSpace' },
+      { type: 'tbd' },
+    ];
+    for (const cond of dinkDriven) expect(conditionNeedsBaseline(cond)).toBe(false);
   });
 });

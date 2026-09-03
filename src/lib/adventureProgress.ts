@@ -3,6 +3,9 @@
 // together, mirroring how tileConditions.ts already bundles gridLines +
 // checkTile + resolveLowestSkill for the Standard board_type.
 import type { AdventureLayout, Tile } from '../db/types.js';
+import { conditionNeedsBaseline, type TileCondition } from './tileConditions.js';
+import { computeHiscoresRecap, computeHiscoresRecapFromBaseline, type HiscoresRecap, type SnapshotRow } from './hiscoresRecap.js';
+import type { DateWindow } from './participantStats.js';
 
 // 9 columns, shape 2,2,1,2,2,1,2,2,1 -- two 2-tile lanes converging on a
 // boss, three times, ending at a final boss. Columns 2/5/8 are bosses (2
@@ -121,4 +124,59 @@ export function resolveFrontier(tiles: Tile[], path: AdventurePath, doneTileIds:
     if (!doneTileIds.has(tile.id)) return { kind: 'tile', tile };
   }
   return { kind: 'clear' };
+}
+
+export type AdventureTileWindowResult =
+  | { kind: 'ready'; window: DateWindow; recap: HiscoresRecap | null }
+  // Only ever returned for a hiscores-backed condition (conditionNeedsBaseline
+  // === true) whose participant hasn't logged out since reaching it --
+  // there's no window to check stats against at all yet.
+  | { kind: 'awaiting-baseline' };
+
+// The single decision of "what window (if any) should a frontier tile's
+// stats be checked against" -- consolidates what was, before this
+// function existed, four near-identical copies (challengeProgress.ts
+// server-side, plus live-preview copies in BoardPage.tsx,
+// AdventureColumnModal.tsx, and TileDetailModal.tsx), all needing to
+// agree with each other exactly or the client can show a state the
+// server doesn't actually enforce (or vice versa).
+//
+// Three cases (BACKLOG.md #4, updated to distinguish Dink-driven
+// conditions from hiscores-backed ones -- see conditionNeedsBaseline):
+// 1. This is the participant's very first tile ever (doneCount === 0)
+//    -- nothing to reset from, checked against the whole challenge
+//    window exactly like every non-Adventure board.
+// 2. The tile's condition doesn't need hiscores precision
+//    (!conditionNeedsBaseline) -- backed by raw Dink-event rows with
+//    their own real timestamps, so a window starting at the moment the
+//    *previous* tile completed is already fully precise (arguably more
+//    precise than a logout-based baseline, which starts at the logout
+//    moment, not the actual unlock moment). No logout required. This
+//    does NOT change how many tiles one webhook event can complete --
+//    that pacing lives entirely in challengeProgress.ts's loop, which
+//    still evaluates and stops after one tile per non-logout event
+//    regardless of condition type; this function only ever decides
+//    whether the *current* frontier tile is checkable right now.
+// 3. The tile's condition needs hiscores precision -- unchanged from
+//    the original design: blocked until a qualifying Dink LOGOUT event
+//    establishes a fresh baseline (adventure_baseline_at/_snapshot).
+export function resolveAdventureTileWindow(
+  condition: TileCondition,
+  doneCount: number,
+  challengeWindow: DateWindow,
+  baselineAt: string | null,
+  baselineSnapshot: SnapshotRow | null,
+  lastCompletionAt: string | null,
+  snapshots: SnapshotRow[],
+): AdventureTileWindowResult {
+  if (doneCount === 0) {
+    return { kind: 'ready', window: challengeWindow, recap: computeHiscoresRecap(snapshots, challengeWindow) };
+  }
+  if (!conditionNeedsBaseline(condition)) {
+    const window: DateWindow = { start: lastCompletionAt ?? challengeWindow.start, end: challengeWindow.end };
+    return { kind: 'ready', window, recap: null };
+  }
+  if (!baselineAt) return { kind: 'awaiting-baseline' };
+  const recap = baselineSnapshot ? computeHiscoresRecapFromBaseline(baselineSnapshot, snapshots) : null;
+  return { kind: 'ready', window: { start: baselineAt, end: challengeWindow.end }, recap };
 }

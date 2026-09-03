@@ -252,6 +252,38 @@ export function checkTile(cond: TileCondition, stats: ParticipantStats): TileSta
   }
 }
 
+// Adventure's logout-gated baseline reset (BACKLOG.md #4) only actually
+// needs a logout for condition types backed by hiscores snapshots
+// (xpGained/skillXpGained/skillLevelGained/xpGainedLowestSkill/
+// levelsGainedLowestSkill/every clue tier -- see hiscoresRecap.ts)
+// since hiscores only refresh on a daily cron or a logout, so a logout
+// is the only precise moment to pin a baseline to. Every other
+// condition type is backed by raw Dink-event rows with their own real
+// per-event timestamps (participantStats.ts) -- a window starting at
+// the previous tile's actual completion time is already precise for
+// these, no logout needed. Used by adventureProgress.ts's
+// resolveAdventureTileWindow, the single place this distinction gets
+// applied (both server- and client-side).
+export function conditionNeedsBaseline(cond: TileCondition): boolean {
+  switch (cond.type) {
+    case 'xpGained':
+    case 'skillXpGained':
+    case 'skillLevelGained':
+    case 'xpGainedLowestSkill':
+    case 'levelsGainedLowestSkill':
+    case 'cluesCompleted':
+    case 'beginnerCluesCompleted':
+    case 'easyCluesCompleted':
+    case 'mediumCluesCompleted':
+    case 'hardCluesCompleted':
+    case 'eliteCluesCompleted':
+    case 'masterCluesCompleted':
+      return true;
+    default:
+      return false;
+  }
+}
+
 // A full sentence-ready description of what a condition requires -- unlike
 // a tile's own `label`, which is deliberately terse and relies on its icon
 // for the rest of the meaning. Used where there's no icon to lean on, e.g.

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   resolveFrontier,
+  resolveAdventureTileWindow,
   ADVENTURE_SMALL_LAYOUT,
   forkIndexForColumn,
   isBossColumn,
@@ -10,6 +11,8 @@ import {
 } from './adventureProgress';
 import type { AdventurePath } from './adventureProgress';
 import type { AdventureLayout, Tile } from '../db/types';
+import type { TileCondition } from './tileConditions';
+import type { SnapshotRow } from './hiscoresRecap';
 
 function tile(layout: AdventureLayout, id = `${layout.column}:${layout.lane}`): Tile {
   return {
@@ -160,5 +163,51 @@ describe('resolveFrontier', () => {
     const result = resolveFrontier(FULL_TILES, path, new Set());
     expect(result.kind).toBe('tile');
     if (result.kind === 'tile') expect((result.tile.layout as AdventureLayout).lane).toBe('bottom');
+  });
+});
+
+describe('resolveAdventureTileWindow', () => {
+  const CHALLENGE_WINDOW = { start: '2026-09-01', end: '2026-09-12' };
+  const DINK_DRIVEN: TileCondition = { type: 'bossKcGained', threshold: 1 };
+  const HISCORES_BACKED: TileCondition = { type: 'xpGained', threshold: 10_000 };
+
+  function snapshot(recorded_on: string, total_xp: number): SnapshotRow {
+    return { recorded_on, total_xp, skills: {}, activities: {} };
+  }
+
+  it("uses the whole challenge window for a participant's very first tile ever, regardless of condition type", () => {
+    const result = resolveAdventureTileWindow(HISCORES_BACKED, 0, CHALLENGE_WINDOW, null, null, null, []);
+    expect(result).toEqual({ kind: 'ready', window: CHALLENGE_WINDOW, recap: null });
+  });
+
+  it('never needs a baseline for a Dink-driven condition, even with none set', () => {
+    const result = resolveAdventureTileWindow(DINK_DRIVEN, 1, CHALLENGE_WINDOW, null, null, '2026-09-05T12:00:00.000Z', []);
+    expect(result.kind).toBe('ready');
+    if (result.kind === 'ready') {
+      expect(result.window).toEqual({ start: '2026-09-05T12:00:00.000Z', end: CHALLENGE_WINDOW.end });
+      expect(result.recap).toBeNull();
+    }
+  });
+
+  it("falls back to the challenge start when a Dink-driven tile has no prior completion (shouldn't happen in practice, but stays precise)", () => {
+    const result = resolveAdventureTileWindow(DINK_DRIVEN, 1, CHALLENGE_WINDOW, null, null, null, []);
+    expect(result.kind).toBe('ready');
+    if (result.kind === 'ready') expect(result.window.start).toBe(CHALLENGE_WINDOW.start);
+  });
+
+  it('reports awaiting-baseline for a hiscores-backed tile with no baseline established yet', () => {
+    const result = resolveAdventureTileWindow(HISCORES_BACKED, 1, CHALLENGE_WINDOW, null, null, '2026-09-05T12:00:00.000Z', []);
+    expect(result).toEqual({ kind: 'awaiting-baseline' });
+  });
+
+  it('checks a hiscores-backed tile against the baseline instant once one exists', () => {
+    const baseline = snapshot('2026-09-05', 1_000_000);
+    const latest = snapshot('2026-09-06', 1_050_000);
+    const result = resolveAdventureTileWindow(HISCORES_BACKED, 1, CHALLENGE_WINDOW, '2026-09-05T12:00:00.000Z', baseline, null, [latest]);
+    expect(result.kind).toBe('ready');
+    if (result.kind === 'ready') {
+      expect(result.window).toEqual({ start: '2026-09-05T12:00:00.000Z', end: CHALLENGE_WINDOW.end });
+      expect(result.recap?.xpGained).toBe(50_000);
+    }
   });
 });
