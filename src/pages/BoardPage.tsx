@@ -612,19 +612,33 @@ export default function BoardPage() {
                         // ever shows its goal, never live progress.
                         const percent =
                           tile && status && isFrontier && !awaitingBaselineReset ? progressPercent(tile.condition, status) : null;
+                        // A done tile never shows a live-recomputed number --
+                        // viewedTileStatuses for a non-frontier tile is
+                        // computed against cumulative challenge-wide stats
+                        // (see the comment above), which drifts from the
+                        // real completion once the KC-gained baseline-
+                        // establishing fix (participantStats.ts) discounts
+                        // whatever kill first appeared in that window. Goal-
+                        // only text is always accurate for something already
+                        // finished, same as TileDetailModal/
+                        // AdventureColumnModal's own done-row captions.
                         const baseCaption =
                           tile && isOnPath && !awaitingBaselineReset
-                            ? isFrontier || done
-                              ? (status && formatTileProgress(tile.condition, status)) ?? formatTileGoal(tile.condition)
-                              : formatTileGoal(tile.condition)
+                            ? done
+                              ? formatTileGoal(tile.condition)
+                              : isFrontier
+                                ? (status && formatTileProgress(tile.condition, status)) ?? formatTileGoal(tile.condition)
+                                : formatTileGoal(tile.condition)
                             : null;
-                        const caption = awaitingBaselineReset
-                          ? 'Log out to start'
-                          : status?.resolvedSkill
-                            ? `${baseCaption} (${status.resolvedSkill})`
-                            : status?.needsSkillChoice
-                              ? 'Pick a skill below'
-                              : baseCaption;
+                        const caption = done
+                          ? baseCaption
+                          : awaitingBaselineReset
+                            ? 'Log out to start'
+                            : status?.resolvedSkill
+                              ? `${baseCaption} (${status.resolvedSkill})`
+                              : status?.needsSkillChoice
+                                ? 'Pick a skill below'
+                                : baseCaption;
                         const isFirst =
                           tile != null && done && tile.condition.type !== 'freeSpace' && firstCompleters[tile.id] === viewedParticipantId;
 
