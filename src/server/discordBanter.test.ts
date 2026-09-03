@@ -8,9 +8,9 @@ const first = () => 0;
 const last = () => 0.999;
 
 describe('tileCompletionFlavor', () => {
-  it('bakes the point total into the first-place line for a regular tile', () => {
+  it('does not repeat the point total in the first-place line for a regular tile (the embed has its own Points field)', () => {
     const line = tileCompletionFlavor({ isFirst: true, isBoss: false, points: 8, firstCompleterRsn: 'otototo' }, undefined, first);
-    expect(line).toContain('8 pts');
+    expect(line).not.toContain('pts');
   });
 
   it('bakes the first-completer name into the non-first line for a regular tile', () => {
@@ -24,9 +24,9 @@ describe('tileCompletionFlavor', () => {
     expect(bossLine).not.toBe(tileLine);
   });
 
-  it('bakes the point total into the first-place boss line', () => {
+  it('does not repeat the point total in the first-place boss line either', () => {
     const line = tileCompletionFlavor({ isFirst: true, isBoss: true, points: 12, firstCompleterRsn: 'x' }, undefined, first);
-    expect(line).toContain('12 pts');
+    expect(line).not.toContain('pts');
   });
 
   it('bakes the first-completer name into the non-first boss line', () => {

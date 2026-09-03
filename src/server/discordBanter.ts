@@ -6,15 +6,17 @@
 // the race to finish it first -- kept in its own module so the joke
 // content doesn't clutter discordEmbeds.ts's embed-assembly logic.
 //
-// Each line is the full sentence (info + banter together), mirroring the
-// single fixed sentence each case used to have, rather than splitting
-// information into a separate line -- so points/who-was-first stay baked
-// into the variety instead of getting duplicated across two lines.
+// firstTile/firstBoss lines are pure flavor, no point total baked in --
+// the embed already has its own dedicated "Points" field
+// (discordEmbeds.ts), so repeating it in the flavor text was redundant.
+// notFirstTile/notFirstBoss still bake in who actually won the race
+// ({rsn}), since that has no other field of its own.
 //
 // BACKLOG.md #9 -- pools are plain data (template strings with
 // {points}/{rsn} placeholders), not functions, so they can live in the
 // admin-editable discord_banter_lines table (discordBanterStore.ts fetches
-// them) instead of only ever these hardcoded defaults.
+// them) instead of only ever these hardcoded defaults. {points} is still
+// substituted wherever a template (default or admin-edited) references it.
 
 export interface BanterPools {
   firstTile: string[];
@@ -26,12 +28,12 @@ export interface BanterPools {
 
 export const DEFAULT_BANTER_POOLS: BanterPools = {
   firstTile: [
-    "+{points} pts. Aren't they just showing off at this point?",
-    '+{points} pts. Absolutely no chill.',
-    "+{points} pts. Somebody's speedrunning this challenge.",
-    '+{points} pts. The rest of the lobby should be nervous.',
-    '+{points} pts. Zero hesitation on that one.',
-    "+{points} pts. Didn't even let anyone else try.",
+    "Aren't they just showing off at this point?",
+    'Absolutely no chill.',
+    "Somebody's speedrunning this challenge.",
+    'The rest of the lobby should be nervous.',
+    'Zero hesitation on that one.',
+    "Didn't even let anyone else try.",
   ],
   notFirstTile: [
     'Unfortunately not as fast as {rsn}, though.',
@@ -41,11 +43,11 @@ export const DEFAULT_BANTER_POOLS: BanterPools = {
     'Bested by {rsn}. No shame in it.',
   ],
   firstBoss: [
-    '+{points} pts. Absolutely demolished.',
-    '+{points} pts. The boss never stood a chance.',
-    '+{points} pts. GG to whatever that boss was trying to do.',
-    "+{points} pts. That's a wrap on that fight.",
-    '+{points} pts. Flawless victory.',
+    'Absolutely demolished.',
+    'The boss never stood a chance.',
+    'GG to whatever that boss was trying to do.',
+    "That's a wrap on that fight.",
+    'Flawless victory.',
   ],
   notFirstBoss: [
     '{rsn} already claimed this kill. Better luck on the next one.',

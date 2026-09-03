@@ -582,22 +582,22 @@ create policy "site admin writes" on discord_banter_lines for all
 -- permanently, same as every other seed in this file.
 insert into discord_banter_lines (pool, template, sort_order)
 select * from (values
-  ('firstTile', '+{points} pts. Aren''t they just showing off at this point?', 0),
-  ('firstTile', '+{points} pts. Absolutely no chill.', 1),
-  ('firstTile', '+{points} pts. Somebody''s speedrunning this challenge.', 2),
-  ('firstTile', '+{points} pts. The rest of the lobby should be nervous.', 3),
-  ('firstTile', '+{points} pts. Zero hesitation on that one.', 4),
-  ('firstTile', '+{points} pts. Didn''t even let anyone else try.', 5),
+  ('firstTile', 'Aren''t they just showing off at this point?', 0),
+  ('firstTile', 'Absolutely no chill.', 1),
+  ('firstTile', 'Somebody''s speedrunning this challenge.', 2),
+  ('firstTile', 'The rest of the lobby should be nervous.', 3),
+  ('firstTile', 'Zero hesitation on that one.', 4),
+  ('firstTile', 'Didn''t even let anyone else try.', 5),
   ('notFirstTile', 'Unfortunately not as fast as {rsn}, though.', 0),
   ('notFirstTile', '{rsn} beat them to it. Tough crowd out here.', 1),
   ('notFirstTile', '{rsn} already claimed this one. There''s always the next tile.', 2),
   ('notFirstTile', 'A solid finish -- just not as solid as {rsn}''s.', 3),
   ('notFirstTile', 'Bested by {rsn}. No shame in it.', 4),
-  ('firstBoss', '+{points} pts. Absolutely demolished.', 0),
-  ('firstBoss', '+{points} pts. The boss never stood a chance.', 1),
-  ('firstBoss', '+{points} pts. GG to whatever that boss was trying to do.', 2),
-  ('firstBoss', '+{points} pts. That''s a wrap on that fight.', 3),
-  ('firstBoss', '+{points} pts. Flawless victory.', 4),
+  ('firstBoss', 'Absolutely demolished.', 0),
+  ('firstBoss', 'The boss never stood a chance.', 1),
+  ('firstBoss', 'GG to whatever that boss was trying to do.', 2),
+  ('firstBoss', 'That''s a wrap on that fight.', 3),
+  ('firstBoss', 'Flawless victory.', 4),
   ('notFirstBoss', '{rsn} already claimed this kill. Better luck on the next one.', 0),
   ('notFirstBoss', '{rsn} got there first -- this boss just isn''t safe from this lobby.', 1),
   ('notFirstBoss', 'Still a kill, just not the first one. {rsn} beat them to that.', 2),
@@ -609,6 +609,16 @@ select * from (values
   ('boardCompletion', 'Not a single tile left to do.', 4)
 ) as seed(pool, template, sort_order)
 where not exists (select 1 from discord_banter_lines);
+
+-- 2026-09-03 -- the embed already has its own dedicated "Points" field
+-- (discordEmbeds.ts), so repeating "+{points} pts. " inside the flavor
+-- text itself was redundant. The "where not exists" guard above only
+-- ever seeds an empty table, so it can't fix already-seeded rows on its
+-- own -- this strips the prefix from any row that still has it. Safe to
+-- leave here permanently (a no-op once every row's been updated once).
+update discord_banter_lines
+set template = replace(template, '+{points} pts. ', '')
+where template like '+{points} pts. %';
 
 -- BACKLOG.md #13 -- one stable per-account Dink webhook secret, separate
 -- from `profiles` (public-read) since this secret lets whoever holds it

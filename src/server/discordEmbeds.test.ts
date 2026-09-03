@@ -89,10 +89,12 @@ describe('buildTileCompletionEmbed', () => {
       challenge: CHALLENGE,
     });
     expect(embed.title).toBe('26 Limont was first to complete the 500,000 total XP task!');
-    expect(embed.description).toContain('3 pts');
+    // The embed's own "Points" field already carries the total -- flavor
+    // text doesn't repeat it (BACKLOG.md, discordBanter.ts default pools).
+    expect(embed.description).not.toContain('pts');
   });
 
-  it('adds the first-completer bonus to the flavor text and Points field when isFirst', () => {
+  it('adds the first-completer bonus to the Points field when isFirst', () => {
     const embed = buildTileCompletionEmbed({
       participant: PARTICIPANTS[0],
       tile: tile({ points: 3, first_completer_bonus: 5, condition: { type: 'xpGained', threshold: 500_000 } }),
@@ -102,7 +104,6 @@ describe('buildTileCompletionEmbed', () => {
       participants: PARTICIPANTS,
       challenge: CHALLENGE,
     });
-    expect(embed.description).toContain('8 pts');
     expect(embed.fields?.find((f) => f.name === 'Points')?.value).toBe('+8');
   });
 
