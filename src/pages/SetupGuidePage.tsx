@@ -142,6 +142,12 @@ export default function SetupGuidePage() {
           Now go back through and check the enable box in <Box>Slayer</Box>, <Box>Pets</Box>, <Box>Kill Count</Box>,{' '}
           <Box>Death</Box>, and <Box>Collection Log</Box>. Leave <Box>Loot</Box> for the next step -- it needs one
           more setting first.
+          <p className="mt-2 rounded-lg border border-amber-900/50 bg-amber-950/20 p-2 text-xs text-amber-500/90">
+            While you're in <Box>Kill Count</Box>, check the <Box>Kill Count Interval</Box> setting too -- if it's
+            set above <Box>1</Box>, Dink only sends a notification every Nth kill (e.g. every 50th), not every kill.
+            Any boss/KC tile can then sit stuck at zero for a long time even though you're actually racking up kills,
+            since nothing fires in between. Set it to <Box>1</Box> so every kill counts.
+          </p>
         </Step>
 
         <Step n={4} title="Finish setting up Loot">
