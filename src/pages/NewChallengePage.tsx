@@ -28,9 +28,19 @@ export default function NewChallengePage() {
   if (loading) return null;
   if (!session) return <Navigate to="/login" replace />;
 
+  // Also used as both date inputs' `min` below.
+  const today = new Date().toISOString().slice(0, 10);
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (!session || !name.trim() || !slug.trim() || !startDate || !endDate) return;
+    // Defense in depth alongside the date inputs' own `min` -- a browser
+    // that doesn't enforce it (or a value set some other way) shouldn't be
+    // able to slip a past date through.
+    if (startDate < today || endDate < today) {
+      setError('Start and end dates cannot be in the past.');
+      return;
+    }
     setSubmitting(true);
     setError('');
 
@@ -156,6 +166,7 @@ export default function NewChallengePage() {
             <input
               type="date"
               required
+              min={today}
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
               className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
@@ -166,6 +177,7 @@ export default function NewChallengePage() {
             <input
               type="date"
               required
+              min={today}
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
               className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
