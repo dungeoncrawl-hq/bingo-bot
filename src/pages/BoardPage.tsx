@@ -3,7 +3,7 @@ import type { FormEvent } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { getSupabase } from '../db/supabaseClient';
-import type { Challenge, Team, Tile } from '../db/types';
+import type { AdventureLayout, Challenge, Team, Tile } from '../db/types';
 import {
   checkTile,
   describeTileCondition,
@@ -18,6 +18,7 @@ import { computeLeaderboard } from '../lib/leaderboard';
 import { computeFirstCompleters } from '../lib/firstCompletions';
 import { progressColor } from '../lib/progressColor';
 import { formatLocalRange, preciseCountdownText } from '../lib/dungeonStatus';
+import { formatRelativeTime } from '../lib/format';
 import TileDetailModal from '../components/TileDetailModal';
 import AdventureColumnModal from '../components/AdventureColumnModal';
 import AdventureConnector from '../components/AdventureConnector';
@@ -56,6 +57,11 @@ interface ParticipantRow {
   // LOGOUT event.
   adventure_baseline_at: string | null;
   adventure_baseline_snapshot: SnapshotRow | null;
+  // Bumped on every successful Dink call regardless of event type
+  // (dinkWebhook.ts's recordWebhookCall) -- this challenge's own most
+  // recent event, shown next to "You're in as X" so a player can tell
+  // at a glance whether their tracking is actually alive.
+  last_webhook_at: string | null;
 }
 
 interface CompletionRow {
@@ -84,6 +90,8 @@ export default function BoardPage() {
   const [tileStatusesByParticipant, setTileStatusesByParticipant] = useState<Record<string, Record<string, TileStatus>>>({});
   const [selectedTile, setSelectedTile] = useState<Tile | null>(null);
   const [selectedColumn, setSelectedColumn] = useState<number | null>(null);
+  const [baselineBannerDismissed, setBaselineBannerDismissed] = useState(false);
+  const [legendOpen, setLegendOpen] = useState(false);
 
   const myParticipant = session ? participants.find((p) => p.profile_id === session.user.id) : undefined;
   // Which participant's board is currently displayed -- explicit via ?p=,
@@ -91,6 +99,30 @@ export default function BoardPage() {
   // Anyone (signed in or not) can view anyone's board this way, since the
   // underlying raw event tables are all public-read RLS.
   const viewedParticipantId = searchParams.get('p') ?? myParticipant?.id ?? null;
+
+  // Auto-center the viewed participant's current room on load, if it
+  // isn't already visible. Declared before any early return (Rules of
+  // Hooks) and computes its own frontier inline from raw state, rather
+  // than depending on the `viewedFrontier` const declared later in this
+  // component after the early-return guards. Runs once -- hasAutoScrolled
+  // guards repeat firing, and is what makes this idempotent despite
+  // depending on `tiles`/`participants`, which change reference every
+  // load(); it also retries on its own across renders until data has
+  // actually loaded and the target column's ref exists, then locks.
+  useEffect(() => {
+    if (hasAutoScrolled.current) return;
+    if (!challenge || challenge === 'not-found' || challenge.board_type !== 'adventure') return;
+    const viewer = participants.find((p) => p.id === viewedParticipantId);
+    if (!viewer) return;
+    const doneIds = new Set(completions.filter((c) => c.kind === 'tile' && c.participant_id === viewer.id).map((c) => c.ref));
+    const frontier = resolveFrontier(tiles, viewer.adventure_path ?? {}, doneIds);
+    if (frontier.kind !== 'tile') return;
+    const column = (frontier.tile.layout as AdventureLayout).column;
+    const el = columnRefs.current[column];
+    if (!el) return;
+    hasAutoScrolled.current = true;
+    el.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'instant' as ScrollBehavior });
+  }, [challenge, tiles, participants, completions, viewedParticipantId]);
 
   const load = useCallback(async () => {
     if (!slug) return;
@@ -105,7 +137,9 @@ export default function BoardPage() {
       supabase.from('tiles').select('*').eq('challenge_id', challengeData.id),
       supabase
         .from('challenge_participants')
-        .select('id, profile_id, rsn, chosen_lowest_skill, adventure_path, team_id, adventure_baseline_at, adventure_baseline_snapshot')
+        .select(
+          'id, profile_id, rsn, chosen_lowest_skill, adventure_path, team_id, adventure_baseline_at, adventure_baseline_snapshot, last_webhook_at',
+        )
         .eq('challenge_id', challengeData.id),
       supabase
         .from('tile_completions')
@@ -128,6 +162,12 @@ export default function BoardPage() {
   // guarded by a ref rather than "only when rsn is empty" so clearing the
   // field afterward to type something else doesn't keep snapping it back.
   const prefilledDefaultRsn = useRef(false);
+  // Adventure board auto-scroll (item 7): each column's wrapper registers
+  // itself here by column index, so the effect below can scroll straight
+  // to whichever one is the viewed participant's frontier without
+  // hand-replicating AdventureConnector.tsx's pixel geometry.
+  const columnRefs = useRef<Record<number, HTMLDivElement | null>>({});
+  const hasAutoScrolled = useRef(false);
   useEffect(() => {
     if (!prefilledDefaultRsn.current && profile?.default_rsn) {
       setRsn(profile.default_rsn);
@@ -360,6 +400,33 @@ export default function BoardPage() {
   const myAwaitingBaselineReset =
     myFrontier?.kind === 'tile' && doneTileIdsFor(myParticipant?.id ?? '').size > 0 && !myParticipant?.adventure_baseline_at;
 
+  // Every participant's current frontier tile, regardless of whose board
+  // is being viewed -- an always-on "where's everyone right now" layer
+  // (position chips below), additive to the single-viewed-participant
+  // rendering above. Scoped to frontier.kind === 'tile' only -- someone
+  // mid-lane-choice or who's cleared the whole dungeon doesn't get a
+  // chip, a deliberately small v1 rather than covering every edge state.
+  const frontierParticipantsByTileId = new Map<string, ParticipantRow[]>();
+  if (challenge.board_type === 'adventure') {
+    for (const p of participants) {
+      const frontier = resolveFrontier(tiles, p.adventure_path ?? {}, doneTileIdsFor(p.id));
+      if (frontier.kind !== 'tile') continue;
+      const list = frontierParticipantsByTileId.get(frontier.tile.id) ?? [];
+      list.push(p);
+      frontierParticipantsByTileId.set(frontier.tile.id, list);
+    }
+  }
+
+  // Deterministic per-participant color for position chips -- same
+  // participant always gets the same color across renders/reloads
+  // without needing to store one, just a stable hash of their id.
+  const CHIP_COLORS = ['#f59e0b', '#38bdf8', '#a78bfa', '#f472b6', '#34d399', '#fb923c'];
+  function chipColorFor(participantId: string): string {
+    let hash = 0;
+    for (let i = 0; i < participantId.length; i++) hash = (hash * 31 + participantId.charCodeAt(i)) >>> 0;
+    return CHIP_COLORS[hash % CHIP_COLORS.length];
+  }
+
   // Any tile status of the signed-in participant's own (not the viewed
   // participant's -- the choice below is only actionable for your own
   // membership) that's still waiting on a lowest-skill tie-break. Every
@@ -400,9 +467,62 @@ export default function BoardPage() {
       {countdown && <p className="mt-1 text-xs font-medium text-amber-500">{countdown}</p>}
       {viewedParticipant && <p className="mt-2 text-sm font-medium text-stone-400">{viewedParticipant.rsn}'s board</p>}
 
+      {myAwaitingBaselineReset && !baselineBannerDismissed && (
+        <div className="mt-4 flex items-start justify-between gap-3 rounded-lg border border-sky-800 bg-sky-950/30 p-3">
+          <p className="text-sm text-stone-300">
+            You've reached a new room. Log out in-game to start counting progress toward it -- nothing before that
+            counts.
+          </p>
+          <button
+            type="button"
+            onClick={() => setBaselineBannerDismissed(true)}
+            aria-label="Dismiss"
+            className="shrink-0 text-stone-500 hover:text-stone-300"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       <div className="mt-8 flex flex-col gap-8 lg:flex-row lg:items-start">
         {/* Board -- above the leaderboard on mobile, left column (~80%) on desktop. */}
         <div className="order-2 min-w-0 lg:order-1 lg:flex-1">
+          <button
+            type="button"
+            onClick={() => setLegendOpen((v) => !v)}
+            className="mb-3 text-xs text-stone-500 underline decoration-dotted hover:text-stone-300"
+          >
+            {legendOpen ? 'Hide' : 'ⓘ How this board works'}
+          </button>
+          {legendOpen && (
+            <div className="mb-4 space-y-2 rounded-lg border border-stone-800 bg-stone-900/50 p-3 text-xs text-stone-400">
+              {challenge.board_type === 'adventure' ? (
+                <>
+                  <p>
+                    <span className="inline-block h-3 w-3 rounded-sm border border-green-500 bg-green-950/40 align-middle" /> Done
+                    &nbsp; <span className="inline-block h-3 w-3 rounded-sm border border-amber-500 bg-stone-900 align-middle" />{' '}
+                    Your current room &nbsp;
+                    <span className="inline-block h-3 w-3 rounded-sm border border-sky-600 bg-sky-950/20 align-middle" /> Reached, log
+                    out to start &nbsp;
+                    <span className="inline-block h-3 w-3 rounded-sm border border-stone-800 bg-stone-950/60 align-middle opacity-60" />{' '}
+                    Not reached yet
+                  </p>
+                  <p>Rooms with a red glow are boss rooms -- clearing one unlocks the next fork.</p>
+                  <p>
+                    The hallways connecting rooms show the dungeon's overall shape (which columns branch into two paths
+                    or converge into a boss) -- not your specific chosen route. Your own path is whichever lane you
+                    picked at each fork; the other lane just fades out.
+                  </p>
+                </>
+              ) : (
+                <p>
+                  ⭐ first to complete it &nbsp; ✓ you've completed it &nbsp; ✕ someone else completed it &nbsp; ○
+                  no one's completed it yet (colored by how close the closest person is) &nbsp; the thin bar on a
+                  tile's left edge is your own progress toward it.
+                </p>
+              )}
+            </div>
+          )}
           {challenge.board_type === 'adventure' ? (
             <div className="overflow-x-auto pb-2">
               <div className="flex gap-2" style={{ minWidth: `${ADVENTURE_SMALL_COLUMNS * 90}px` }}>
@@ -427,6 +547,9 @@ export default function BoardPage() {
                     <Fragment key={column}>
                       {column > 0 && <AdventureConnector from={laneCountForColumn(column - 1)} to={laneCountForColumn(column)} />}
                       <div
+                        ref={(el) => {
+                          columnRefs.current[column] = el;
+                        }}
                         onClick={columnHasAnyTile ? () => setSelectedColumn(column) : undefined}
                         className={`flex w-20 shrink-0 flex-col justify-center gap-2 ${columnHasAnyTile ? 'cursor-pointer' : ''}`}
                       >
@@ -505,6 +628,20 @@ export default function BoardPage() {
                             )}
                             {isFirst && <span className="absolute right-1 top-1 text-xs text-amber-400">⭐</span>}
                             {!isFirst && done && <span className="absolute right-1 top-1 text-xs text-green-400">✓</span>}
+                            {tile && frontierParticipantsByTileId.get(tile.id) && (
+                              <div className="absolute bottom-1 left-1 flex gap-0.5">
+                                {frontierParticipantsByTileId.get(tile.id)!.map((p) => (
+                                  <span
+                                    key={p.id}
+                                    title={`${p.rsn} is here`}
+                                    className="flex h-3.5 w-3.5 items-center justify-center rounded-full text-[7px] font-bold text-stone-950"
+                                    style={{ backgroundColor: chipColorFor(p.id) }}
+                                  >
+                                    {p.rsn.slice(0, 1).toUpperCase()}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                             {tile ? (
                               <>
                                 {tile.icon && <img src={tile.icon} alt="" className="h-6 w-6 shrink-0" />}
@@ -741,6 +878,12 @@ export default function BoardPage() {
                 </Link>
               </p>
             )}
+            {session && myParticipant && !editingRsn && (
+              <p className="text-xs text-stone-600">
+                Last Dink event:{' '}
+                {myParticipant.last_webhook_at ? formatRelativeTime(myParticipant.last_webhook_at, Date.now()) : 'none received yet'}
+              </p>
+            )}
             {session && myParticipant && editingRsn && (
               <form onSubmit={handleRenameRsn} className="flex flex-col gap-2">
                 <input
@@ -810,15 +953,6 @@ export default function BoardPage() {
                     Bottom
                   </button>
                 </div>
-              </div>
-            )}
-
-            {myAwaitingBaselineReset && (
-              <div className="rounded-lg border border-sky-800 bg-sky-950/30 p-3">
-                <p className="text-sm text-stone-300">
-                  You've reached a new room. Log out in-game to start counting progress toward it -- nothing before
-                  that counts.
-                </p>
               </div>
             )}
 
