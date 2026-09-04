@@ -484,3 +484,40 @@ instead of renumbering the existing list.
     already there: Vorkath, Zulrah, the DT2 bosses (Duke Sucellus, The
     Leviathan, The Whisperer, Vardorvis), The Gauntlet (and Corrupted
     Gauntlet), Yama, Araxxor, Doom of Mokhaiotl, Grotesque Guardians.
+
+17. **"Obtain specific uniques" (itemCount) needs an ANY/ALL goal mode,
+    plus showing the actual selected items on the player-facing tile
+    modal.** Today itemCount only sums quantity across the host's
+    selected items (a fast Vorkath grinder could clear "get 2 of these
+    3 items" purely off 2 draconic visages) -- no way to require each
+    selected item be obtained at least once.
+
+    **ANY** (today's only behavior, becomes the default so no existing
+    tile's meaning changes): progress is total quantity across the
+    selection, duplicates of one item freely substitute for another.
+    **ALL**: progress is how many of the selected items have been
+    obtained at least once (duplicates of an already-obtained item
+    don't help) -- this is exactly `itemSetCollected`'s old semantics
+    (removed as its own condition type 2026-09-04, see #2), now meant
+    to live as a mode on itemCount instead of a second sibling type,
+    since the two share every other piece of the data model
+    (itemNames/setName/threshold) and now the same multi-select UI.
+
+    **Data model**: `itemCount` gains a field (e.g. `mode: 'any' |
+    'all'`), defaulting to `'any'` for every tile saved before this
+    exists -- zero behavior change until a host actually touches it.
+    `checkTile`'s itemCount case branches on it: `'any'` keeps today's
+    `itemCounts` sum; `'all'` reuses the distinct-obtained-at-least-once
+    counting logic `itemSetCollected` used to have (git history has the
+    exact implementation, `tileConditions.ts` before commit `509c2e2`).
+
+    **TileEditorForm.tsx**: a toggle/radio (Any/All) shown once itemCount
+    is selected, next to or above the item checklist.
+
+    **Player-facing display**: the tile detail modal(s)
+    (`TileDetailModal.tsx`, and `AdventureColumnModal.tsx` for Adventure
+    boards) should list the tile's actual targeted items -- icon +
+    name, not just the set name -- at the bottom of the modal, so a
+    player can see exactly which items count without guessing from the
+    catalog name alone. Reuses `itemIcon()` (`itemSets.ts`) for each
+    icon, same resolver the tile's own auto-icon already uses.
