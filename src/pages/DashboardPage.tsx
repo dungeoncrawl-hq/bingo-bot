@@ -21,6 +21,18 @@ function DungeonRow({ c, today }: { c: ChallengeRow; today: string }) {
   const status = displayStatus(c, today);
   const style = STATUS_STYLE[status];
   const countdown = countdownText(c, status, today);
+  const [inviteCopied, setInviteCopied] = useState(false);
+  // Same wording as EditChallengePage.tsx's own invite box, so a host sees
+  // one consistent message regardless of which page they copied it from.
+  const inviteMessage = `Come join my Dungeon Crawl challenge, "${c.name}"! Jump in here: ${window.location.origin}/c/${c.slug}`;
+
+  async function handleCopyInvite(e: React.MouseEvent) {
+    e.stopPropagation();
+    await navigator.clipboard.writeText(inviteMessage);
+    setInviteCopied(true);
+    setTimeout(() => setInviteCopied(false), 2000);
+  }
+
   return (
     <div
       role="link"
@@ -43,15 +55,26 @@ function DungeonRow({ c, today }: { c: ChallengeRow; today: string }) {
           {formatDateRange(c.start_date, c.end_date)}
           {countdown && <span className="text-stone-600"> · {countdown}</span>}
         </p>
-        {c.isHost && (
+        {(status !== 'past' || c.isHost) && (
           <div className="flex shrink-0 items-center gap-3 text-xs" onClick={(e) => e.stopPropagation()}>
-            <Link
-              to={`/c/${c.slug}/edit`}
-              className="text-stone-400 underline decoration-dotted hover:text-stone-200"
-              onClick={(e) => e.stopPropagation()}
-            >
-              Edit
-            </Link>
+            {status !== 'past' && (
+              <button
+                type="button"
+                onClick={handleCopyInvite}
+                className="text-stone-400 underline decoration-dotted hover:text-stone-200"
+              >
+                {inviteCopied ? 'Copied!' : 'Copy Invite Message'}
+              </button>
+            )}
+            {c.isHost && (
+              <Link
+                to={`/c/${c.slug}/edit`}
+                className="text-stone-400 underline decoration-dotted hover:text-stone-200"
+                onClick={(e) => e.stopPropagation()}
+              >
+                Edit
+              </Link>
+            )}
           </div>
         )}
       </div>
