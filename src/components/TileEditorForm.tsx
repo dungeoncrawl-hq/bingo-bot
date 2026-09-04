@@ -125,10 +125,7 @@ const CONDITION_GROUPS: { group: string; options: { value: TileCondition['type']
   },
   {
     group: 'Other',
-    options: [
-      { value: 'freeSpace', label: 'Free space (always complete, no points)' },
-      { value: 'tbd', label: 'TBD (placeholder)' },
-    ],
+    options: [{ value: 'freeSpace', label: 'Free space (always complete, no points)' }],
   },
 ];
 
@@ -285,14 +282,14 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
 
   function selectMode(next: 'any' | 'all') {
     setItemMode(next);
-    // Switching to "all" defaults the goal to "every selected item" --
-    // the common case, and matches itemSetCollected's old convenience
-    // default before it was folded into this mode (BACKLOG.md #2/#17).
-    // Only applied on the mode switch itself, not on every checkbox
-    // toggle afterward, so a host who deliberately asks for "any N of
-    // these M" doesn't get overwritten by their own further clicks.
-    if (next === 'all') setThreshold(selectedItemNames.length);
   }
+
+  // "All" always means "every one of the selected items" -- there's no
+  // separate goal to set (the number input is hidden for this mode, see
+  // the Goal field below), so the real threshold is just the current
+  // selection size, computed live rather than tracked as its own piece
+  // of state that could drift out of sync with the checklist.
+  const effectiveThreshold = type === 'itemCount' && itemMode === 'all' ? selectedItemNames.length : threshold;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -306,7 +303,7 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
       await onSave({
         label,
         icon,
-        condition: conditionFromForm(type, threshold, activity, skill, selectedSet, selectedItemNames, itemMode, dropValueThreshold),
+        condition: conditionFromForm(type, effectiveThreshold, activity, skill, selectedSet, selectedItemNames, itemMode, dropValueThreshold),
         // A free space is always complete for everyone the instant it
         // exists -- there's no "first" to reward and no achievement to
         // weight, so it can never contribute points regardless of what's
@@ -339,7 +336,10 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
         className="flex max-h-[calc(100vh-2rem)] w-full max-w-md flex-col rounded-xl border border-stone-800 bg-stone-950"
       >
         <div className="shrink-0 p-6 pb-0">
-          <h2 className="text-lg font-semibold">{existing ? 'Edit tile' : 'Add tile'}</h2>
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="text-lg font-semibold">{existing ? 'Edit Room Condition' : 'Add Room Condition'}</h2>
+            {icon && <img src={icon} alt="" className="h-10 w-10 shrink-0 object-contain" />}
+          </div>
           {fieldsLocked && (
             <p className="mt-4 rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-xs text-stone-400">
               This challenge has started, so this tile's condition can't be changed anymore -- it might invalidate
@@ -366,14 +366,6 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
               </optgroup>
             ))}
           </select>
-        </div>
-        <div>
-          <label className="block text-sm text-stone-400">Label</label>
-          <div className="mt-1 flex items-center gap-2 rounded-lg border border-stone-800 bg-stone-900 p-2">
-            {icon && <img src={icon} alt="" className="h-8 w-8 shrink-0 object-contain" />}
-            <p className="text-sm">{label}</p>
-          </div>
-          <p className="mt-1 text-xs text-stone-500">Label and icon are set automatically for this condition.</p>
         </div>
         {type === 'kcGained' && (
           <div>
@@ -491,7 +483,14 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
             <label className="block text-sm text-stone-400">
               {type === 'maxDeaths' ? 'Max deaths allowed' : type === 'bigDropsCount' ? 'How many such drops' : 'Goal'}
             </label>
-            {MONEY_XP_THRESHOLD_TYPES.has(type) ? (
+            {type === 'itemCount' && itemMode === 'all' ? (
+              // "All" always means every one of the selected items -- no
+              // separate number to set, so there's nothing editable to
+              // show here (see effectiveThreshold above).
+              <p className="mt-1 text-sm text-stone-300">
+                All {selectedItemNames.length} selected item{selectedItemNames.length === 1 ? '' : 's'}
+              </p>
+            ) : MONEY_XP_THRESHOLD_TYPES.has(type) ? (
               <MoneyXpThresholdInput value={threshold} onChange={setThreshold} disabled={fieldsLocked} />
             ) : (
               <input
@@ -503,21 +502,12 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
                 className={inputClass}
               />
             )}
-            {type === 'itemCount' && itemMode === 'all' ? (
-              <p className="mt-1 text-xs text-stone-500">
-                How many of the {selectedItemNames.length} selected items a player needs to obtain at least once
-                (each one only counts once, out of {selectedItemNames.length}).
-              </p>
-            ) : (
-              type !== 'maxDeaths' &&
-              type !== 'bigDropsCount' && (
-                <p className="mt-1 text-xs text-stone-500">The amount a player needs to reach to complete this tile.</p>
-              )
+            {type !== 'maxDeaths' && type !== 'bigDropsCount' && !(type === 'itemCount' && itemMode === 'all') && (
+              <p className="mt-1 text-xs text-stone-500">The amount a player needs to reach to complete this tile.</p>
             )}
             {pooled && (
               <p className="mt-1 text-xs text-amber-500">
-                This will be pooled across {poolSize} participant{poolSize === 1 ? '' : 's'} -- a solo-sized goal may
-                be trivial once combined.
+                This will be pooled across {poolSize} participant{poolSize === 1 ? '' : 's'}.
               </p>
             )}
           </div>
@@ -529,7 +519,7 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
         ) : (
           <>
             <div>
-              <label className="block text-sm text-stone-400">Points (leaderboard value)</label>
+              <label className="block text-sm text-stone-400">Points</label>
               <input
                 type="number"
                 min={1}
@@ -537,11 +527,10 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
                 onChange={(e) => setPoints(Number(e.target.value))}
                 className={inputClass}
               />
+              <p className="mt-1 text-xs text-stone-500">The value a player receives after completing the room's condition.</p>
             </div>
             {gameMode === 'coop' ? (
-              <p className="text-xs text-stone-500">
-                No first-completer bonus in Coop -- credit lands on everyone at once, so there's no "first."
-              </p>
+              <p className="text-xs text-stone-500">No bonus for being first to complete a tile in Co-op mode.</p>
             ) : (
               <div>
                 <label className="block text-sm text-stone-400">First-completer bonus</label>
