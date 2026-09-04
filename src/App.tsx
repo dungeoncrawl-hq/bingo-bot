@@ -10,6 +10,8 @@ import BoardPage from './pages/BoardPage';
 import SetupGuidePage from './pages/SetupGuidePage';
 import AboutPage from './pages/AboutPage';
 import AccountPage from './pages/AccountPage';
+import ChangelogPage from './pages/ChangelogPage';
+import UnsubscribedPage from './pages/UnsubscribedPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 import AdminParticipantsPage from './pages/AdminParticipantsPage';
 import AdminGrowthPage from './pages/AdminGrowthPage';
@@ -17,6 +19,7 @@ import AdminRandomizeSettingsPage from './pages/AdminRandomizeSettingsPage';
 import AdminDiscordTemplatesPage from './pages/AdminDiscordTemplatesPage';
 import AdminAccountsPage from './pages/AdminAccountsPage';
 import AdminFeedbackPage from './pages/AdminFeedbackPage';
+import AdminAnnouncementsPage from './pages/AdminAnnouncementsPage';
 
 function App() {
   return (
@@ -34,6 +37,8 @@ function App() {
             <Route path="/c/:slug/setup" element={<SetupGuidePage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/account" element={<AccountPage />} />
+            <Route path="/changelog" element={<ChangelogPage />} />
+            <Route path="/unsubscribed" element={<UnsubscribedPage />} />
             <Route path="/dungeon-master-admin" element={<AdminDashboardPage />} />
             <Route path="/dungeon-master-admin/participants" element={<AdminParticipantsPage />} />
             <Route path="/dungeon-master-admin/growth" element={<AdminGrowthPage />} />
@@ -41,6 +46,7 @@ function App() {
             <Route path="/dungeon-master-admin/discord-templates" element={<AdminDiscordTemplatesPage />} />
             <Route path="/dungeon-master-admin/accounts" element={<AdminAccountsPage />} />
             <Route path="/dungeon-master-admin/feedback" element={<AdminFeedbackPage />} />
+            <Route path="/dungeon-master-admin/announcements" element={<AdminAnnouncementsPage />} />
           </Routes>
         </div>
         <Footer />

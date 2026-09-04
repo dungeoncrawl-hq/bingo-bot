@@ -41,6 +41,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         <NavLink to="/dungeon-master-admin/feedback" className={tabClass}>
           Feedback
         </NavLink>
+        <NavLink to="/dungeon-master-admin/announcements" className={tabClass}>
+          Announcements
+        </NavLink>
       </div>
       <div className="mt-8">{children}</div>
     </div>

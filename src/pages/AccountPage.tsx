@@ -15,6 +15,8 @@ export default function AccountPage() {
   const [rsnSaving, setRsnSaving] = useState(false);
   const [rsnSaved, setRsnSaved] = useState(false);
   const [rsnError, setRsnError] = useState('');
+  const [emailNotifications, setEmailNotifications] = useState(true);
+  const [notifSaving, setNotifSaving] = useState(false);
   const [dinkSecret, setDinkSecret] = useState<string | null>(null);
   const [webhookCopied, setWebhookCopied] = useState(false);
   // 'loading' distinct from null (no events yet) so the line doesn't
@@ -27,6 +29,10 @@ export default function AccountPage() {
 
   useEffect(() => {
     if (profile) setDefaultRsn(profile.default_rsn ?? '');
+  }, [profile]);
+
+  useEffect(() => {
+    if (profile) setEmailNotifications(profile.email_notifications);
   }, [profile]);
 
   // BACKLOG.md #13 -- one stable per-account webhook, separate from
@@ -105,6 +111,16 @@ export default function AccountPage() {
     setTimeout(() => setRsnSaved(false), 2000);
   }
 
+  async function handleToggleEmailNotifications(next: boolean) {
+    if (!session) return;
+    const prev = emailNotifications;
+    setEmailNotifications(next);
+    setNotifSaving(true);
+    const { error } = await getSupabase().from('profiles').update({ email_notifications: next }).eq('id', session.user.id);
+    setNotifSaving(false);
+    if (error) setEmailNotifications(prev);
+  }
+
   return (
     <div className="mx-auto max-w-lg py-12">
       <h1 className="text-2xl font-semibold">Account</h1>
@@ -155,6 +171,22 @@ export default function AccountPage() {
           </button>
         </form>
         {rsnError && <p className="mt-1 text-sm text-red-400">{rsnError}</p>}
+      </div>
+
+      <div className="mt-8 max-w-md">
+        <h2 className="text-sm font-semibold text-stone-300">Email notifications</h2>
+        <p className="mt-1 text-xs text-stone-500">
+          Occasional emails when a new feature ships. Doesn't affect sign-in emails, which always send.
+        </p>
+        <label className="mt-2 flex items-center gap-2 text-sm text-stone-300">
+          <input
+            type="checkbox"
+            checked={emailNotifications}
+            onChange={(e) => handleToggleEmailNotifications(e.target.checked)}
+            disabled={notifSaving}
+          />
+          Email me about new features
+        </label>
       </div>
 
       {dinkSecret && (

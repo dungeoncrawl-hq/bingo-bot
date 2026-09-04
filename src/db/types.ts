@@ -10,6 +10,10 @@ export interface Profile {
   // form so they don't have to retype it every time. null until they set
   // one on the account page.
   default_rsn: string | null;
+  // BACKLOG.md #20 -- opt-out for the "new feature" announcement emails,
+  // defaulting to true. Unrelated to Supabase's own auth emails (magic
+  // link/signup), which always send regardless of this flag.
+  email_notifications: boolean;
 }
 
 export interface Challenge {
@@ -101,4 +105,17 @@ export interface Feedback {
   message: string;
   created_at: string;
   reviewed: boolean;
+}
+
+// BACKLOG.md #20 -- a site-admin-authored changelog entry. published_at
+// null means it's a draft, invisible outside the admin page (see
+// schema.sql's two-policy RLS split). emailed_at null means the one-time
+// subscriber email blast for this entry hasn't gone out yet.
+export interface Announcement {
+  id: string;
+  title: string;
+  body: string;
+  created_at: string;
+  published_at: string | null;
+  emailed_at: string | null;
 }

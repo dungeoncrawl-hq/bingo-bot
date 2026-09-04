@@ -583,3 +583,75 @@ instead of renumbering the existing list.
     `challenges.discord_webhook_url` is per-challenge, likely another
     singleton-row settings table matching `randomize_settings`'
     pattern. Worth revisiting once there's real submission volume.
+
+20. ~~A site-admin-authored changelog~~ -- **Shipped 2026-09-04**,
+    minus the Discord-broadcast channel (see #21).
+
+    **Data model**: new `announcements` table -- `title`, `body`,
+    `created_at`, `published_at` (null = draft, invisible outside the
+    admin page -- two RLS SELECT policies, public-read-if-published
+    OR-combined with a blanket site-admin policy, same pattern as
+    every other admin-authored table here), `emailed_at` (null until
+    the one-time subscriber email for this row has gone out -- what
+    stops a second accidental send). Publishing (visible on the
+    site) and emailing subscribers are two separate, deliberate admin
+    actions, not one Save button -- a typo-fix republish must never
+    silently re-blast every inbox.
+
+    **Email opt-out**: new `profiles.email_notifications` boolean,
+    defaulting to true (opt-out, not opt-in) -- a toggle on
+    `AccountPage.tsx` alongside Default RSN/the Dink webhook.
+    Unrelated to Supabase's own auth emails (magic link/signup
+    confirmation), which always send regardless of this flag.
+
+    **One-click unsubscribe, no login required**: the link in every
+    email is `/api/unsubscribe?profile=<id>&token=<hmac>` -- the token
+    is `HMAC-SHA256(profileId, UNSUBSCRIBE_SECRET)`
+    (`src/server/unsubscribeToken.ts`), verified statelessly with no DB
+    lookup or session, so it works even from an email client that
+    never has an app session. Includes `List-Unsubscribe`/
+    `List-Unsubscribe-Post` headers for one-click compliance in Gmail
+    etc.
+
+    **Sending**: `src/server/resendEmail.ts` calls Resend's REST API
+    directly (raw fetch, no `resend` npm dependency -- matches
+    `supabaseAdmin.ts`'s own raw-fetch-over-SDK convention), batched
+    at 100 recipients/call. `profiles` deliberately has no email
+    column (see #18's own privacy note) and `auth.users` isn't
+    reachable through PostgREST, so a new `subscribed_emails()` SQL
+    function (security definer, execute revoked from every
+    client-facing role) is the only way to resolve "which addresses
+    opted in" without paging the Admin Auth API by hand.
+    `api/announcements/send.ts` is gated by a new
+    `src/server/adminAuth.ts` (`requireSiteAdmin`) -- resolves the
+    caller's bearer token via Supabase's own `/auth/v1/user` endpoint
+    rather than adding a JWT-verification dependency, then checks
+    `is_site_admin`. Reusable by any future admin-only API route.
+
+    **Reading it**: `HomePage.tsx` teases the latest 3 published
+    entries; `/changelog` (`ChangelogPage.tsx`) lists the full
+    history; `/feed.xml` (`api/feed.ts`, rewritten ahead of the SPA
+    catch-all in `vercel.json`) is a plain RSS feed for anyone who'd
+    rather subscribe that way. A small dot badge on the Footer's new
+    "Updates" link compares the latest announcement's id against a
+    `localStorage` "last seen" value (cleared on visiting
+    `/changelog`) -- catches someone who's logged in but never
+    revisits the home page, no account-level tracking needed.
+
+    **IMPORTANT -- three things still need to happen outside this
+    repo before it works live**: (1) run the `announcements`/
+    `subscribed_emails()`/`email_notifications` block appended to
+    `schema.sql` against the live Supabase project (Claude has no
+    direct Postgres/DDL access, same limitation as #18); (2) set
+    `RESEND_API_KEY` and a new `UNSUBSCRIBE_SECRET` (any random
+    string) in Vercel's env vars; (3) verify a sending domain in
+    Resend and update `resendEmail.ts`'s `FROM_ADDRESS` placeholder
+    (`announcements@dungeoncrawl.lol`) to match.
+
+21. Broadcast new announcements (#20) to Discord too, opt-in per
+    challenge, reusing that challenge's own `discord_webhook_url` --
+    reaches players who never revisit the site between events, which
+    email/the home page can't. Deliberately deferred out of #20's v1:
+    off by default, since mixing gameplay completion pings with
+    unrelated site news in someone's clan channel uninvited is a good
+    way to get the webhook removed.

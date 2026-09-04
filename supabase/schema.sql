@@ -718,3 +718,64 @@ create policy "site admin updates" on feedback for update
   ) with check (
     exists (select 1 from profiles p where p.id = auth.uid() and p.is_site_admin)
   );
+
+-- BACKLOG.md #20, 2026-09-04 -- a site-admin-authored changelog. Publishing
+-- (visible on the home page/changelog/RSS feed) and emailing subscribers
+-- are two separate, deliberate actions -- see api/announcements/send.ts's
+-- own comment -- so `published_at` is set by an explicit Publish action,
+-- not by the row simply existing, and `emailed_at` records whether/when
+-- the one-time email blast for this row has already gone out (prevents a
+-- second accidental send).
+create table if not exists announcements (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  body text not null,
+  created_at timestamptz not null default now(),
+  published_at timestamptz,
+  emailed_at timestamptz
+);
+
+alter table announcements enable row level security;
+-- Two SELECT policies, combined with OR by Postgres RLS: the public only
+-- ever sees published rows; a site admin's blanket policy below also
+-- covers drafts, so the admin authoring page can list everything.
+drop policy if exists "public read published" on announcements;
+create policy "public read published" on announcements for select
+  using (published_at is not null);
+drop policy if exists "site admin all" on announcements;
+create policy "site admin all" on announcements for all
+  to authenticated using (
+    exists (select 1 from profiles p where p.id = auth.uid() and p.is_site_admin)
+  ) with check (
+    exists (select 1 from profiles p where p.id = auth.uid() and p.is_site_admin)
+  );
+
+-- Opt-out, defaulting to true -- every new signup is in until they say
+-- otherwise (AccountPage.tsx toggle, or the one-click unsubscribe link in
+-- the email itself). Unrelated to Supabase's own auth emails (magic
+-- link/signup confirmation), which always send regardless of this flag.
+alter table profiles add column if not exists email_notifications boolean not null default true;
+
+-- Server-only lookup for api/announcements/send.ts -- profiles
+-- deliberately has no email column (see BACKLOG.md #18's feedback table
+-- comment on this schema's existing profiles/auth.users privacy split),
+-- and auth.users isn't reachable through PostgREST at all, so this is the
+-- only way to resolve "which addresses should get this email" without
+-- paging the Admin Auth API by hand. security definer to cross into the
+-- auth schema; execute is revoked from every client-facing role so an
+-- email address can never leak through a client query.
+create or replace function subscribed_emails()
+returns table (id uuid, email text)
+language sql
+security definer
+set search_path = public
+as $$
+  select p.id, u.email
+  from profiles p
+  join auth.users u on u.id = p.id
+  where p.email_notifications = true
+    and u.email is not null;
+$$;
+
+revoke all on function subscribed_emails() from public, authenticated, anon;
+grant execute on function subscribed_emails() to service_role;
