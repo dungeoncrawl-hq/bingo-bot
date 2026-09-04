@@ -16,6 +16,7 @@ import AdminGrowthPage from './pages/AdminGrowthPage';
 import AdminRandomizeSettingsPage from './pages/AdminRandomizeSettingsPage';
 import AdminDiscordTemplatesPage from './pages/AdminDiscordTemplatesPage';
 import AdminAccountsPage from './pages/AdminAccountsPage';
+import AdminFeedbackPage from './pages/AdminFeedbackPage';
 
 function App() {
   return (
@@ -39,6 +40,7 @@ function App() {
             <Route path="/dungeon-master-admin/randomize-settings" element={<AdminRandomizeSettingsPage />} />
             <Route path="/dungeon-master-admin/discord-templates" element={<AdminDiscordTemplatesPage />} />
             <Route path="/dungeon-master-admin/accounts" element={<AdminAccountsPage />} />
+            <Route path="/dungeon-master-admin/feedback" element={<AdminFeedbackPage />} />
           </Routes>
         </div>
         <Footer />

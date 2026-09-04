@@ -672,3 +672,49 @@ on conflict (profile_id) do nothing;
 -- cleanly 404ing/succeeding, for as long as the old build is still
 -- serving requests.
 alter table challenges drop column if exists dink_secret;
+
+-- BACKLOG.md #18, 2026-09-04 -- a lightweight in-app feedback form, so a
+-- host or participant can flag a bug/suggestion without leaving to find a
+-- Discord DM or open a GitHub issue. No Discord relay for submissions
+-- (deliberately deferred, see BACKLOG.md #19) -- this table plus the
+-- /dungeon-master-admin/feedback review page is the whole v1.
+create table if not exists feedback (
+  id uuid primary key default gen_random_uuid(),
+  -- Every write in this app already requires auth, so there's no
+  -- anonymous-submission path to design around here either.
+  profile_id uuid not null references profiles(id) on delete cascade,
+  -- Captured automatically from window.location.pathname at submit time,
+  -- not typed by the user -- context for free. Nullable only in case a
+  -- future submission path (e.g. a server-side error handler) doesn't
+  -- have a page to attribute.
+  page_path text,
+  message text not null,
+  created_at timestamptz not null default now(),
+  -- Lets the admin page dim/hide things already looked at without
+  -- deleting the row (BACKLOG.md #17's ANY/ALL work established the same
+  -- "boolean flag, no destructive default" shape for host-facing state).
+  reviewed boolean not null default false
+);
+
+alter table feedback enable row level security;
+-- Unlike almost every other table in this schema, feedback text could say
+-- anything -- no "public read" policy here. Insert-only for the
+-- submitter's own profile_id (same shape as challenge_participants'
+-- self-write policy); read/update restricted to is_site_admin (same
+-- exists(...) pattern already used for randomize_settings/
+-- discord_banter_lines).
+drop policy if exists "self insert" on feedback;
+create policy "self insert" on feedback for insert
+  to authenticated with check (profile_id = auth.uid());
+drop policy if exists "site admin reads and reviews" on feedback;
+create policy "site admin reads and reviews" on feedback for select
+  to authenticated using (
+    exists (select 1 from profiles p where p.id = auth.uid() and p.is_site_admin)
+  );
+drop policy if exists "site admin updates" on feedback;
+create policy "site admin updates" on feedback for update
+  to authenticated using (
+    exists (select 1 from profiles p where p.id = auth.uid() and p.is_site_admin)
+  ) with check (
+    exists (select 1 from profiles p where p.id = auth.uid() and p.is_site_admin)
+  );

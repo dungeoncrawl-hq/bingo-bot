@@ -91,3 +91,14 @@ export interface ChallengeParticipant {
   adventure_baseline_at: string | null;
   adventure_baseline_snapshot: SnapshotRow | null;
 }
+
+// BACKLOG.md #18 -- a submitted-by-anyone bug/suggestion note, reviewed
+// only by the site admin (see schema.sql's RLS -- no public read).
+export interface Feedback {
+  id: string;
+  profile_id: string;
+  page_path: string | null;
+  message: string;
+  created_at: string;
+  reviewed: boolean;
+}

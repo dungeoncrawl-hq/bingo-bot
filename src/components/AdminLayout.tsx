@@ -38,6 +38,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         <NavLink to="/dungeon-master-admin/discord-templates" className={tabClass}>
           Discord templates
         </NavLink>
+        <NavLink to="/dungeon-master-admin/feedback" className={tabClass}>
+          Feedback
+        </NavLink>
       </div>
       <div className="mt-8">{children}</div>
     </div>

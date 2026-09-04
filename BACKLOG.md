@@ -534,10 +534,8 @@ instead of renumbering the existing list.
     resolved wiki icons.
 
 ## Feedback
-18. **A lightweight feedback form**, reachable from anywhere in the
-    app (a small "Feedback" link in `Footer.tsx`, alongside "About
-    us"), so a host or participant can flag a bug/suggestion without
-    leaving to find a Discord DM or open a GitHub issue.
+18. ~~A lightweight feedback form~~, reachable from anywhere in the
+    app -- **Shipped 2026-09-04**, no Discord relay (see #19).
 
     **Data model**: new `feedback` table -- `id`, `profile_id` (who
     submitted; not nullable, since every write in this app already
@@ -554,25 +552,34 @@ instead of renumbering the existing list.
     `discord_banter_lines`) -- feedback text could say anything, so
     unlike most of this schema it shouldn't be publicly readable.
 
-    **Submit UI**: a small modal (styled like `TileDetailModal.tsx`)
-    triggered from the Footer link -- one textarea, a Submit button, a
-    brief "thanks" state on success. No page navigation, so it stays
-    usable mid-board without losing scroll position/state.
+    **IMPORTANT -- migration not yet applied**: the `feedback` table/
+    RLS block added to `schema.sql` needs to be run against the live
+    Supabase project (SQL editor) before this feature works in
+    production -- Claude has no direct Postgres/DDL access, only the
+    app's own REST/auth APIs, so this one step couldn't be automated
+    like the rest of the build.
 
-    **Review UI**: new `/dungeon-master-admin/feedback` page (added to
-    `AdminLayout`'s nav alongside the existing admin pages), listing
-    rows newest-first with the submitter's rsn/email, `page_path` (as
-    a link, when it resolves to a real in-app route), the message, and
-    a "mark reviewed" toggle. No reply mechanism -- if a submission
-    needs a response, that still happens out-of-band (Discord/in
-    person); this is a capture-and-triage tool, not a support-ticket
-    system.
+    **Submit UI** (`FeedbackModal.tsx`): a small modal (styled like
+    `TileDetailModal.tsx`), triggered from a "Feedback" link in
+    `Footer.tsx` (next to "About us", shown only when signed in) --
+    one textarea, a Submit button, a brief "thanks" state on success.
+    No page navigation, so it stays usable mid-board without losing
+    scroll position/state.
 
-    **Open question**: whether a new submission should also relay to
-    a site-wide Discord webhook (so it surfaces immediately instead of
-    waiting for an admin-page visit) -- would need its own site-level
-    webhook URL setting, since `challenges.discord_webhook_url` is
-    per-challenge, likely another singleton-row settings table
-    matching `randomize_settings`' pattern. Deferred until there's
-    real submission volume to justify it; the admin page alone covers
-    v1.
+    **Review UI** (`AdminFeedbackPage.tsx`): new
+    `/dungeon-master-admin/feedback` page (added to `AdminLayout`'s
+    nav), listing rows newest-first with the submitter's display name,
+    `page_path`, the message, and a "mark reviewed" toggle (optimistic,
+    reverted on failure) -- reviewed rows are hidden by default behind
+    a "Show reviewed" checkbox rather than deleted. No reply mechanism
+    -- if a submission needs a response, that still happens out-of-band
+    (Discord/in person); this is a capture-and-triage tool, not a
+    support-ticket system.
+
+19. Relay new feedback submissions (#18) to a site-wide Discord
+    webhook, so they surface immediately instead of waiting for an
+    admin-page visit. Deliberately deferred out of #18's v1 -- would
+    need its own site-level webhook URL setting, since
+    `challenges.discord_webhook_url` is per-challenge, likely another
+    singleton-row settings table matching `randomize_settings`'
+    pattern. Worth revisiting once there's real submission volume.
