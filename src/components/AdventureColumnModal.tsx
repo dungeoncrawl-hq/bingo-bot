@@ -14,6 +14,7 @@ import { computeParticipantStats, type RawParticipantData } from '../lib/partici
 import type { SnapshotRow } from '../lib/hiscoresRecap';
 import { progressColor } from '../lib/progressColor';
 import { resolveAdventureTileWindow, resolveFrontier } from '../lib/adventureProgress';
+import { itemIcon } from '../lib/itemSets';
 
 interface ParticipantLite {
   id: string;
@@ -327,6 +328,29 @@ export default function AdventureColumnModal({
             ))}
             {participants.length === 0 && <li className="text-sm text-stone-500">No one's joined yet.</li>}
           </ul>
+        )}
+
+        {(
+          [
+            { tile: topTile, lane: 'top' },
+            { tile: bottomTile, lane: 'bottom' },
+          ] as const
+        ).map(({ tile, lane }) =>
+          tile && tile.condition.type === 'itemCount' ? (
+            <div key={lane} className="border-t border-stone-800 pt-3">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-500">
+                {lane} -- targeted items ({tile.condition.itemNames.length})
+              </p>
+              <ul className="max-h-32 space-y-1 overflow-y-auto">
+                {tile.condition.itemNames.map((name) => (
+                  <li key={name} className="flex items-center gap-2 text-xs text-stone-300">
+                    <img src={itemIcon(name)} alt="" className="h-4 w-4 shrink-0 object-contain" />
+                    {name}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null,
         )}
 
         <div className="flex justify-end pt-2">

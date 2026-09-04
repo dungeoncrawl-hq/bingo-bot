@@ -70,7 +70,7 @@ describe('checkTile', () => {
     expect(checkTile({ type: 'skillXpGained', skill: 'Attack', threshold: 10_000 }, s).done).toBe(true);
   });
 
-  it('itemCount sums matching item names case-insensitively', () => {
+  it('itemCount (mode "any", or omitted) sums matching item names case-insensitively', () => {
     const cond: TileCondition = {
       type: 'itemCount',
       itemNames: ["Dharok's helm", "Dharok's platebody"],
@@ -79,6 +79,58 @@ describe('checkTile', () => {
     };
     const s = stats({ itemCounts: { "dharok's helm": 1, "dharok's platebody": 1, "verac's flail": 5 } });
     expect(checkTile(cond, s)).toEqual({ done: true, progress: 2, goal: 2 });
+  });
+
+  it('itemCount mode "any" lets duplicates of one item substitute for another', () => {
+    const cond: TileCondition = {
+      type: 'itemCount',
+      itemNames: ["Dharok's helm", "Dharok's platebody"],
+      setName: 'Barrows pieces',
+      mode: 'any',
+      threshold: 2,
+    };
+    // Two copies of the same piece, none of the other -- "any" still clears it.
+    const s = stats({ itemCounts: { "dharok's helm": 2 } });
+    expect(checkTile(cond, s)).toEqual({ done: true, progress: 2, goal: 2 });
+  });
+
+  it('itemCount mode "all" counts distinct items obtained at least once -- duplicates of one do not substitute for another', () => {
+    const cond: TileCondition = {
+      type: 'itemCount',
+      itemNames: ["Dharok's helm", "Dharok's platebody", "Dharok's platelegs", "Dharok's greataxe"],
+      setName: "Dharok's set",
+      mode: 'all',
+      threshold: 4,
+    };
+    // Five copies of the same piece -- only 1 distinct item, nowhere near the set.
+    const s = stats({ itemCounts: { "dharok's helm": 5 } });
+    expect(checkTile(cond, s)).toEqual({ done: false, progress: 1, goal: 4 });
+  });
+
+  it('itemCount mode "all" completes once every selected item has at least one copy', () => {
+    const cond: TileCondition = {
+      type: 'itemCount',
+      itemNames: ["Dharok's helm", "Dharok's platebody"],
+      setName: "Dharok's set",
+      mode: 'all',
+      threshold: 2,
+    };
+    const s = stats({ itemCounts: { "dharok's helm": 1, "dharok's platebody": 3 } });
+    expect(checkTile(cond, s)).toEqual({ done: true, progress: 2, goal: 2 });
+  });
+
+  it('itemCount mode "all" supports a partial-selection threshold (any N of the M selected)', () => {
+    const cond: TileCondition = {
+      type: 'itemCount',
+      itemNames: ['a', 'b', 'c', 'd', 'e'],
+      setName: 'Some set',
+      mode: 'all',
+      threshold: 3,
+    };
+    const s = stats({ itemCounts: { a: 1, b: 1 } });
+    expect(checkTile(cond, s).done).toBe(false);
+    const s2 = stats({ itemCounts: { a: 1, b: 1, c: 1 } });
+    expect(checkTile(cond, s2).done).toBe(true);
   });
 
   it('maxDeaths starts complete and flips to failed once the limit is broken', () => {
@@ -248,9 +300,21 @@ describe('formatTileProgress', () => {
     expect(formatTileProgress(cond, checkTile(cond, stats({ petsObtained: 0 })))).toBe('0 / 1 pet');
   });
 
-  it('formats itemCount as a plain progress/goal multiplier', () => {
+  it('formats itemCount mode "any" (or omitted) as a plain progress/goal multiplier', () => {
     const cond: TileCondition = { type: 'itemCount', itemNames: ["Verac's flail"], setName: 'Barrows uniques', threshold: 3 };
     expect(formatTileProgress(cond, checkTile(cond, stats({ itemCounts: { "verac's flail": 1 } })))).toBe('1/3x');
+  });
+
+  it('formats itemCount mode "all" as a progress/goal item count', () => {
+    const cond: TileCondition = {
+      type: 'itemCount',
+      itemNames: ["Verac's flail", "Verac's helm"],
+      setName: 'Barrows uniques',
+      mode: 'all',
+      threshold: 2,
+    };
+    const status = checkTile(cond, stats({ itemCounts: { "verac's flail": 1 } }));
+    expect(formatTileProgress(cond, status)).toBe('1/2 items');
   });
 
   it('formats maxDeaths as a plain progress/goal death count', () => {
@@ -342,6 +406,20 @@ describe('tileTaskPhrase', () => {
     expect(tileTaskPhrase({ type: 'petsObtained', threshold: 2 })).toBe('2 pets');
   });
 
+  it('describes itemCount mode "all" distinctly from the default "any" quantity phrasing', () => {
+    const any: TileCondition = { type: 'itemCount', itemNames: ['a', 'b'], setName: 'Barrows uniques', threshold: 2 };
+    expect(tileTaskPhrase(any)).toBe('2 Barrows uniques');
+    const allFull: TileCondition = { type: 'itemCount', itemNames: ['a', 'b'], setName: 'Barrows uniques', mode: 'all', threshold: 2 };
+    expect(tileTaskPhrase(allFull)).toBe('every one of these 2 Barrows uniques items');
+    const allPartial: TileCondition = {
+      type: 'itemCount',
+      itemNames: ['a', 'b', 'c'],
+      setName: 'Barrows uniques',
+      mode: 'all',
+      threshold: 2,
+    };
+    expect(tileTaskPhrase(allPartial)).toBe('2 of these 3 Barrows uniques items');
+  });
 });
 
 describe('conditionNeedsBaseline', () => {

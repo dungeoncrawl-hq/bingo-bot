@@ -14,6 +14,7 @@ import { computeParticipantStats, poolStats, type RawParticipantData } from '../
 import { computeHiscoresRecap, type SnapshotRow } from '../lib/hiscoresRecap';
 import { progressColor } from '../lib/progressColor';
 import { resolveAdventureTileWindow } from '../lib/adventureProgress';
+import { itemIcon } from '../lib/itemSets';
 
 interface ParticipantLite {
   id: string;
@@ -373,6 +374,22 @@ export default function TileDetailModal({
             })}
             {ranked.length === 0 && <li className="text-sm text-stone-500">No one's joined yet.</li>}
           </ul>
+        )}
+
+        {tile.condition.type === 'itemCount' && (
+          <div className="border-t border-stone-800 pt-3">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-500">
+              Targeted items ({tile.condition.itemNames.length})
+            </p>
+            <ul className="max-h-32 space-y-1 overflow-y-auto">
+              {tile.condition.itemNames.map((name) => (
+                <li key={name} className="flex items-center gap-2 text-xs text-stone-300">
+                  <img src={itemIcon(name)} alt="" className="h-4 w-4 shrink-0 object-contain" />
+                  {name}
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
 
         <div className="flex justify-end pt-2">

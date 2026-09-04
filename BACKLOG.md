@@ -487,10 +487,10 @@ instead of renumbering the existing list.
 
 17. **"Obtain specific uniques" (itemCount) needs an ANY/ALL goal mode,
     plus showing the actual selected items on the player-facing tile
-    modal.** Today itemCount only sums quantity across the host's
-    selected items (a fast Vorkath grinder could clear "get 2 of these
-    3 items" purely off 2 draconic visages) -- no way to require each
-    selected item be obtained at least once.
+    modal.** **Shipped 2026-09-04.** Previously itemCount only summed
+    quantity across the host's selected items (a fast Vorkath grinder
+    could clear "get 2 of these 3 items" purely off 2 draconic visages)
+    -- no way to require each selected item be obtained at least once.
 
     **ANY** (today's only behavior, becomes the default so no existing
     tile's meaning changes): progress is total quantity across the
@@ -503,21 +503,29 @@ instead of renumbering the existing list.
     since the two share every other piece of the data model
     (itemNames/setName/threshold) and now the same multi-select UI.
 
-    **Data model**: `itemCount` gains a field (e.g. `mode: 'any' |
-    'all'`), defaulting to `'any'` for every tile saved before this
-    exists -- zero behavior change until a host actually touches it.
-    `checkTile`'s itemCount case branches on it: `'any'` keeps today's
-    `itemCounts` sum; `'all'` reuses the distinct-obtained-at-least-once
-    counting logic `itemSetCollected` used to have (git history has the
-    exact implementation, `tileConditions.ts` before commit `509c2e2`).
+    **Data model**: `itemCount` gained an optional `mode: 'any' |
+    'all'` field, absent/defaulting to `'any'` on every tile saved
+    before this shipped -- zero behavior change for them.
+    `checkTile`'s itemCount case branches on it: `'any'` keeps the
+    original `itemCounts` sum; `'all'` reuses the distinct-obtained-
+    at-least-once counting logic `itemSetCollected` used to have.
+    `formatTileGoal`/`formatTileProgress`/`describeTileCondition`/
+    `tileTaskPhrase` are all mode-aware too, so "All" reads as "every
+    one of these N items"/"X/Y items" rather than the ambiguous "Nx".
 
-    **TileEditorForm.tsx**: a toggle/radio (Any/All) shown once itemCount
-    is selected, next to or above the item checklist.
+    **TileEditorForm.tsx**: an Any/All toggle shown once itemCount is
+    selected, above the item checklist -- switching to "All" defaults
+    the goal to the current selection's full size (the common case),
+    without overwriting it again on further checkbox clicks.
 
-    **Player-facing display**: the tile detail modal(s)
-    (`TileDetailModal.tsx`, and `AdventureColumnModal.tsx` for Adventure
-    boards) should list the tile's actual targeted items -- icon +
-    name, not just the set name -- at the bottom of the modal, so a
-    player can see exactly which items count without guessing from the
-    catalog name alone. Reuses `itemIcon()` (`itemSets.ts`) for each
-    icon, same resolver the tile's own auto-icon already uses.
+    **Player-facing display**: `TileDetailModal.tsx` and
+    `AdventureColumnModal.tsx` (per lane, for Adventure rooms) both
+    list the tile's actual targeted items -- icon + name, via the same
+    `itemIcon()` resolver the tile's own auto-icon already uses -- at
+    the bottom of the modal, so a player can see exactly which items
+    count without guessing from the catalog name alone.
+
+    Live-verified in the browser: the toggle renders and auto-sets the
+    goal on switching to "All"; the board grid caption reads "2/2
+    items"; the tile detail modal lists the two selected items with
+    resolved wiki icons.

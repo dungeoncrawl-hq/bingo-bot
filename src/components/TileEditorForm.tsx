@@ -140,6 +140,7 @@ function conditionFromForm(
   itemSet: PresetItemSet,
   // itemCount's own host-narrowed subset of itemSet.items.
   selectedItemNames: string[],
+  itemMode: 'any' | 'all',
   dropValueThreshold: number,
 ): TileCondition {
   switch (type) {
@@ -149,7 +150,7 @@ function conditionFromForm(
     case 'skillXpGained':
       return { type, skill, threshold };
     case 'itemCount':
-      return { type, itemNames: selectedItemNames, setName: itemSet.name, threshold };
+      return { type, itemNames: selectedItemNames, setName: itemSet.name, mode: itemMode, threshold };
     case 'bigDropsCount':
       return { type, dropValueThreshold: Math.max(MIN_DROP_VALUE_THRESHOLD, dropValueThreshold), threshold };
     case 'freeSpace':
@@ -168,6 +169,9 @@ function formFromCondition(cond: TileCondition) {
     skill: cond.type === 'skillLevelGained' || cond.type === 'skillXpGained' ? cond.skill : '',
     itemSetName: cond.type === 'itemCount' ? cond.setName : '',
     itemNames: cond.type === 'itemCount' ? cond.itemNames : [],
+    // Absent on any tile saved before this existed -- defaults to 'any',
+    // its original (and only) behavior.
+    itemMode: cond.type === 'itemCount' ? (cond.mode ?? 'any') : ('any' as 'any' | 'all'),
     dropValueThreshold: cond.type === 'bigDropsCount' ? cond.dropValueThreshold : DEFAULT_DROP_VALUE_THRESHOLD,
   };
 }
@@ -220,6 +224,7 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
         skill: '',
         itemSetName: '',
         itemNames: [] as string[],
+        itemMode: 'any' as 'any' | 'all',
         dropValueThreshold: DEFAULT_DROP_VALUE_THRESHOLD,
       };
   const [threshold, setThreshold] = useState(initial.threshold);
@@ -245,6 +250,11 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
   const [selectedItemNames, setSelectedItemNames] = useState<string[]>(
     initial.itemNames.length > 0 ? initial.itemNames : (initialItemSet ?? PRESET_ITEM_SETS[0]).items,
   );
+  // 'any': total quantity across the selection, duplicates of one item
+  // freely substitute for another (today's original behavior). 'all':
+  // how many of the selected items have been obtained at least once,
+  // duplicates of an already-obtained item don't help.
+  const [itemMode, setItemMode] = useState<'any' | 'all'>(initial.itemMode);
   const [dropValueThreshold, setDropValueThreshold] = useState(initial.dropValueThreshold);
   const [points, setPoints] = useState(existing?.points ?? 1);
   const [firstCompleterBonus, setFirstCompleterBonus] = useState(existing?.first_completer_bonus ?? 0);
@@ -273,6 +283,17 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
     setSelectedItemNames((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
   }
 
+  function selectMode(next: 'any' | 'all') {
+    setItemMode(next);
+    // Switching to "all" defaults the goal to "every selected item" --
+    // the common case, and matches itemSetCollected's old convenience
+    // default before it was folded into this mode (BACKLOG.md #2/#17).
+    // Only applied on the mode switch itself, not on every checkbox
+    // toggle afterward, so a host who deliberately asks for "any N of
+    // these M" doesn't get overwritten by their own further clicks.
+    if (next === 'all') setThreshold(selectedItemNames.length);
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     if (type === 'itemCount' && selectedItemNames.length === 0) {
@@ -285,7 +306,7 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
       await onSave({
         label,
         icon,
-        condition: conditionFromForm(type, threshold, activity, skill, selectedSet, selectedItemNames, dropValueThreshold),
+        condition: conditionFromForm(type, threshold, activity, skill, selectedSet, selectedItemNames, itemMode, dropValueThreshold),
         // A free space is always complete for everyone the instant it
         // exists -- there's no "first" to reward and no achievement to
         // weight, so it can never contribute points regardless of what's
@@ -401,6 +422,31 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
                   </option>
                 ))}
             </select>
+            <div className="mt-2">
+              <label className="block text-sm text-stone-400">Goal type</label>
+              <div className="mt-1 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => selectMode('any')}
+                  disabled={fieldsLocked}
+                  className={`flex-1 rounded-lg border px-3 py-2 text-left text-xs disabled:cursor-not-allowed disabled:opacity-50 ${
+                    itemMode === 'any' ? 'border-amber-500 bg-amber-950/30 text-amber-400' : 'border-stone-700 text-stone-300'
+                  }`}
+                >
+                  <span className="font-semibold">Any</span> -- quantity across the selection; duplicates of one item count
+                </button>
+                <button
+                  type="button"
+                  onClick={() => selectMode('all')}
+                  disabled={fieldsLocked}
+                  className={`flex-1 rounded-lg border px-3 py-2 text-left text-xs disabled:cursor-not-allowed disabled:opacity-50 ${
+                    itemMode === 'all' ? 'border-amber-500 bg-amber-950/30 text-amber-400' : 'border-stone-700 text-stone-300'
+                  }`}
+                >
+                  <span className="font-semibold">All</span> -- each selected item at least once; duplicates don't help
+                </button>
+              </div>
+            </div>
             <div className="mt-2 flex items-center justify-between">
               <label className="text-sm text-stone-400">
                 Which items ({selectedItemNames.length}/{selectedSet.items.length} selected)
@@ -457,8 +503,16 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
                 className={inputClass}
               />
             )}
-            {type !== 'maxDeaths' && type !== 'bigDropsCount' && (
-              <p className="mt-1 text-xs text-stone-500">The amount a player needs to reach to complete this tile.</p>
+            {type === 'itemCount' && itemMode === 'all' ? (
+              <p className="mt-1 text-xs text-stone-500">
+                How many of the {selectedItemNames.length} selected items a player needs to obtain at least once
+                (each one only counts once, out of {selectedItemNames.length}).
+              </p>
+            ) : (
+              type !== 'maxDeaths' &&
+              type !== 'bigDropsCount' && (
+                <p className="mt-1 text-xs text-stone-500">The amount a player needs to reach to complete this tile.</p>
+              )
             )}
             {pooled && (
               <p className="mt-1 text-xs text-amber-500">

@@ -32,12 +32,21 @@ export type TileCondition =
   // XP gained in one specific skill during the event -- unlike 'xpGained',
   // which sums every skill together.
   | { type: 'skillXpGained'; skill: string; threshold: number }
-  // Total quantity obtained across a named set of items during the event
-  // (e.g. the 24 Barrows uniques) -- itemNames matched
-  // case-insensitively against loot item names. setName is a human-readable
-  // name for that set, used only by describeTileCondition below (the
-  // tile's own on-board label handles the item names themselves).
-  | { type: 'itemCount'; itemNames: string[]; setName: string; threshold: number }
+  // itemNames matched case-insensitively against loot item names.
+  // setName is a human-readable name for the catalog set they were
+  // chosen from, used only by describeTileCondition below (the tile's
+  // own on-board label handles the item names themselves). mode picks
+  // how itemNames count toward threshold:
+  // - 'any' (default -- optional so a tile saved before this field
+  //   existed keeps its original meaning): total quantity summed across
+  //   every selected item, duplicates of one freely substitute for
+  //   another (e.g. 5x the same item alone can clear a threshold-2 goal).
+  // - 'all': how many of the selected items have been obtained at LEAST
+  //   ONCE (each capped at 1 toward progress -- a duplicate of an
+  //   already-obtained item doesn't help). threshold is usually
+  //   itemNames.length ("get every selected item"), but a host can ask
+  //   for fewer ("any N of these M specific items").
+  | { type: 'itemCount'; itemNames: string[]; setName: string; mode?: 'any' | 'all'; threshold: number }
   // A drop counts if its own total_value clears dropValueThreshold (not a
   // running sum) -- e.g. "3 drops worth 1,000,000+ GP each". Distinct
   // from singleDropValue above (a boolean -- did any one drop clear a
@@ -210,7 +219,10 @@ export function checkTile(cond: TileCondition, stats: ParticipantStats): TileSta
       return { done: progress >= cond.threshold, progress, goal: cond.threshold };
     }
     case 'itemCount': {
-      const progress = cond.itemNames.reduce((sum, name) => sum + (stats.itemCounts[name.toLowerCase()] ?? 0), 0);
+      const progress =
+        cond.mode === 'all'
+          ? cond.itemNames.filter((name) => (stats.itemCounts[name.toLowerCase()] ?? 0) > 0).length
+          : cond.itemNames.reduce((sum, name) => sum + (stats.itemCounts[name.toLowerCase()] ?? 0), 0);
       return { done: progress >= cond.threshold, progress, goal: cond.threshold };
     }
     case 'bigDropsCount': {
@@ -332,7 +344,11 @@ export function describeTileCondition(cond: TileCondition): string {
     case 'skillXpGained':
       return `${cond.threshold.toLocaleString()} ${cond.skill} XP`;
     case 'itemCount':
-      return `${cond.threshold.toLocaleString()} ${cond.setName}`;
+      return cond.mode === 'all'
+        ? cond.threshold >= cond.itemNames.length
+          ? `every one of these ${cond.itemNames.length} ${cond.setName} items`
+          : `${cond.threshold} of these ${cond.itemNames.length} ${cond.setName} items`
+        : `${cond.threshold.toLocaleString()} ${cond.setName}`;
     case 'bigDropsCount':
       return `${cond.threshold.toLocaleString()} drops worth ${cond.dropValueThreshold.toLocaleString()}+ GP each`;
     case 'maxDeaths':
@@ -398,7 +414,11 @@ export function tileTaskPhrase(cond: TileCondition): string {
     case 'skillXpGained':
       return `${cond.threshold.toLocaleString()} ${cond.skill} XP`;
     case 'itemCount':
-      return `${cond.threshold.toLocaleString()} ${cond.setName}`;
+      return cond.mode === 'all'
+        ? cond.threshold >= cond.itemNames.length
+          ? `every one of these ${cond.itemNames.length} ${cond.setName} items`
+          : `${cond.threshold} of these ${cond.itemNames.length} ${cond.setName} items`
+        : `${cond.threshold.toLocaleString()} ${cond.setName}`;
     case 'maxDeaths':
       return `${cond.threshold.toLocaleString()} deaths or fewer`;
     case 'petsObtained':
@@ -447,7 +467,7 @@ export function formatTileGoal(cond: TileCondition): string | null {
     case 'singleDropValue':
       return `${formatCompactNumber(cond.threshold)}+ gp`;
     case 'itemCount':
-      return `${cond.threshold.toLocaleString()}x`;
+      return cond.mode === 'all' ? `${cond.threshold.toLocaleString()}/${cond.itemNames.length} items` : `${cond.threshold.toLocaleString()}x`;
     case 'bigDropsCount':
       return `${cond.threshold.toLocaleString()}x ${formatCompactNumber(cond.dropValueThreshold)}+ gp`;
     case 'cluesCompleted':
@@ -510,7 +530,7 @@ export function formatTileProgress(cond: TileCondition, status: TileStatus): str
     case 'petsObtained':
       return `${status.progress} / ${status.goal} pet${status.goal === 1 ? '' : 's'}`;
     case 'itemCount':
-      return `${status.progress}/${status.goal}x`;
+      return cond.mode === 'all' ? `${status.progress}/${status.goal} items` : `${status.progress}/${status.goal}x`;
     case 'maxDeaths':
       return `${status.progress} / ${status.goal} deaths`;
     default:
