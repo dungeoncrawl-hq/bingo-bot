@@ -263,7 +263,7 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
   // Label and icon are pure functions of the fields above -- no state of
   // their own, no manual override. Any label/icon a tile was saved with
   // before this restriction existed is superseded the moment it's reopened.
-  const label = defaultLabelFor(type, skill, activity, selectedSet.name);
+  const label = defaultLabelFor(type, skill, activity, itemMode, dropValueThreshold);
   const icon = defaultIconFor(type, skill, activity, selectedItemNames);
 
   function selectItemSet(name: string) {

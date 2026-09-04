@@ -4,6 +4,7 @@
 import type { TileCondition } from './tileConditions.js';
 import { bossActivityIcon } from './bossActivities.js';
 import { itemIcon } from './itemSets.js';
+import { formatCompactNumber } from './format.js';
 
 // The OSRS Wiki hosts a small, stable icon asset at this URL pattern for
 // every skill (verified against all 24 in SKILL_ORDER).
@@ -36,11 +37,21 @@ const PETS_ICON_URL = 'https://oldschool.runescape.wiki/images/Baby_Mole.png';
 const GOTR_ICON_URL = 'https://oldschool.runescape.wiki/images/Abyssal_lantern.png';
 
 // The label is entirely derived from the condition (and its skill/activity/
-// item-catalog parameters) -- not a separate host-editable field in
-// TileEditorForm.tsx, and reused as-is by randomizeBoard.ts's auto-generated
-// tiles. Every branch is deterministic, so there's nothing for a host (or
-// the randomizer) to choose here either.
-export function defaultLabelFor(type: TileCondition['type'], skill: string, activity: string, setName: string): string {
+// item-catalog/value-threshold parameters) -- not a separate host-editable
+// field in TileEditorForm.tsx, and reused as-is by randomizeBoard.ts's
+// auto-generated tiles. Every branch is deterministic, so there's nothing
+// for a host (or the randomizer) to choose here either.
+export function defaultLabelFor(
+  type: TileCondition['type'],
+  skill: string,
+  activity: string,
+  // Only meaningful for itemCount -- 'any'/omitted renders the same as
+  // 'any' (its default), matching formFromCondition's own fallback.
+  itemMode?: 'any' | 'all',
+  // Only meaningful for bigDropsCount -- undefined only for a caller that
+  // hasn't settled on one yet (there's no sensible default value to guess).
+  dropValueThreshold?: number,
+): string {
   switch (type) {
     case 'xpGained':
       return 'Total XP';
@@ -49,7 +60,7 @@ export function defaultLabelFor(type: TileCondition['type'], skill: string, acti
     case 'skillLevelGained':
       return `${skill} Level`;
     case 'bossKcGained':
-      return 'Boss KC';
+      return 'Total Boss KC';
     case 'kcGained':
       // activity is always a catalog value once the dropdown below has
       // ever been touched -- the empty-string fallback only matters for a
@@ -60,13 +71,20 @@ export function defaultLabelFor(type: TileCondition['type'], skill: string, acti
     case 'maxDeaths':
       return 'Max Deaths';
     case 'lootValueGained':
-      return 'Loot Value';
+      return 'Total Loot';
     case 'singleDropValue':
       return 'Big Drop';
     case 'bigDropsCount':
-      return 'Big Drops';
+      // The value bar itself lives in the label now (the goal caption
+      // below just counts drops) -- undefined only for a tile still being
+      // built in TileEditorForm.tsx before a threshold has been chosen.
+      return dropValueThreshold != null ? `${formatCompactNumber(dropValueThreshold)}+ Drops` : 'Big Drops';
     case 'itemCount':
-      return setName;
+      // The specific catalog set (and its full item list) is still shown
+      // in TileDetailModal/TileEditorForm -- the on-board label just says
+      // how many of them are needed, which reads the same regardless of
+      // which set a host picked.
+      return itemMode === 'all' ? 'All Uniques from list' : 'Any Uniques from list';
     case 'cluesCompleted':
       return 'Clue Scrolls';
     case 'beginnerCluesCompleted':

@@ -136,12 +136,13 @@ export function randomizeBoard({ emptySlots, existingConditions, difficulty, set
 
     const skill = condition.type === 'skillLevelGained' || condition.type === 'skillXpGained' ? condition.skill : '';
     const activity = condition.type === 'kcGained' ? condition.activity : '';
-    const setName = condition.type === 'itemCount' ? condition.setName : '';
     const itemNames = condition.type === 'itemCount' ? condition.itemNames : undefined;
+    const itemMode = condition.type === 'itemCount' ? condition.mode : undefined;
+    const dropValueThreshold = condition.type === 'bigDropsCount' ? condition.dropValueThreshold : undefined;
 
     generated.push({
       layout,
-      label: defaultLabelFor(condition.type, skill, activity, setName),
+      label: defaultLabelFor(condition.type, skill, activity, itemMode, dropValueThreshold),
       icon: defaultIconFor(condition.type, skill, activity, itemNames),
       condition,
       points: settings.pointsByDifficulty[difficulty],

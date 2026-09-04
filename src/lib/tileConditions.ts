@@ -467,9 +467,16 @@ export function formatTileGoal(cond: TileCondition): string | null {
     case 'singleDropValue':
       return `${formatCompactNumber(cond.threshold)}+ gp`;
     case 'itemCount':
-      return cond.mode === 'all' ? `${cond.threshold.toLocaleString()}/${cond.itemNames.length} items` : `${cond.threshold.toLocaleString()}x`;
+      // Which specific items and how many total are already on the label
+      // (defaultLabelFor)/item checklist (TileDetailModal) -- this just
+      // needs the count, same for either mode now that 'all' always means
+      // "every selected item" (TileEditorForm.tsx locks its threshold to
+      // the selection size).
+      return `${cond.threshold.toLocaleString()} item${cond.threshold === 1 ? '' : 's'}`;
     case 'bigDropsCount':
-      return `${cond.threshold.toLocaleString()}x ${formatCompactNumber(cond.dropValueThreshold)}+ gp`;
+      // The per-drop value bar is on the label now (defaultLabelFor) --
+      // this just counts how many such drops are needed.
+      return `${cond.threshold.toLocaleString()} drop${cond.threshold === 1 ? '' : 's'}`;
     case 'cluesCompleted':
     case 'beginnerCluesCompleted':
     case 'easyCluesCompleted':
@@ -487,31 +494,38 @@ export function formatTileGoal(cond: TileCondition): string | null {
   }
 }
 
-// A "620K / 1.5M XP"-style caption combining current progress with the
-// goal, replacing formatTileGoal's goal-only text so a tile's caption
-// actually reflects how close someone is, not just what the target is.
-// XP/gp-scale numbers use formatCompactNumber's shorthand (current
-// progress always rounded down, so a tile never visually reads as having
-// reached the threshold before it actually has); every other type's
-// numbers are small enough to show exactly. null only for the handful of
-// condition types with no meaningful running count -- callers fall back
-// to formatTileGoal for those (freeSpace/tbd: nothing to measure;
-// singleDropValue: a yes/no, not a running total).
+// A "620K / 1.5M"-style caption combining current progress with the goal,
+// replacing formatTileGoal's goal-only text so a tile's caption actually
+// reflects how close someone is, not just what the target is. No trailing
+// unit -- the label above (defaultLabelFor) and the pre-progress goal
+// caption already establish what's being counted, so repeating it on
+// every single tick of progress was just noise. XP/gp-scale numbers use
+// formatCompactNumber's shorthand (current progress always rounded down,
+// so a tile never visually reads as having reached the threshold before
+// it actually has); every other type's numbers are small enough to show
+// exactly. null only for the handful of condition types with no
+// meaningful running count -- callers fall back to formatTileGoal for
+// those (freeSpace/tbd: nothing to measure; singleDropValue: a yes/no,
+// not a running total).
 export function formatTileProgress(cond: TileCondition, status: TileStatus): string | null {
   switch (cond.type) {
     case 'xpGained':
     case 'skillXpGained':
     case 'xpGainedLowestSkill':
-      return `${formatCompactNumber(status.progress, { roundDown: true })} / ${formatCompactNumber(cond.threshold)} XP`;
     case 'lootValueGained':
-      return `${formatCompactNumber(status.progress, { roundDown: true })} / ${formatCompactNumber(cond.threshold)} gp`;
-    case 'bigDropsCount':
-      return `${status.progress}/${status.goal} big drops`;
+      return `${formatCompactNumber(status.progress, { roundDown: true })} / ${formatCompactNumber(cond.threshold)}`;
+    case 'maxDeaths': {
+      // Counts down instead of up -- "3 deaths left" tells a player how
+      // much room they have to keep this tile, which is the number that
+      // actually matters here, unlike a plain "2 / 5" progress readout
+      // (which reads like every other tile's "getting closer to done").
+      const remaining = status.goal - status.progress;
+      if (status.failed) return `Failed -- ${status.progress.toLocaleString()} deaths`;
+      return `${remaining.toLocaleString()} death${remaining === 1 ? '' : 's'} left`;
+    }
     case 'bossKcGained':
     case 'kcGained':
-      return `${status.progress} / ${status.goal} KC`;
     case 'slayerTasksCompleted':
-      return `${status.progress} / ${status.goal} tasks`;
     case 'cluesCompleted':
     case 'beginnerCluesCompleted':
     case 'easyCluesCompleted':
@@ -519,20 +533,14 @@ export function formatTileProgress(cond: TileCondition, status: TileStatus): str
     case 'hardCluesCompleted':
     case 'eliteCluesCompleted':
     case 'masterCluesCompleted':
-      return `${status.progress} / ${status.goal} clues`;
     case 'collectionLogGained':
-      return `${status.progress} / ${status.goal} items`;
     case 'gotrCompleted':
-      return `${status.progress} / ${status.goal} rifts`;
     case 'skillLevelGained':
     case 'levelsGainedLowestSkill':
-      return `${status.progress} / ${status.goal} level${status.goal === 1 ? '' : 's'}`;
     case 'petsObtained':
-      return `${status.progress} / ${status.goal} pet${status.goal === 1 ? '' : 's'}`;
+    case 'bigDropsCount':
     case 'itemCount':
-      return cond.mode === 'all' ? `${status.progress}/${status.goal} items` : `${status.progress}/${status.goal}x`;
-    case 'maxDeaths':
-      return `${status.progress} / ${status.goal} deaths`;
+      return `${status.progress} / ${status.goal}`;
     default:
       return null;
   }

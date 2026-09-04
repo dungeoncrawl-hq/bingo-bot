@@ -548,7 +548,7 @@ export default function BoardPage() {
                 </>
               ) : (
                 <p>
-                  ⭐ first to complete it &nbsp; ✓ you've completed it &nbsp; ✕ someone else completed it &nbsp; ○
+                  ⭐ first to complete it &nbsp; ✓ you've completed it &nbsp; ✕ someone else completed it &nbsp; ●
                   no one's completed it yet (colored by how close the closest person is) &nbsp; the thin bar on a
                   tile's left edge is your own progress toward it.
                 </p>
@@ -777,7 +777,7 @@ export default function BoardPage() {
                     : someoneElseCompleted
                       ? { glyph: '✕', className: 'text-red-400' }
                       : noOneCompleted
-                        ? { glyph: '○', color: progressColor(closestPercent) }
+                        ? { glyph: '●', color: progressColor(closestPercent) }
                         : null;
               return (
                 <div

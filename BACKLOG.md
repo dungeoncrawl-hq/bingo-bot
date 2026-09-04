@@ -474,9 +474,12 @@ instead of renumbering the existing list.
     existing challenge until a host explicitly edits it.
 
 ## Board display
-15. The per-tile progress indicator (top-right corner, standard board
+15. ~~The per-tile progress indicator (top-right corner, standard board
     grid) should be a solid filled circle in the progress color, not
-    just an outline -- currently only the ring/outline is drawn.
+    just an outline~~ -- **Shipped 2026-09-04.** Swapped the hollow `○`
+    glyph for the filled `●` one in BoardPage.tsx's badge (and its
+    legend text) -- one-character fix, `progressColor`'s color already
+    applied correctly, it just had nothing solid to fill.
 
 ## Item catalog
 16. More curated sets to add to `itemSets.ts` (BACKLOG.md #2's

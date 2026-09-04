@@ -240,72 +240,72 @@ describe('formatTileProgress', () => {
   it('formats current/goal in shorthand for xpGained, current rounded down', () => {
     const cond: TileCondition = { type: 'xpGained', threshold: 1_500_000 };
     const status = checkTile(cond, stats({ xpGained: 1_999_999 }));
-    expect(formatTileProgress(cond, status)).toBe('1.99M / 1.5M XP');
+    expect(formatTileProgress(cond, status)).toBe('1.99M / 1.5M');
   });
 
   it('formats current/goal in shorthand for lootValueGained', () => {
     const cond: TileCondition = { type: 'lootValueGained', threshold: 12_000 };
     const status = checkTile(cond, stats({ lootValueGained: 3_254 }));
-    expect(formatTileProgress(cond, status)).toBe('3,254 / 12K gp');
+    expect(formatTileProgress(cond, status)).toBe('3,254 / 12K');
   });
 
   it('formats current/goal for skillXpGained using the skill-specific progress', () => {
     const cond: TileCondition = { type: 'skillXpGained', skill: 'Attack', threshold: 1_524_000 };
     const status = checkTile(cond, stats({ skillXpGained: { Attack: 1_524_000 } }));
-    expect(formatTileProgress(cond, status)).toBe('1.52M / 1.52M XP');
+    expect(formatTileProgress(cond, status)).toBe('1.52M / 1.52M');
   });
 
   it('formats bigDropsCount as a plain progress/goal drop count', () => {
     const cond: TileCondition = { type: 'bigDropsCount', dropValueThreshold: 1_000_000, threshold: 3 };
     const status = checkTile(cond, stats({ dropValues: [1_000_000, 5_000_000] }));
-    expect(formatTileProgress(cond, status)).toBe('2/3 big drops');
+    expect(formatTileProgress(cond, status)).toBe('2 / 3');
   });
 
   it('formats bossKcGained/kcGained as a plain progress/goal KC count', () => {
     const total: TileCondition = { type: 'bossKcGained', threshold: 10 };
-    expect(formatTileProgress(total, checkTile(total, stats({ bossKcGained: 5 })))).toBe('5 / 10 KC');
+    expect(formatTileProgress(total, checkTile(total, stats({ bossKcGained: 5 })))).toBe('5 / 10');
     const activity: TileCondition = { type: 'kcGained', activity: 'Zulrah', threshold: 4 };
-    expect(formatTileProgress(activity, checkTile(activity, stats({ kcGainedByActivity: { Zulrah: 2 } })))).toBe('2 / 4 KC');
+    expect(formatTileProgress(activity, checkTile(activity, stats({ kcGainedByActivity: { Zulrah: 2 } })))).toBe('2 / 4');
   });
 
   it('formats slayerTasksCompleted as a plain progress/goal task count', () => {
     const cond: TileCondition = { type: 'slayerTasksCompleted', threshold: 5 };
-    expect(formatTileProgress(cond, checkTile(cond, stats({ slayerTasksCompleted: 3 })))).toBe('3 / 5 tasks');
+    expect(formatTileProgress(cond, checkTile(cond, stats({ slayerTasksCompleted: 3 })))).toBe('3 / 5');
   });
 
   it('formats every clue tier as a plain progress/goal clue count', () => {
     const cond: TileCondition = { type: 'hardCluesCompleted', threshold: 2 };
-    expect(formatTileProgress(cond, checkTile(cond, stats({ hardCluesCompleted: 1 })))).toBe('1 / 2 clues');
+    expect(formatTileProgress(cond, checkTile(cond, stats({ hardCluesCompleted: 1 })))).toBe('1 / 2');
   });
 
   it('formats collectionLogGained as a plain progress/goal item count', () => {
     const cond: TileCondition = { type: 'collectionLogGained', threshold: 3 };
-    expect(formatTileProgress(cond, checkTile(cond, stats({ collectionLogGained: 1 })))).toBe('1 / 3 items');
+    expect(formatTileProgress(cond, checkTile(cond, stats({ collectionLogGained: 1 })))).toBe('1 / 3');
   });
 
   it('formats gotrCompleted as a plain progress/goal rift count', () => {
     const cond: TileCondition = { type: 'gotrCompleted', threshold: 2 };
-    expect(formatTileProgress(cond, checkTile(cond, stats({ gotrCompleted: 1 })))).toBe('1 / 2 rifts');
+    expect(formatTileProgress(cond, checkTile(cond, stats({ gotrCompleted: 1 })))).toBe('1 / 2');
   });
 
-  it('formats skillLevelGained/levelsGainedLowestSkill with goal-driven pluralization', () => {
+  it('formats skillLevelGained/levelsGainedLowestSkill as a plain progress/goal count', () => {
     const multi: TileCondition = { type: 'skillLevelGained', skill: 'Attack', threshold: 3 };
-    expect(formatTileProgress(multi, checkTile(multi, stats({ skillLevelsGained: { Attack: 1 } })))).toBe('1 / 3 levels');
+    expect(formatTileProgress(multi, checkTile(multi, stats({ skillLevelsGained: { Attack: 1 } })))).toBe('1 / 3');
     const single: TileCondition = { type: 'skillLevelGained', skill: 'Attack', threshold: 1 };
-    expect(formatTileProgress(single, checkTile(single, stats({ skillLevelsGained: { Attack: 0 } })))).toBe('0 / 1 level');
+    expect(formatTileProgress(single, checkTile(single, stats({ skillLevelsGained: { Attack: 0 } })))).toBe('0 / 1');
   });
 
-  it('formats petsObtained with goal-driven pluralization', () => {
+  it('formats petsObtained as a plain progress/goal count', () => {
     const cond: TileCondition = { type: 'petsObtained', threshold: 1 };
-    expect(formatTileProgress(cond, checkTile(cond, stats({ petsObtained: 0 })))).toBe('0 / 1 pet');
+    expect(formatTileProgress(cond, checkTile(cond, stats({ petsObtained: 0 })))).toBe('0 / 1');
   });
 
-  it('formats itemCount mode "any" (or omitted) as a plain progress/goal multiplier', () => {
+  it('formats itemCount mode "any" (or omitted) as a plain progress/goal count', () => {
     const cond: TileCondition = { type: 'itemCount', itemNames: ["Verac's flail"], setName: 'Barrows uniques', threshold: 3 };
-    expect(formatTileProgress(cond, checkTile(cond, stats({ itemCounts: { "verac's flail": 1 } })))).toBe('1/3x');
+    expect(formatTileProgress(cond, checkTile(cond, stats({ itemCounts: { "verac's flail": 1 } })))).toBe('1 / 3');
   });
 
-  it('formats itemCount mode "all" as a progress/goal item count', () => {
+  it('formats itemCount mode "all" as a plain progress/goal count', () => {
     const cond: TileCondition = {
       type: 'itemCount',
       itemNames: ["Verac's flail", "Verac's helm"],
@@ -314,12 +314,15 @@ describe('formatTileProgress', () => {
       threshold: 2,
     };
     const status = checkTile(cond, stats({ itemCounts: { "verac's flail": 1 } }));
-    expect(formatTileProgress(cond, status)).toBe('1/2 items');
+    expect(formatTileProgress(cond, status)).toBe('1 / 2');
   });
 
-  it('formats maxDeaths as a plain progress/goal death count', () => {
+  it('formats maxDeaths as a countdown of deaths remaining, not deaths so far', () => {
     const cond: TileCondition = { type: 'maxDeaths', threshold: 5 };
-    expect(formatTileProgress(cond, checkTile(cond, stats({ deathsInPeriod: 2 })))).toBe('2 / 5 deaths');
+    expect(formatTileProgress(cond, checkTile(cond, stats({ deathsInPeriod: 2 })))).toBe('3 deaths left');
+    expect(formatTileProgress(cond, checkTile(cond, stats({ deathsInPeriod: 4 })))).toBe('1 death left');
+    expect(formatTileProgress(cond, checkTile(cond, stats({ deathsInPeriod: 5 })))).toBe('0 deaths left');
+    expect(formatTileProgress(cond, checkTile(cond, stats({ deathsInPeriod: 7 })))).toBe('Failed -- 7 deaths');
   });
 
   it('still returns null for condition types with no meaningful running count', () => {

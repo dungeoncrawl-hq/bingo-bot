@@ -153,7 +153,7 @@ describe('randomizeBoard', () => {
       rng: first,
     });
     expect(result[0].condition.type).toBe('xpGained');
-    expect(result[0].label).toBe(defaultLabelFor('xpGained', '', '', ''));
+    expect(result[0].label).toBe(defaultLabelFor('xpGained', '', ''));
     expect(result[0].icon).toBe(defaultIconFor('xpGained'));
   });
 
