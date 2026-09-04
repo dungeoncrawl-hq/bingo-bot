@@ -532,3 +532,47 @@ instead of renumbering the existing list.
     goal on switching to "All"; the board grid caption reads "2/2
     items"; the tile detail modal lists the two selected items with
     resolved wiki icons.
+
+## Feedback
+18. **A lightweight feedback form**, reachable from anywhere in the
+    app (a small "Feedback" link in `Footer.tsx`, alongside "About
+    us"), so a host or participant can flag a bug/suggestion without
+    leaving to find a Discord DM or open a GitHub issue.
+
+    **Data model**: new `feedback` table -- `id`, `profile_id` (who
+    submitted; not nullable, since every write in this app already
+    requires auth -- no anonymous-submission path needed), `page_path`
+    (captured automatically from `window.location.pathname` at submit
+    time, not typed by the user -- context for free), `message` (the
+    one field the user actually fills in), `created_at`, `reviewed`
+    (boolean, default false -- lets the admin page dim/hide things
+    already looked at without deleting the row). RLS: insert allowed
+    for any authenticated user inserting their own `profile_id` (same
+    shape as every other participant-writes-their-own-row policy in
+    `schema.sql`); select/update restricted to `is_site_admin` (same
+    `exists(...)` pattern already used for `randomize_settings`/
+    `discord_banter_lines`) -- feedback text could say anything, so
+    unlike most of this schema it shouldn't be publicly readable.
+
+    **Submit UI**: a small modal (styled like `TileDetailModal.tsx`)
+    triggered from the Footer link -- one textarea, a Submit button, a
+    brief "thanks" state on success. No page navigation, so it stays
+    usable mid-board without losing scroll position/state.
+
+    **Review UI**: new `/dungeon-master-admin/feedback` page (added to
+    `AdminLayout`'s nav alongside the existing admin pages), listing
+    rows newest-first with the submitter's rsn/email, `page_path` (as
+    a link, when it resolves to a real in-app route), the message, and
+    a "mark reviewed" toggle. No reply mechanism -- if a submission
+    needs a response, that still happens out-of-band (Discord/in
+    person); this is a capture-and-triage tool, not a support-ticket
+    system.
+
+    **Open question**: whether a new submission should also relay to
+    a site-wide Discord webhook (so it surfaces immediately instead of
+    waiting for an admin-page visit) -- would need its own site-level
+    webhook URL setting, since `challenges.discord_webhook_url` is
+    per-challenge, likely another singleton-row settings table
+    matching `randomize_settings`' pattern. Deferred until there's
+    real submission volume to justify it; the admin page alone covers
+    v1.

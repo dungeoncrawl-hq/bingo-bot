@@ -51,6 +51,10 @@ export function defaultLabelFor(
   // Only meaningful for bigDropsCount -- undefined only for a caller that
   // hasn't settled on one yet (there's no sensible default value to guess).
   dropValueThreshold?: number,
+  // Only meaningful for itemCount -- the host's own narrowed-down
+  // selection (same list defaultIconFor's own itemNames param already
+  // uses for its icon).
+  itemNames?: string[],
 ): string {
   switch (type) {
     case 'xpGained':
@@ -80,10 +84,14 @@ export function defaultLabelFor(
       // built in TileEditorForm.tsx before a threshold has been chosen.
       return dropValueThreshold != null ? `${formatCompactNumber(dropValueThreshold)}+ Drops` : 'Big Drops';
     case 'itemCount':
-      // The specific catalog set (and its full item list) is still shown
-      // in TileDetailModal/TileEditorForm -- the on-board label just says
-      // how many of them are needed, which reads the same regardless of
-      // which set a host picked.
+      // A single-item selection has nothing left to be vague about --
+      // "any"/"all" of one item are the same requirement either way, so
+      // the item's own name is strictly more useful than the generic
+      // text below. The specific catalog set (and its full item list) is
+      // still shown in TileDetailModal/TileEditorForm for a multi-item
+      // selection, which reads the same regardless of which set a host
+      // picked.
+      if (itemNames && itemNames.length === 1) return itemNames[0];
       return itemMode === 'all' ? 'All Uniques from list' : 'Any Uniques from list';
     case 'cluesCompleted':
       return 'Clue Scrolls';

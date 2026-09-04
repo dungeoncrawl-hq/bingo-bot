@@ -142,7 +142,7 @@ export function randomizeBoard({ emptySlots, existingConditions, difficulty, set
 
     generated.push({
       layout,
-      label: defaultLabelFor(condition.type, skill, activity, itemMode, dropValueThreshold),
+      label: defaultLabelFor(condition.type, skill, activity, itemMode, dropValueThreshold, itemNames),
       icon: defaultIconFor(condition.type, skill, activity, itemNames),
       condition,
       points: settings.pointsByDifficulty[difficulty],
