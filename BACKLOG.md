@@ -29,8 +29,8 @@ ordered -- just captured so they don't get lost.
    checkboxes), rather than always summing the whole set -- the tile's
    icon reflects whichever item is first in that selection. See #16 for
    further catalog additions still wanted.
-3. **Restrict GP/XP thresholds to K/M increments.** Resolved design
-   below. Covers exactly 6 fields, all in `TileEditorForm.tsx`: the
+3. **Restrict GP/XP thresholds to K/M increments.** **Shipped
+   2026-09-02** (`708796d`). Covers exactly 6 fields, all in `TileEditorForm.tsx`: the
    shared `threshold` field when the condition is `xpGained`,
    `skillXpGained`, `xpGainedLowestSkill`, `lootValueGained`, or
    `singleDropValue`, plus `bigDropsCount`'s own separate
@@ -64,12 +64,18 @@ ordered -- just captured so they don't get lost.
    clamp on save is unchanged -- the K/M control doesn't need its own
    copy of that rule, just to still produce a number the existing
    clamp can check.
-4. **Adventure: logout-gated progress reset between tiles.** Today,
-   every tile's condition is checked against a participant's *cumulative
-   stats since the challenge's start date* -- nothing resets at unlock,
-   so a tile several columns into the path can complete the instant it
-   unlocks, off gains racked up earlier in the dungeon (or before
-   reaching that fork at all). Resolved design: reset the baseline at
+4. **Adventure: logout-gated progress reset between tiles.** **Shipped
+   2026-09-02** (`808e6c7`), refined 2026-09-03 (`e7c9f9e`) so only
+   hiscores-backed conditions (XP/level/clue-tier) actually need the
+   logout -- Dink-event-driven tiles (KC, loot, etc.) now evaluate
+   against the previous tile's completion time instead, since their raw
+   events already carry real per-event timestamps
+   (`conditionNeedsBaseline`/`resolveAdventureTileWindow`). Original
+   problem: every tile's condition was checked against a participant's
+   *cumulative stats since the challenge's start date* -- nothing reset
+   at unlock, so a tile several columns into the path could complete the
+   instant it unlocked, off gains racked up earlier in the dungeon (or
+   before reaching that fork at all). Mechanism: reset the baseline at
    every tile transition, gated on a Dink `LOGOUT` event specifically --
    not a timestamp/snapshot recorded at tile-completion time, since
    hiscores only get polled daily except when a logout forces an
@@ -134,8 +140,8 @@ board's "random tile" needs different pools per lane/boss, and copying
 a challenge needs to carry `board_type`/`board_size`/`game_mode`
 forward, not just tiles, once those exist to copy.
 
-5. **"Randomize a board" starting point.** Resolved design below --
-   scoped to Standard/solo only (grid5x5, `game_mode: 'solo'`), same
+5. **"Randomize a board" starting point.** **Shipped 2026-09-02**
+   (`f7361e2`) -- scoped to Standard/solo only (grid5x5, `game_mode: 'solo'`), same
    deferral as the section intro above. Fills empty slots with random
    tiles a host then tweaks/replaces by hand, rather than starting from
    a fully blank 25-cell grid.
@@ -306,9 +312,14 @@ instead of renumbering the existing list.
 ## Tile authoring UX
 12. Re-order the fields on the "Add Tile" modal (`TileEditorForm.tsx`).
     Also add a scroll bar for modals taller than the viewport -- e.g.
-    "Obtain a set of items" (itemCount/itemSetCollected, whose item
-    catalog list can push the form past the screen) currently has no
-    way to reach fields/buttons below the fold.
+    "Obtain specific uniques"/"Collect a full item set" (itemCount/
+    itemSetCollected, whose item catalog list can push the form past
+    the screen) currently has no way to reach fields/buttons below the
+    fold. More pressing after #2's multi-select checklist (2026-09-04):
+    the outer modal container has no `max-h-*`/`overflow-y-auto` at
+    all, so a large catalog set (e.g. "Slayer monster uniques," 95
+    checkboxes) can push Save/Cancel off-screen entirely with no way to
+    reach them, not just "below the fold."
 
 ## Webhook setup UX
 13. **One stable per-account Dink URL instead of one per challenge.**
