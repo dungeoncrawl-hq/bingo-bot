@@ -146,11 +146,12 @@ export function randomizeBoard({ emptySlots, existingConditions, difficulty, set
     const skill = condition.type === 'skillLevelGained' || condition.type === 'skillXpGained' ? condition.skill : '';
     const activity = condition.type === 'kcGained' ? condition.activity : '';
     const setName = condition.type === 'itemCount' || condition.type === 'itemSetCollected' ? condition.setName : '';
+    const itemNames = condition.type === 'itemCount' || condition.type === 'itemSetCollected' ? condition.itemNames : undefined;
 
     generated.push({
       layout,
       label: defaultLabelFor(condition.type, skill, activity, setName),
-      icon: defaultIconFor(condition.type, skill, activity),
+      icon: defaultIconFor(condition.type, skill, activity, itemNames),
       condition,
       points: settings.pointsByDifficulty[difficulty],
       first_completer_bonus: 0,

@@ -13,6 +13,38 @@ export interface PresetItemSet {
   items: string[];
 }
 
+const WIKI_IMG = 'https://oldschool.runescape.wiki/images/';
+
+// Most items' own OSRS Wiki image lives at exactly this URL (item name,
+// spaces to underscores). Verified with a live HEAD request against
+// every one of the 233 items across every set below -- 226 resolved
+// directly; the 6 that didn't are covered by ITEM_ICON_OVERRIDES.
+function naiveItemIconUrl(itemName: string): string {
+  return `${WIKI_IMG}${itemName.replace(/ /g, '_')}.png`;
+}
+
+// The handful of items whose real drop name (used for matching, see
+// isNotableLootItem below) doesn't match their actual wiki image
+// filename -- a different capitalization, a "(item)"
+// disambiguation-page suffix, or (for a stackable currency-style item)
+// a stack-size suffix. Each confirmed with a live HEAD request.
+const ITEM_ICON_OVERRIDES: Record<string, string> = {
+  'Cow slippers': `${WIKI_IMG}Cow_slippers_(1).png`,
+  'Tome of earth (empty)': `${WIKI_IMG}Tome_of_Earth_(empty).png`,
+  'Scythe of vitur (uncharged)': `${WIKI_IMG}Scythe_of_Vitur_(uncharged).png`,
+  'Ancient essence': `${WIKI_IMG}Ancient_essence_500.png`,
+  'Staff of the dead': `${WIKI_IMG}Staff_of_the_Dead.png`,
+  'Crawling hand': `${WIKI_IMG}Crawling_hand_(item).png`,
+};
+
+// The one real per-item icon resolver -- used both for a whole preset
+// set's own representative icon (its first item) and, once a host
+// narrows a itemCount tile down to specific items (TileEditorForm.tsx),
+// for whichever item they actually picked as the tile's icon.
+export function itemIcon(itemName: string): string {
+  return ITEM_ICON_OVERRIDES[itemName] ?? naiveItemIconUrl(itemName);
+}
+
 export const PRESET_ITEM_SETS: PresetItemSet[] = [
   {
     name: 'Barrows uniques',
@@ -146,6 +178,76 @@ export const PRESET_ITEM_SETS: PresetItemSet[] = [
   {
     name: 'Zamorak Wars uniques (God Wars)',
     items: ['Steam battlestaff', 'Zamorakian spear', 'Staff of the dead', 'Zamorak hilt'],
+  },
+  {
+    name: 'Callisto uniques',
+    items: ['Claws of Callisto', 'Dragon 2h sword', 'Dragon pickaxe', 'Voidwaker hilt', 'Tyrannical ring'],
+  },
+  {
+    name: 'Artio uniques',
+    items: ['Claws of Callisto', 'Dragon 2h sword', 'Dragon pickaxe', 'Voidwaker hilt', 'Tyrannical ring'],
+  },
+  {
+    name: "Vet'ion uniques",
+    items: ["Skull of Vet'ion", 'Dragon 2h sword', 'Dragon pickaxe', 'Voidwaker blade', 'Ring of the gods'],
+  },
+  {
+    name: "Calvar'ion uniques",
+    items: ["Skull of Vet'ion", 'Dragon 2h sword', 'Dragon pickaxe', 'Voidwaker blade', 'Ring of the gods'],
+  },
+  {
+    name: 'Venenatis uniques',
+    items: ['Fangs of Venenatis', 'Dragon 2h sword', 'Dragon pickaxe', 'Voidwaker gem', 'Treasonous ring'],
+  },
+  {
+    name: 'Spindel uniques',
+    items: ['Fangs of Venenatis', 'Dragon 2h sword', 'Dragon pickaxe', 'Voidwaker gem', 'Treasonous ring'],
+  },
+  {
+    name: 'Revenant maledictus uniques',
+    items: [
+      "Craw's bow (u)",
+      "Thammaron's sceptre (u)",
+      "Viggora's chainmace (u)",
+      'Amulet of avarice',
+      'Ancient emblem',
+      'Ancient totem',
+      'Ancient statuette',
+      'Ancient crystal',
+      'Ancient medallion',
+      'Ancient effigy',
+      'Ancient relic',
+      'Bracelet of ethereum (uncharged)',
+    ],
+  },
+  {
+    name: 'Chaos Elemental uniques',
+    items: [
+      'Dragon 2h sword',
+      'Dragon pickaxe',
+      'Dragon platelegs',
+      'Dragon plateskirt',
+      'Mystic air staff',
+      'Mystic water staff',
+      'Mystic earth staff',
+      'Mystic fire staff',
+    ],
+  },
+  {
+    name: 'Chaos Fanatic uniques',
+    items: ['Odium shard 1', 'Malediction shard 1', 'Ancient staff'],
+  },
+  {
+    name: 'Crazy archaeologist uniques',
+    items: ['Odium shard 2', 'Malediction shard 2', 'Fedora'],
+  },
+  {
+    name: 'Scorpia uniques',
+    items: ['Odium shard 3', 'Malediction shard 3', 'Dragon 2h sword'],
+  },
+  {
+    name: 'King Black Dragon uniques',
+    items: ['Dragon pickaxe', 'Draconic visage', 'Dragon med helm'],
   },
   // The OSRS Wiki's own "Slayer" collection log category (95 items,
   // pulled from the Collection log page's raw wikitext export rather

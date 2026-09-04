@@ -96,7 +96,7 @@ const CONDITION_GROUPS: { group: string; options: { value: TileCondition['type']
       { value: 'lootValueGained', label: 'Total GP looted' },
       { value: 'singleDropValue', label: 'A single drop worth at least...' },
       { value: 'bigDropsCount', label: 'Multiple drops worth at least...' },
-      { value: 'itemCount', label: 'Obtain a set of items' },
+      { value: 'itemCount', label: 'Obtain specific uniques' },
       { value: 'itemSetCollected', label: 'Collect a full item set (each item once)' },
     ],
   },
@@ -139,6 +139,9 @@ function conditionFromForm(
   activity: string,
   skill: string,
   itemSet: PresetItemSet,
+  // itemCount's own host-narrowed subset of itemSet.items -- itemSetCollected
+  // ignores this and always targets the whole set (see the switch below).
+  selectedItemNames: string[],
   dropValueThreshold: number,
 ): TileCondition {
   switch (type) {
@@ -148,6 +151,7 @@ function conditionFromForm(
     case 'skillXpGained':
       return { type, skill, threshold };
     case 'itemCount':
+      return { type, itemNames: selectedItemNames, setName: itemSet.name, threshold };
     case 'itemSetCollected':
       return { type, itemNames: itemSet.items, setName: itemSet.name, threshold };
     case 'bigDropsCount':
@@ -167,6 +171,11 @@ function formFromCondition(cond: TileCondition) {
     activity: cond.type === 'kcGained' ? cond.activity : '',
     skill: cond.type === 'skillLevelGained' || cond.type === 'skillXpGained' ? cond.skill : '',
     itemSetName: cond.type === 'itemCount' || cond.type === 'itemSetCollected' ? cond.setName : '',
+    // Only itemCount ever stores a real subset -- itemSetCollected's
+    // itemNames is always its whole set, so there's nothing to restore
+    // here for it (selectItemSet already reflects that from the set
+    // itself).
+    itemNames: cond.type === 'itemCount' ? cond.itemNames : [],
     dropValueThreshold: cond.type === 'bigDropsCount' ? cond.dropValueThreshold : DEFAULT_DROP_VALUE_THRESHOLD,
   };
 }
@@ -213,7 +222,14 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
   const [type, setType] = useState<TileCondition['type']>(existing?.condition.type ?? 'xpGained');
   const initial = existing
     ? formFromCondition(existing.condition)
-    : { threshold: 1, activity: '', skill: '', itemSetName: '', dropValueThreshold: DEFAULT_DROP_VALUE_THRESHOLD };
+    : {
+        threshold: 1,
+        activity: '',
+        skill: '',
+        itemSetName: '',
+        itemNames: [] as string[],
+        dropValueThreshold: DEFAULT_DROP_VALUE_THRESHOLD,
+      };
   const [threshold, setThreshold] = useState(initial.threshold);
   // A tile can only reference a boss/minigame/raid from the curated catalog
   // -- no freeform typing (see bossActivities.ts's own comment). Falls back
@@ -231,6 +247,13 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
   const [selectedItemSet, setSelectedItemSet] = useState(
     PRESET_ITEM_SETS.find((p) => p.name === initial.itemSetName)?.name ?? PRESET_ITEM_SETS[0].name,
   );
+  // itemCount only -- which of the chosen catalog set's items this tile
+  // actually targets (a host-narrowable subset; "everything" by default).
+  // itemSetCollected never reads this -- it always targets its whole set.
+  const initialItemSet = PRESET_ITEM_SETS.find((p) => p.name === initial.itemSetName);
+  const [selectedItemNames, setSelectedItemNames] = useState<string[]>(
+    initial.itemNames.length > 0 ? initial.itemNames : (initialItemSet ?? PRESET_ITEM_SETS[0]).items,
+  );
   const [dropValueThreshold, setDropValueThreshold] = useState(initial.dropValueThreshold);
   const [points, setPoints] = useState(existing?.points ?? 1);
   const [firstCompleterBonus, setFirstCompleterBonus] = useState(existing?.first_completer_bonus ?? 0);
@@ -238,32 +261,49 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
   const [error, setError] = useState('');
 
   const selectedSet = PRESET_ITEM_SETS.find((p) => p.name === selectedItemSet) ?? PRESET_ITEM_SETS[0];
+  // itemCount's icon should reflect whichever items the host actually
+  // targeted; itemSetCollected always targets the whole set, so its
+  // icon comes from that instead.
+  const iconItemNames = type === 'itemCount' ? selectedItemNames : selectedSet.items;
 
   // Label and icon are pure functions of the fields above -- no state of
   // their own, no manual override. Any label/icon a tile was saved with
   // before this restriction existed is superseded the moment it's reopened.
   const label = defaultLabelFor(type, skill, activity, selectedSet.name);
-  const icon = defaultIconFor(type, skill, activity);
+  const icon = defaultIconFor(type, skill, activity, iconItemNames);
 
   function selectItemSet(name: string) {
     setSelectedItemSet(name);
     const set = PRESET_ITEM_SETS.find((p) => p.name === name);
+    if (!set) return;
     // "Collect a full item set" defaults to requiring every item in the
     // catalog entry -- itemCount's threshold is a different scale
     // entirely (a total-quantity goal), so it's left for the host to set
     // by hand.
-    if (set && type === 'itemSetCollected') setThreshold(set.items.length);
+    if (type === 'itemSetCollected') setThreshold(set.items.length);
+    // Switching source resets itemCount's own selection to "everything
+    // from this source" -- the previous set's item names wouldn't mean
+    // anything against the new one anyway.
+    setSelectedItemNames(set.items);
+  }
+
+  function toggleItem(name: string) {
+    setSelectedItemNames((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
   }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (type === 'itemCount' && selectedItemNames.length === 0) {
+      setError('Select at least one item to target.');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
       await onSave({
         label,
         icon,
-        condition: conditionFromForm(type, threshold, activity, skill, selectedSet, dropValueThreshold),
+        condition: conditionFromForm(type, threshold, activity, skill, selectedSet, selectedItemNames, dropValueThreshold),
         // A free space is always complete for everyone the instant it
         // exists -- there's no "first" to reward and no achievement to
         // weight, so it can never contribute points regardless of what's
@@ -361,15 +401,59 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
               disabled={fieldsLocked}
               className={inputClass}
             >
-              {PRESET_ITEM_SETS.map((p) => (
-                <option key={p.name} value={p.name}>
-                  {p.name} ({p.items.length})
-                </option>
-              ))}
+              {[...PRESET_ITEM_SETS]
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((p) => (
+                  <option key={p.name} value={p.name}>
+                    {p.name} ({p.items.length})
+                  </option>
+                ))}
             </select>
-            <div className="mt-2 max-h-24 overflow-y-auto rounded-lg border border-stone-800 bg-stone-900 p-2 text-xs text-stone-400">
-              {selectedSet.items.join(', ')}
-            </div>
+            {type === 'itemSetCollected' ? (
+              <div className="mt-2 max-h-24 overflow-y-auto rounded-lg border border-stone-800 bg-stone-900 p-2 text-xs text-stone-400">
+                {selectedSet.items.join(', ')}
+              </div>
+            ) : (
+              <>
+                <div className="mt-2 flex items-center justify-between">
+                  <label className="text-sm text-stone-400">
+                    Which items ({selectedItemNames.length}/{selectedSet.items.length} selected)
+                  </label>
+                  <div className="flex gap-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedItemNames(selectedSet.items)}
+                      disabled={fieldsLocked}
+                      className="text-amber-500 hover:underline disabled:opacity-40"
+                    >
+                      Select all
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedItemNames([])}
+                      disabled={fieldsLocked}
+                      className="text-amber-500 hover:underline disabled:opacity-40"
+                    >
+                      Select none
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-1 max-h-40 overflow-y-auto rounded-lg border border-stone-800 bg-stone-900 p-2">
+                  {selectedSet.items.map((item) => (
+                    <label key={item} className="flex items-center gap-2 py-0.5 text-xs text-stone-300">
+                      <input
+                        type="checkbox"
+                        checked={selectedItemNames.includes(item)}
+                        onChange={() => toggleItem(item)}
+                        disabled={fieldsLocked}
+                        className="shrink-0"
+                      />
+                      {item}
+                    </label>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         )}
         {type !== 'tbd' && type !== 'freeSpace' && (

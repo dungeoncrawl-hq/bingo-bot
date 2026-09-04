@@ -3,6 +3,7 @@
 // rs/src/lib/skillIcons.ts (same OSRS Wiki image host/convention).
 import type { TileCondition } from './tileConditions.js';
 import { bossActivityIcon } from './bossActivities.js';
+import { itemIcon } from './itemSets.js';
 
 // The OSRS Wiki hosts a small, stable icon asset at this URL pattern for
 // every skill (verified against all 24 in SKILL_ORDER).
@@ -101,10 +102,14 @@ export function defaultLabelFor(type: TileCondition['type'], skill: string, acti
 // Every condition maps to exactly one icon -- hosts can't pick their own
 // (no hotlinking/embedding arbitrary images), and there's nothing left to
 // choose: the icon is entirely determined by the condition itself (and its
-// skill, for the per-skill conditions, or activity, for kcGained). null for
-// 'tbd' (a placeholder with nothing to depict) and 'freeSpace' (nothing to
-// depict either).
-export function defaultIconFor(type: TileCondition['type'], skill?: string, activity?: string): string | null {
+// skill, for the per-skill conditions; activity, for kcGained; or
+// itemNames, for itemCount/itemSetCollected -- itemNames[0]'s own icon,
+// so a host who's narrowed an itemCount tile down to specific items
+// (TileEditorForm.tsx) gets an icon from their actual selection, not
+// just whichever item happens to lead the whole catalog set). null for
+// 'tbd' (a placeholder with nothing to depict) and 'freeSpace' (nothing
+// to depict either).
+export function defaultIconFor(type: TileCondition['type'], skill?: string, activity?: string, itemNames?: string[]): string | null {
   switch (type) {
     case 'xpGained':
       return TOTAL_LEVEL_ICON_URL;
@@ -157,7 +162,13 @@ export function defaultIconFor(type: TileCondition['type'], skill?: string, acti
       return TOTAL_LEVEL_ICON_URL;
     case 'itemCount':
     case 'itemSetCollected':
-      return COLLECTION_LOG_ICON_URL;
+      // A real, recognizable unique -- itemNames[0] for itemSetCollected
+      // is always the whole set's first item (it never narrows); for
+      // itemCount it's whichever item is first in the host's own
+      // selection. Falls back to the generic collection-log book only
+      // for a stored tile with no items at all (shouldn't happen once
+      // saved, but empty is possible mid-edit).
+      return (itemNames && itemNames[0] && itemIcon(itemNames[0])) || COLLECTION_LOG_ICON_URL;
     case 'freeSpace':
     case 'tbd':
       return null;
