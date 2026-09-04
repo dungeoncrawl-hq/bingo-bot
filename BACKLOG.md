@@ -638,15 +638,13 @@ instead of renumbering the existing list.
     `/changelog`) -- catches someone who's logged in but never
     revisits the home page, no account-level tracking needed.
 
-    **IMPORTANT -- three things still need to happen outside this
-    repo before it works live**: (1) run the `announcements`/
-    `subscribed_emails()`/`email_notifications` block appended to
-    `schema.sql` against the live Supabase project (Claude has no
-    direct Postgres/DDL access, same limitation as #18); (2) set
-    `RESEND_API_KEY` and a new `UNSUBSCRIBE_SECRET` (any random
-    string) in Vercel's env vars; (3) verify a sending domain in
-    Resend and update `resendEmail.ts`'s `FROM_ADDRESS` placeholder
-    (`announcements@dungeoncrawl.lol`) to match.
+    All three setup steps are done as of 2026-09-04: the `schema.sql`
+    migration ran (verified live -- `subscribed_emails()` correctly
+    resolves every opted-in account's email), `RESEND_API_KEY`/
+    `UNSUBSCRIBE_SECRET` are set in Vercel, and dungeoncrawl.lol is
+    verified in Resend with no sending subdomain (`FROM_ADDRESS` in
+    `resendEmail.ts` already matched -- just needed its stale TODO
+    comment cleared).
 
 21. Broadcast new announcements (#20) to Discord too, opt-in per
     challenge, reusing that challenge's own `discord_webhook_url` --

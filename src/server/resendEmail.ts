@@ -4,8 +4,8 @@
 // no SDK-only functionality is needed here).
 import { makeUnsubscribeToken } from './unsubscribeToken.js';
 
-// TODO: update once a sending domain is verified in Resend -- see
-// BACKLOG.md #20's migration note.
+// dungeoncrawl.lol is verified in Resend with no sending subdomain, so
+// this sends from the bare domain directly.
 const FROM_ADDRESS = 'Dungeon Crawl <announcements@dungeoncrawl.lol>';
 // Resend's batch endpoint caps at 100 emails per call.
 const BATCH_SIZE = 100;
