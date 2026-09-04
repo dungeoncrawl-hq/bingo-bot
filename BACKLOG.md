@@ -13,10 +13,22 @@ ordered -- just captured so they don't get lost.
    already conceptually hidden (not yet relevant) purely by sequence --
    may not need its own new trigger concept at all, at least for
    Adventure boards.
-2. Improve the logic around the "Obtain a set of items" (`itemCount`)
-   condition -- currently just a flat comma-separated item-name list
-   matched case-insensitively against loot; needs a closer look (exact
-   scope TBD).
+2. ~~Improve the logic around the "Obtain a set of items" (`itemCount`)
+   condition~~ -- **Shipped 2026-09-04.** The real gap turned out to be
+   the item catalog (`itemSets.ts`), not the matching logic: only one
+   preset set ("Barrows uniques") existed, so that was the only thing
+   any itemCount/itemSetCollected tile could ever reference --
+   `dinkWebhook.ts` only keeps a granular per-item loot row for a
+   catalog item (or a big-value drop), so nothing outside the catalog
+   was ever trackable at all. Expanded to 28 curated sets (every major
+   raid, GWD, the full 95-item Slayer collection-log tab, and a batch of
+   named bosses), each item verified against the OSRS Wiki's own
+   drop-table pages rather than typed from memory. Also renamed to
+   "Obtain specific uniques" and reworked so a host multi-selects which
+   items within a chosen set actually count (Select all/none +
+   checkboxes), rather than always summing the whole set -- the tile's
+   icon reflects whichever item is first in that selection. See #16 for
+   further catalog additions still wanted.
 3. **Restrict GP/XP thresholds to K/M increments.** Resolved design
    below. Covers exactly 6 fields, all in `TileEditorForm.tsx`: the
    shared `threshold` field when the condition is `xpGained`,
@@ -440,3 +452,15 @@ instead of renumbering the existing list.
     **Migration**: `alter table challenges add column timezone text not
     null default 'UTC';` -- additive, zero behavior change for every
     existing challenge until a host explicitly edits it.
+
+## Board display
+15. The per-tile progress indicator (top-right corner, standard board
+    grid) should be a solid filled circle in the progress color, not
+    just an outline -- currently only the ring/outline is drawn.
+
+## Item catalog
+16. More curated sets to add to `itemSets.ts` (BACKLOG.md #2's
+    catalog), verified against the OSRS Wiki the same way as the sets
+    already there: Vorkath, Zulrah, the DT2 bosses (Duke Sucellus, The
+    Leviathan, The Whisperer, Vardorvis), The Gauntlet (and Corrupted
+    Gauntlet), Yama, Araxxor, Doom of Mokhaiotl, Grotesque Guardians.
