@@ -99,6 +99,10 @@ export const PRESET_ITEM_SETS: PresetItemSet[] = [
     ],
   },
   {
+    name: 'Phantom Muspah uniques',
+    items: ['Ancient essence', 'Ancient icon', 'Venator shard', 'Frozen cache', 'Charged ice'],
+  },
+  {
     name: 'Tombs of Amascut uniques',
     items: [
       "Tumeken's shadow (uncharged)",

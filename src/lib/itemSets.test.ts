@@ -18,6 +18,7 @@ describe('isNotableLootItem', () => {
     expect(isNotableLootItem('Giantsoul amulet')).toBe(true);
     expect(isNotableLootItem('abyssal whip')).toBe(true);
     expect(isNotableLootItem('Black mask (10)')).toBe(true);
+    expect(isNotableLootItem('Venator shard')).toBe(true);
   });
 
   it('does not match an item outside every catalog set', () => {
