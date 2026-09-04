@@ -48,16 +48,14 @@ type RandomizableType = Exclude<TileCondition['type'], 'freeSpace' | 'tbd' | 'go
 const RANDOMIZABLE_CONDITION_GROUPS: RandomizableType[][] = [
   ['xpGained', 'skillXpGained', 'skillLevelGained', 'xpGainedLowestSkill', 'levelsGainedLowestSkill'],
   ['bossKcGained', 'kcGained', 'slayerTasksCompleted', 'maxDeaths'],
-  ['lootValueGained', 'singleDropValue', 'bigDropsCount', 'itemCount', 'itemSetCollected'],
+  ['lootValueGained', 'singleDropValue', 'bigDropsCount', 'itemCount'],
   ['cluesCompleted', 'beginnerCluesCompleted', 'easyCluesCompleted', 'mediumCluesCompleted', 'hardCluesCompleted', 'eliteCluesCompleted', 'masterCluesCompleted'],
   ['collectionLogGained'],
   ['petsObtained'],
 ];
 
 // How many times a slot re-rolls before just accepting a duplicate
-// type+param combo -- a real fallback, not theoretical: itemCount and
-// itemSetCollected only ever have one possible param today, since
-// PRESET_ITEM_SETS has exactly one entry.
+// type+param combo.
 const MAX_RETRIES_PER_SLOT = 40;
 
 function pick<T>(pool: readonly T[], rng: () => number): T {
@@ -75,7 +73,6 @@ function paramKeyFor(cond: TileCondition): string {
     case 'skillXpGained':
       return `${cond.type}:${cond.skill}`;
     case 'itemCount':
-    case 'itemSetCollected':
       return `${cond.type}:${cond.setName}`;
     default:
       return cond.type;
@@ -105,12 +102,6 @@ function buildCondition(type: RandomizableType, difficulty: Difficulty, settings
       if (PRESET_ITEM_SETS.length === 0) return null;
       const set = pick(PRESET_ITEM_SETS, rng);
       return { type, itemNames: set.items, setName: set.name, threshold: thresholdFor(type, difficulty, settings) };
-    }
-    case 'itemSetCollected': {
-      if (PRESET_ITEM_SETS.length === 0) return null;
-      const set = pick(PRESET_ITEM_SETS, rng);
-      const threshold = Math.max(1, Math.round((set.items.length * settings.itemSetCollectedPercent[difficulty]) / 100));
-      return { type, itemNames: set.items, setName: set.name, threshold };
     }
     case 'bigDropsCount':
       return {
@@ -145,8 +136,8 @@ export function randomizeBoard({ emptySlots, existingConditions, difficulty, set
 
     const skill = condition.type === 'skillLevelGained' || condition.type === 'skillXpGained' ? condition.skill : '';
     const activity = condition.type === 'kcGained' ? condition.activity : '';
-    const setName = condition.type === 'itemCount' || condition.type === 'itemSetCollected' ? condition.setName : '';
-    const itemNames = condition.type === 'itemCount' || condition.type === 'itemSetCollected' ? condition.itemNames : undefined;
+    const setName = condition.type === 'itemCount' ? condition.setName : '';
+    const itemNames = condition.type === 'itemCount' ? condition.itemNames : undefined;
 
     generated.push({
       layout,

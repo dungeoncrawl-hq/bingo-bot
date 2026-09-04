@@ -28,7 +28,13 @@ ordered -- just captured so they don't get lost.
    items within a chosen set actually count (Select all/none +
    checkboxes), rather than always summing the whole set -- the tile's
    icon reflects whichever item is first in that selection. See #16 for
-   further catalog additions still wanted.
+   further catalog additions still wanted. **`itemSetCollected` ("Collect
+   a full item set") removed entirely 2026-09-04** -- itemCount's new
+   multi-select subsumes it (a host can just select every item in a set
+   to reproduce the old "collect the full set" behavior), so keeping a
+   second, narrower condition type around only added surface area. Also
+   removed the now-permanently-dead `tileTaskDetail` (its only non-null
+   case was itemSetCollected's "each counts once" caveat).
 3. **Restrict GP/XP thresholds to K/M increments.** **Shipped
    2026-09-02** (`708796d`). Covers exactly 6 fields, all in `TileEditorForm.tsx`: the
    shared `threshold` field when the condition is `xpGained`,
@@ -182,10 +188,9 @@ forward, not just tiles, once those exist to copy.
    each condition type carrying one Medium baseline that Easy/Hard
    scale from. `maxDeaths` is inverted (a *lower* threshold is harder)
    and handled as its own case, not a footnote every future reader has
-   to remember. `itemSetCollected`'s threshold is a *fraction* of the
-   chosen preset's item count (50% Medium/25% Easy/100% Hard), not a
-   flat number, so it stays sane as more item-set presets get added to
-   `itemSets.ts` beyond today's single "Barrows uniques" entry.
+   to remember. (`itemSetCollected` originally had its own
+   percentage-of-the-set threshold here too -- moot since #2 removed the
+   condition type entirely on 2026-09-04.)
 
    `kcGained` is the one type needing real per-item curation: 79 bosses
    in `bossActivities.ts` span wildly different farm rates (50 Giant
@@ -311,15 +316,19 @@ instead of renumbering the existing list.
 
 ## Tile authoring UX
 12. Re-order the fields on the "Add Tile" modal (`TileEditorForm.tsx`).
-    Also add a scroll bar for modals taller than the viewport -- e.g.
-    "Obtain specific uniques"/"Collect a full item set" (itemCount/
-    itemSetCollected, whose item catalog list can push the form past
-    the screen) currently has no way to reach fields/buttons below the
-    fold. More pressing after #2's multi-select checklist (2026-09-04):
-    the outer modal container has no `max-h-*`/`overflow-y-auto` at
-    all, so a large catalog set (e.g. "Slayer monster uniques," 95
-    checkboxes) can push Save/Cancel off-screen entirely with no way to
-    reach them, not just "below the fold."
+    **Scroll-bar half shipped 2026-09-04**: the modal (`<form>`) is now a
+    flex column capped at `max-h-[calc(100vh-2rem)]`, split into a fixed
+    header (title + locked-challenge notice), a scrollable middle
+    (every condition-specific field, the goal, points, bonus, and any
+    error), and a fixed footer (Save/Cancel/Delete) -- a large catalog
+    set (e.g. "Slayer monster uniques," 95 checkboxes) used to be able
+    to push Save/Cancel off-screen with no way to reach them at all;
+    now only the field list itself scrolls and the action buttons are
+    always visible. Field *order* itself is unchanged -- no specific
+    target order was set when this item was filed, and reshuffling
+    without one risks just moving the complaint around. Needs a host
+    decision on what the ideal order actually is before that half is
+    worth doing.
 
 ## Webhook setup UX
 13. **One stable per-account Dink URL instead of one per challenge.**

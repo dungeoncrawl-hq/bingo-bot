@@ -1,7 +1,7 @@
 // Builds the rich embeds challengeProgress.ts posts to Discord on a tile/
 // line/board completion -- kept separate from that file so it stays
 // focused on completion *detection*, not presentation.
-import { tileTaskPhrase, tileTaskDetail } from '../lib/tileConditions.js';
+import { tileTaskPhrase } from '../lib/tileConditions.js';
 import { ADVENTURE_SMALL_FINAL_BOSS_COLUMN } from '../lib/adventureProgress.js';
 import { tileCompletionFlavor, boardCompletionFlavor, type BanterPools } from './discordBanter.js';
 import type { LeaderboardEntry } from '../lib/leaderboard.js';
@@ -96,10 +96,6 @@ export function buildTileCompletionEmbed(params: {
   // deployment can land before the DB migration adding the column runs --
   // fall back to no bonus rather than posting "NaN pts" in that gap.
   const totalPoints = tile.points + (isFirst ? (tile.first_completer_bonus ?? 0) : 0);
-  // Extra context that didn't fit in the headline phrase (e.g. an
-  // itemSetCollected tile's "N items, each counts once") gets its own
-  // line ahead of the flavor text, rather than bloating the title.
-  const detail = tileTaskDetail(tile.condition);
 
   // Adventure boss tiles (BACKLOG.md #7) are mechanically just a tile with
   // bigger stakes -- same embed, boss-flavored title text instead of a
@@ -125,7 +121,7 @@ export function buildTileCompletionEmbed(params: {
 
   return {
     title,
-    description: detail && flavor ? `${detail}\n${flavor}` : (detail ?? flavor),
+    description: flavor,
     color: isFirst ? FIRST_COLOR : TILE_COLOR,
     thumbnail: tile.icon ? { url: tile.icon } : undefined,
     // Adventure has no equivalent board-state PNG renderer yet (see

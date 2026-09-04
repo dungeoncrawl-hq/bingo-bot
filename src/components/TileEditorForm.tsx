@@ -97,7 +97,6 @@ const CONDITION_GROUPS: { group: string; options: { value: TileCondition['type']
       { value: 'singleDropValue', label: 'A single drop worth at least...' },
       { value: 'bigDropsCount', label: 'Multiple drops worth at least...' },
       { value: 'itemCount', label: 'Obtain specific uniques' },
-      { value: 'itemSetCollected', label: 'Collect a full item set (each item once)' },
     ],
   },
   {
@@ -139,8 +138,7 @@ function conditionFromForm(
   activity: string,
   skill: string,
   itemSet: PresetItemSet,
-  // itemCount's own host-narrowed subset of itemSet.items -- itemSetCollected
-  // ignores this and always targets the whole set (see the switch below).
+  // itemCount's own host-narrowed subset of itemSet.items.
   selectedItemNames: string[],
   dropValueThreshold: number,
 ): TileCondition {
@@ -152,8 +150,6 @@ function conditionFromForm(
       return { type, skill, threshold };
     case 'itemCount':
       return { type, itemNames: selectedItemNames, setName: itemSet.name, threshold };
-    case 'itemSetCollected':
-      return { type, itemNames: itemSet.items, setName: itemSet.name, threshold };
     case 'bigDropsCount':
       return { type, dropValueThreshold: Math.max(MIN_DROP_VALUE_THRESHOLD, dropValueThreshold), threshold };
     case 'freeSpace':
@@ -170,11 +166,7 @@ function formFromCondition(cond: TileCondition) {
     threshold: 'threshold' in cond ? cond.threshold : 1,
     activity: cond.type === 'kcGained' ? cond.activity : '',
     skill: cond.type === 'skillLevelGained' || cond.type === 'skillXpGained' ? cond.skill : '',
-    itemSetName: cond.type === 'itemCount' || cond.type === 'itemSetCollected' ? cond.setName : '',
-    // Only itemCount ever stores a real subset -- itemSetCollected's
-    // itemNames is always its whole set, so there's nothing to restore
-    // here for it (selectItemSet already reflects that from the set
-    // itself).
+    itemSetName: cond.type === 'itemCount' ? cond.setName : '',
     itemNames: cond.type === 'itemCount' ? cond.itemNames : [],
     dropValueThreshold: cond.type === 'bigDropsCount' ? cond.dropValueThreshold : DEFAULT_DROP_VALUE_THRESHOLD,
   };
@@ -247,9 +239,8 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
   const [selectedItemSet, setSelectedItemSet] = useState(
     PRESET_ITEM_SETS.find((p) => p.name === initial.itemSetName)?.name ?? PRESET_ITEM_SETS[0].name,
   );
-  // itemCount only -- which of the chosen catalog set's items this tile
-  // actually targets (a host-narrowable subset; "everything" by default).
-  // itemSetCollected never reads this -- it always targets its whole set.
+  // Which of the chosen catalog set's items this tile actually targets
+  // (a host-narrowable subset; "everything" by default).
   const initialItemSet = PRESET_ITEM_SETS.find((p) => p.name === initial.itemSetName);
   const [selectedItemNames, setSelectedItemNames] = useState<string[]>(
     initial.itemNames.length > 0 ? initial.itemNames : (initialItemSet ?? PRESET_ITEM_SETS[0]).items,
@@ -261,29 +252,20 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
   const [error, setError] = useState('');
 
   const selectedSet = PRESET_ITEM_SETS.find((p) => p.name === selectedItemSet) ?? PRESET_ITEM_SETS[0];
-  // itemCount's icon should reflect whichever items the host actually
-  // targeted; itemSetCollected always targets the whole set, so its
-  // icon comes from that instead.
-  const iconItemNames = type === 'itemCount' ? selectedItemNames : selectedSet.items;
 
   // Label and icon are pure functions of the fields above -- no state of
   // their own, no manual override. Any label/icon a tile was saved with
   // before this restriction existed is superseded the moment it's reopened.
   const label = defaultLabelFor(type, skill, activity, selectedSet.name);
-  const icon = defaultIconFor(type, skill, activity, iconItemNames);
+  const icon = defaultIconFor(type, skill, activity, selectedItemNames);
 
   function selectItemSet(name: string) {
     setSelectedItemSet(name);
     const set = PRESET_ITEM_SETS.find((p) => p.name === name);
     if (!set) return;
-    // "Collect a full item set" defaults to requiring every item in the
-    // catalog entry -- itemCount's threshold is a different scale
-    // entirely (a total-quantity goal), so it's left for the host to set
-    // by hand.
-    if (type === 'itemSetCollected') setThreshold(set.items.length);
-    // Switching source resets itemCount's own selection to "everything
-    // from this source" -- the previous set's item names wouldn't mean
-    // anything against the new one anyway.
+    // Switching source resets the selection to "everything from this
+    // source" -- the previous set's item names wouldn't mean anything
+    // against the new one anyway.
     setSelectedItemNames(set.items);
   }
 
@@ -323,18 +305,28 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      {/* Capped at the viewport (minus this wrapper's own p-4) and split
+          into a fixed header/footer with a scrollable middle -- a tall
+          form (e.g. itemCount's item checklist, up to 95 entries for the
+          Slayer catalog) used to grow the whole modal unbounded, pushing
+          Save/Cancel off-screen with no way to reach them (BACKLOG.md
+          #12). Header and Save/Cancel/Delete now always stay visible;
+          only the field list itself scrolls. */}
       <form
         onSubmit={handleSubmit}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-md space-y-4 rounded-xl border border-stone-800 bg-stone-950 p-6"
+        className="flex max-h-[calc(100vh-2rem)] w-full max-w-md flex-col rounded-xl border border-stone-800 bg-stone-950"
       >
-        <h2 className="text-lg font-semibold">{existing ? 'Edit tile' : 'Add tile'}</h2>
-        {fieldsLocked && (
-          <p className="rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-xs text-stone-400">
-            This challenge has started, so this tile's condition can't be changed anymore -- it might invalidate
-            progress players already made toward it. Points and the first-completer bonus can still be adjusted.
-          </p>
-        )}
+        <div className="shrink-0 p-6 pb-0">
+          <h2 className="text-lg font-semibold">{existing ? 'Edit tile' : 'Add tile'}</h2>
+          {fieldsLocked && (
+            <p className="mt-4 rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-xs text-stone-400">
+              This challenge has started, so this tile's condition can't be changed anymore -- it might invalidate
+              progress players already made toward it. Points and the first-completer bonus can still be adjusted.
+            </p>
+          )}
+        </div>
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
         <div>
           <label className="block text-sm text-stone-400">Condition</label>
           <select
@@ -392,7 +384,7 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
             <MoneyXpThresholdInput value={dropValueThreshold} onChange={setDropValueThreshold} disabled={fieldsLocked} />
           </div>
         )}
-        {(type === 'itemCount' || type === 'itemSetCollected') && (
+        {type === 'itemCount' && (
           <div>
             <label className="block text-sm text-stone-400">Item catalog</label>
             <select
@@ -409,51 +401,43 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
                   </option>
                 ))}
             </select>
-            {type === 'itemSetCollected' ? (
-              <div className="mt-2 max-h-24 overflow-y-auto rounded-lg border border-stone-800 bg-stone-900 p-2 text-xs text-stone-400">
-                {selectedSet.items.join(', ')}
+            <div className="mt-2 flex items-center justify-between">
+              <label className="text-sm text-stone-400">
+                Which items ({selectedItemNames.length}/{selectedSet.items.length} selected)
+              </label>
+              <div className="flex gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setSelectedItemNames(selectedSet.items)}
+                  disabled={fieldsLocked}
+                  className="text-amber-500 hover:underline disabled:opacity-40"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedItemNames([])}
+                  disabled={fieldsLocked}
+                  className="text-amber-500 hover:underline disabled:opacity-40"
+                >
+                  Select none
+                </button>
               </div>
-            ) : (
-              <>
-                <div className="mt-2 flex items-center justify-between">
-                  <label className="text-sm text-stone-400">
-                    Which items ({selectedItemNames.length}/{selectedSet.items.length} selected)
-                  </label>
-                  <div className="flex gap-2 text-xs">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedItemNames(selectedSet.items)}
-                      disabled={fieldsLocked}
-                      className="text-amber-500 hover:underline disabled:opacity-40"
-                    >
-                      Select all
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedItemNames([])}
-                      disabled={fieldsLocked}
-                      className="text-amber-500 hover:underline disabled:opacity-40"
-                    >
-                      Select none
-                    </button>
-                  </div>
-                </div>
-                <div className="mt-1 max-h-40 overflow-y-auto rounded-lg border border-stone-800 bg-stone-900 p-2">
-                  {selectedSet.items.map((item) => (
-                    <label key={item} className="flex items-center gap-2 py-0.5 text-xs text-stone-300">
-                      <input
-                        type="checkbox"
-                        checked={selectedItemNames.includes(item)}
-                        onChange={() => toggleItem(item)}
-                        disabled={fieldsLocked}
-                        className="shrink-0"
-                      />
-                      {item}
-                    </label>
-                  ))}
-                </div>
-              </>
-            )}
+            </div>
+            <div className="mt-1 max-h-40 overflow-y-auto rounded-lg border border-stone-800 bg-stone-900 p-2">
+              {selectedSet.items.map((item) => (
+                <label key={item} className="flex items-center gap-2 py-0.5 text-xs text-stone-300">
+                  <input
+                    type="checkbox"
+                    checked={selectedItemNames.includes(item)}
+                    onChange={() => toggleItem(item)}
+                    disabled={fieldsLocked}
+                    className="shrink-0"
+                  />
+                  {item}
+                </label>
+              ))}
+            </div>
           </div>
         )}
         {type !== 'tbd' && type !== 'freeSpace' && (
@@ -524,35 +508,38 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
           </>
         )}
         {error && <p className="text-sm text-red-400">{error}</p>}
-        <div className="flex items-center justify-between gap-2 pt-2">
-          <div className="flex gap-2">
-            <button
-              type="submit"
-              disabled={saving}
-              className="rounded-lg bg-amber-500 hover:bg-amber-400 transition-colors px-4 py-2 text-sm font-semibold text-stone-950 disabled:opacity-40"
-            >
-              {saving ? 'Saving…' : 'Save'}
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg border border-stone-700 px-4 py-2 text-sm text-stone-300"
-            >
-              Cancel
-            </button>
+        </div>
+        <div className="shrink-0 border-t border-stone-800 p-6 pt-4">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={saving}
+                className="rounded-lg bg-amber-500 hover:bg-amber-400 transition-colors px-4 py-2 text-sm font-semibold text-stone-950 disabled:opacity-40"
+              >
+                {saving ? 'Saving…' : 'Save'}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-lg border border-stone-700 px-4 py-2 text-sm text-stone-300"
+              >
+                Cancel
+              </button>
+            </div>
+            {existing && onDelete && !locked && (
+              <button
+                type="button"
+                onClick={async () => {
+                  setSaving(true);
+                  await onDelete();
+                }}
+                className="rounded-lg border border-red-900 px-4 py-2 text-sm text-red-400"
+              >
+                Delete
+              </button>
+            )}
           </div>
-          {existing && onDelete && !locked && (
-            <button
-              type="button"
-              onClick={async () => {
-                setSaving(true);
-                await onDelete();
-              }}
-              className="rounded-lg border border-red-900 px-4 py-2 text-sm text-red-400"
-            >
-              Delete
-            </button>
-          )}
         </div>
       </form>
     </div>

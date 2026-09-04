@@ -179,22 +179,6 @@ describe('buildTileCompletionEmbed -- game-mode subject swap (BACKLOG.md #10)', 
     expect(embed.description).toBeUndefined();
   });
 
-  it('still shows tile detail text alongside a dropped flavor line, when the tile has one', () => {
-    const embed = buildTileCompletionEmbed({
-      participant: PARTICIPANTS[0],
-      subject: 'The group',
-      tile: tile({ condition: { type: 'itemSetCollected', itemNames: ['a', 'b'], setName: 'Set', threshold: 2 } }),
-      isFirst: false,
-      firstCompleterRsn: 'irrelevant',
-      noFirstConcept: true,
-      leaderboard: [],
-      participants: PARTICIPANTS,
-      challenge: CHALLENGE,
-    });
-    expect(embed.description).toBeTruthy();
-    expect(embed.description).not.toContain('not as fast as');
-  });
-
   it('uses the team name for Team mode, including in the "first" title', () => {
     const embed = buildTileCompletionEmbed({
       participant: PARTICIPANTS[0],

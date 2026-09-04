@@ -1,5 +1,5 @@
-// Preset item-name lists a host picks from for an itemCount/itemSetCollected
-// tile -- the only way to populate one, no freeform typing (see
+// Preset item-name lists a host picks from for an itemCount tile -- the
+// only way to populate one, no freeform typing (see
 // TileEditorForm.tsx). More sets can be added here without touching any
 // other file. This catalog is also the storage-side answer to "which loot
 // items are notable enough to always keep as their own loot_drops row"

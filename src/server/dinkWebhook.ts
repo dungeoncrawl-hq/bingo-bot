@@ -121,10 +121,10 @@ async function handleLoot(challengeId: string, participantId: string, extra: Rec
 
   // A drop only needs its own row if a tile could actually need it
   // individually: either it contains an item from the curated catalog
-  // (src/lib/itemSets.ts -- the only source of items an itemCount/
-  // itemSetCollected tile can ever reference, so catalog membership is
-  // both necessary and sufficient), or its value clears whatever
-  // threshold this challenge's own 'bigDropsCount' tile(s) actually use.
+  // (src/lib/itemSets.ts -- the only source of items an itemCount tile
+  // can ever reference, so catalog membership is both necessary and
+  // sufficient), or its value clears whatever threshold this challenge's
+  // own 'bigDropsCount' tile(s) actually use.
   // A challenge with no such tile applies no value-based preservation at
   // all -- everything else folds into one running bucket row per
   // participant per day (increment_misc_loot).

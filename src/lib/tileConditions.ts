@@ -38,12 +38,6 @@ export type TileCondition =
   // name for that set, used only by describeTileCondition below (the
   // tile's own on-board label handles the item names themselves).
   | { type: 'itemCount'; itemNames: string[]; setName: string; threshold: number }
-  // A distinct condition from itemCount above: progress is how many of the
-  // named items have been obtained at LEAST ONCE (each capped at 1 toward
-  // progress -- duplicates don't help), not a running total. threshold is
-  // usually itemNames.length ("collect the full set"), but a host can ask
-  // for fewer ("any N of these M items").
-  | { type: 'itemSetCollected'; itemNames: string[]; setName: string; threshold: number }
   // A drop counts if its own total_value clears dropValueThreshold (not a
   // running sum) -- e.g. "3 drops worth 1,000,000+ GP each". Distinct
   // from singleDropValue above (a boolean -- did any one drop clear a
@@ -219,10 +213,6 @@ export function checkTile(cond: TileCondition, stats: ParticipantStats): TileSta
       const progress = cond.itemNames.reduce((sum, name) => sum + (stats.itemCounts[name.toLowerCase()] ?? 0), 0);
       return { done: progress >= cond.threshold, progress, goal: cond.threshold };
     }
-    case 'itemSetCollected': {
-      const progress = cond.itemNames.filter((name) => (stats.itemCounts[name.toLowerCase()] ?? 0) > 0).length;
-      return { done: progress >= cond.threshold, progress, goal: cond.threshold };
-    }
     case 'bigDropsCount': {
       const progress = stats.dropValues.filter((v) => v >= cond.dropValueThreshold).length;
       return { done: progress >= cond.threshold, progress, goal: cond.threshold };
@@ -343,10 +333,6 @@ export function describeTileCondition(cond: TileCondition): string {
       return `${cond.threshold.toLocaleString()} ${cond.skill} XP`;
     case 'itemCount':
       return `${cond.threshold.toLocaleString()} ${cond.setName}`;
-    case 'itemSetCollected':
-      return cond.threshold >= cond.itemNames.length
-        ? `the full ${cond.setName} set (${cond.itemNames.length} items, each counts once)`
-        : `${cond.threshold} of the ${cond.itemNames.length} items in ${cond.setName} (each counts once)`;
     case 'bigDropsCount':
       return `${cond.threshold.toLocaleString()} drops worth ${cond.dropValueThreshold.toLocaleString()}+ GP each`;
     case 'maxDeaths':
@@ -413,11 +399,6 @@ export function tileTaskPhrase(cond: TileCondition): string {
       return `${cond.threshold.toLocaleString()} ${cond.skill} XP`;
     case 'itemCount':
       return `${cond.threshold.toLocaleString()} ${cond.setName}`;
-    case 'itemSetCollected':
-      // Deliberately short -- the item-count/"each counts once" detail
-      // lives in tileTaskDetail below instead, so this stays a clean,
-      // headline-sized phrase.
-      return cond.threshold >= cond.itemNames.length ? `full ${cond.setName}` : `${cond.threshold} of the ${cond.itemNames.length} items in ${cond.setName}`;
     case 'maxDeaths':
       return `${cond.threshold.toLocaleString()} deaths or fewer`;
     case 'petsObtained':
@@ -435,22 +416,6 @@ export function tileTaskPhrase(cond: TileCondition): string {
       // done (see its own comment), so no completion embed is ever built
       // for one.
       return 'mystery';
-  }
-}
-
-// Extra context that doesn't fit in tileTaskPhrase's headline-sized
-// phrase -- appended as its own line in the Discord embed's description
-// (discordEmbeds.ts), ahead of the "not as fast as"/"showing off" flavor
-// line. null for every condition whose phrase is already fully
-// self-contained.
-export function tileTaskDetail(cond: TileCondition): string | null {
-  switch (cond.type) {
-    case 'itemSetCollected':
-      return cond.threshold >= cond.itemNames.length
-        ? `${cond.itemNames.length} items -- each one only counts once.`
-        : 'Each item only counts once toward this.';
-    default:
-      return null;
   }
 }
 
@@ -483,8 +448,6 @@ export function formatTileGoal(cond: TileCondition): string | null {
       return `${formatCompactNumber(cond.threshold)}+ gp`;
     case 'itemCount':
       return `${cond.threshold.toLocaleString()}x`;
-    case 'itemSetCollected':
-      return `${cond.threshold.toLocaleString()}/${cond.itemNames.length} items`;
     case 'bigDropsCount':
       return `${cond.threshold.toLocaleString()}x ${formatCompactNumber(cond.dropValueThreshold)}+ gp`;
     case 'cluesCompleted':
@@ -522,8 +485,6 @@ export function formatTileProgress(cond: TileCondition, status: TileStatus): str
       return `${formatCompactNumber(status.progress, { roundDown: true })} / ${formatCompactNumber(cond.threshold)} XP`;
     case 'lootValueGained':
       return `${formatCompactNumber(status.progress, { roundDown: true })} / ${formatCompactNumber(cond.threshold)} gp`;
-    case 'itemSetCollected':
-      return `${status.progress}/${status.goal} items`;
     case 'bigDropsCount':
       return `${status.progress}/${status.goal} big drops`;
     case 'bossKcGained':

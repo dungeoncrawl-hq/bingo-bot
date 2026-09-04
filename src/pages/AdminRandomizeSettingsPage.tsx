@@ -68,10 +68,6 @@ export default function AdminRandomizeSettingsPage() {
     setSettings((s) => (s ? { ...s, thresholds: { ...s.thresholds, [type]: { ...s.thresholds[type], [difficulty]: value } } } : s));
   }
 
-  function updateItemSetPercent(difficulty: Difficulty, value: number) {
-    setSettings((s) => (s ? { ...s, itemSetCollectedPercent: { ...s.itemSetCollectedPercent, [difficulty]: value } } : s));
-  }
-
   function updateBigDropsThreshold(difficulty: Difficulty, value: number) {
     setSettings((s) =>
       s ? { ...s, bigDropsCountDropValueThreshold: { ...s.bigDropsCountDropValueThreshold, [difficulty]: value } } : s,
@@ -210,21 +206,6 @@ export default function AdminRandomizeSettingsPage() {
                       ))}
                     </tr>
                   ))}
-                  <tr className="border-b border-stone-900">
-                    <td className="py-2 pr-4 text-stone-300">Item set collected (% of the set required)</td>
-                    {DIFFICULTIES.map((d) => (
-                      <td key={d} className="py-2 pr-4">
-                        <input
-                          type="number"
-                          min={1}
-                          max={100}
-                          value={settings.itemSetCollectedPercent[d]}
-                          onChange={(e) => updateItemSetPercent(d, Number(e.target.value))}
-                          className={inputClass}
-                        />
-                      </td>
-                    ))}
-                  </tr>
                   <tr>
                     <td className="py-2 pr-4 text-stone-300">Big drops -- minimum value per drop (gp)</td>
                     {DIFFICULTIES.map((d) => (

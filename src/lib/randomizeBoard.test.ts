@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { randomizeBoard } from './randomizeBoard';
 import { DEFAULT_RANDOMIZE_SETTINGS } from './randomizeSettings';
 import { defaultIconFor, defaultLabelFor } from './tileIcons';
-import { PRESET_ITEM_SETS } from './itemSets';
 import type { GridLayout } from '../db/types';
 import type { TileCondition } from './tileConditions';
 
@@ -41,7 +40,7 @@ function slots(n: number): GridLayout[] {
 function keyOf(cond: TileCondition): string {
   if (cond.type === 'kcGained') return `${cond.type}:${cond.activity}`;
   if (cond.type === 'skillLevelGained' || cond.type === 'skillXpGained') return `${cond.type}:${cond.skill}`;
-  if (cond.type === 'itemCount' || cond.type === 'itemSetCollected') return `${cond.type}:${cond.setName}`;
+  if (cond.type === 'itemCount') return `${cond.type}:${cond.setName}`;
   return cond.type;
 }
 
@@ -116,31 +115,6 @@ describe('randomizeBoard', () => {
     for (const tile of kcTiles) {
       const tier = DEFAULT_RANDOMIZE_SETTINGS.kcTiers.bossToTier[tile.condition.activity] ?? 'slow';
       expect(tile.condition.threshold).toBe(DEFAULT_RANDOMIZE_SETTINGS.kcTiers.tierThresholds[tier].hard);
-    }
-  });
-
-  it("itemSetCollected's threshold is a rounded percentage of the preset's item count, per difficulty", () => {
-    // group index 2 (Loot) -> type index 4 within it (itemSetCollected,
-    // the last of 5 Loot entries) -> index 0 (Barrows uniques) of
-    // PRESET_ITEM_SETS, pinned via rng()=0 so this stays deterministic
-    // regardless of how many entries the catalog grows to.
-    const rng = sequence([0.4, 0.9, 0]);
-    const setSize = PRESET_ITEM_SETS[0].items.length;
-    for (const [difficulty, percent] of Object.entries(DEFAULT_RANDOMIZE_SETTINGS.itemSetCollectedPercent) as [
-      keyof typeof DEFAULT_RANDOMIZE_SETTINGS.itemSetCollectedPercent,
-      number,
-    ][]) {
-      const result = randomizeBoard({
-        emptySlots: slots(1),
-        existingConditions: [],
-        difficulty,
-        settings: DEFAULT_RANDOMIZE_SETTINGS,
-        rng,
-      });
-      expect(result[0].condition.type).toBe('itemSetCollected');
-      expect((result[0].condition as Extract<TileCondition, { type: 'itemSetCollected' }>).threshold).toBe(
-        Math.max(1, Math.round((setSize * percent) / 100)),
-      );
     }
   });
 

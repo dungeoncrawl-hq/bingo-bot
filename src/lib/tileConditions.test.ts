@@ -6,7 +6,6 @@ import {
   gridLines,
   progressPercent,
   tileTaskPhrase,
-  tileTaskDetail,
   type ParticipantStats,
   type TileCondition,
 } from './tileConditions';
@@ -95,42 +94,6 @@ describe('checkTile', () => {
     expect(checkTile({ type: 'hardCluesCompleted', threshold: 2 }, s).done).toBe(true);
     expect(checkTile({ type: 'masterCluesCompleted', threshold: 1 }, s).done).toBe(false);
     expect(checkTile({ type: 'easyCluesCompleted', threshold: 1 }, s).done).toBe(false);
-  });
-
-  it('itemSetCollected counts distinct items obtained at least once -- duplicates of one item do not substitute for another', () => {
-    const cond: TileCondition = {
-      type: 'itemSetCollected',
-      itemNames: ["Dharok's helm", "Dharok's platebody", "Dharok's platelegs", "Dharok's greataxe"],
-      setName: "Dharok's set",
-      threshold: 4,
-    };
-    // Five copies of the same piece -- only 1 distinct item, nowhere near the set.
-    const s = stats({ itemCounts: { "dharok's helm": 5 } });
-    expect(checkTile(cond, s)).toEqual({ done: false, progress: 1, goal: 4 });
-  });
-
-  it('itemSetCollected completes once every distinct item has at least one copy', () => {
-    const cond: TileCondition = {
-      type: 'itemSetCollected',
-      itemNames: ["Dharok's helm", "Dharok's platebody"],
-      setName: "Dharok's set",
-      threshold: 2,
-    };
-    const s = stats({ itemCounts: { "dharok's helm": 1, "dharok's platebody": 3 } });
-    expect(checkTile(cond, s)).toEqual({ done: true, progress: 2, goal: 2 });
-  });
-
-  it('itemSetCollected supports a partial-set threshold (any N of M)', () => {
-    const cond: TileCondition = {
-      type: 'itemSetCollected',
-      itemNames: ['a', 'b', 'c', 'd', 'e'],
-      setName: 'Some set',
-      threshold: 3,
-    };
-    const s = stats({ itemCounts: { a: 1, b: 1 } });
-    expect(checkTile(cond, s).done).toBe(false);
-    const s2 = stats({ itemCounts: { a: 1, b: 1, c: 1 } });
-    expect(checkTile(cond, s2).done).toBe(true);
   });
 
   it('bigDropsCount counts only drops that individually clear the per-drop threshold', () => {
@@ -238,17 +201,6 @@ describe('formatTileProgress', () => {
     const cond: TileCondition = { type: 'skillXpGained', skill: 'Attack', threshold: 1_524_000 };
     const status = checkTile(cond, stats({ skillXpGained: { Attack: 1_524_000 } }));
     expect(formatTileProgress(cond, status)).toBe('1.52M / 1.52M XP');
-  });
-
-  it('formats itemSetCollected as a plain progress/goal item count', () => {
-    const cond: TileCondition = {
-      type: 'itemSetCollected',
-      itemNames: ["Dharok's helm", "Dharok's platebody", "Dharok's platelegs", "Dharok's greataxe"],
-      setName: "Dharok's set",
-      threshold: 4,
-    };
-    const status = checkTile(cond, stats({ itemCounts: { "dharok's helm": 1, "dharok's platebody": 1 } }));
-    expect(formatTileProgress(cond, status)).toBe('2/4 items');
   });
 
   it('formats bigDropsCount as a plain progress/goal drop count', () => {
@@ -390,25 +342,6 @@ describe('tileTaskPhrase', () => {
     expect(tileTaskPhrase({ type: 'petsObtained', threshold: 2 })).toBe('2 pets');
   });
 
-  it('itemSetCollected keeps the headline short -- no leading "the", no item-count detail', () => {
-    const full: TileCondition = { type: 'itemSetCollected', itemNames: ['a', 'b'], setName: 'Barrows uniques', threshold: 2 };
-    expect(tileTaskPhrase(full)).toBe('full Barrows uniques');
-    const partial: TileCondition = { type: 'itemSetCollected', itemNames: ['a', 'b', 'c'], setName: 'Barrows uniques', threshold: 2 };
-    expect(tileTaskPhrase(partial)).toBe('2 of the 3 items in Barrows uniques');
-  });
-});
-
-describe('tileTaskDetail', () => {
-  it('carries the item-count/"each counts once" context tileTaskPhrase leaves out', () => {
-    const full: TileCondition = { type: 'itemSetCollected', itemNames: ['a', 'b'], setName: 'Barrows uniques', threshold: 2 };
-    expect(tileTaskDetail(full)).toBe('2 items -- each one only counts once.');
-    const partial: TileCondition = { type: 'itemSetCollected', itemNames: ['a', 'b', 'c'], setName: 'Barrows uniques', threshold: 2 };
-    expect(tileTaskDetail(partial)).toBe('Each item only counts once toward this.');
-  });
-
-  it('is null for condition types whose phrase is already self-contained', () => {
-    expect(tileTaskDetail({ type: 'xpGained', threshold: 500_000 })).toBeNull();
-  });
 });
 
 describe('conditionNeedsBaseline', () => {
@@ -440,7 +373,6 @@ describe('conditionNeedsBaseline', () => {
       { type: 'singleDropValue', threshold: 1 },
       { type: 'bigDropsCount', dropValueThreshold: 100_000, threshold: 1 },
       { type: 'itemCount', itemNames: ['a'], setName: 'Set', threshold: 1 },
-      { type: 'itemSetCollected', itemNames: ['a'], setName: 'Set', threshold: 1 },
       { type: 'collectionLogGained', threshold: 1 },
       { type: 'maxDeaths', threshold: 1 },
       { type: 'petsObtained', threshold: 1 },
