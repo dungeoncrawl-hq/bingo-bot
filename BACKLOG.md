@@ -814,3 +814,9 @@ instead of renumbering the existing list.
       shows the chosen color as its own background now too, so a host
       previews the actual combination before it ever appears on a
       board.
+
+    CHECK-constraint migration ran 2026-09-06 (took two attempts -- the
+    first report of it running didn't actually take, caught by testing
+    the constraint directly rather than trusting the report). Verified
+    live: cyan and white both save now, and the removed `#fb923c`
+    (orange) is correctly rejected.
