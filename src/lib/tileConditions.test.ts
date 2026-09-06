@@ -5,6 +5,7 @@ import {
   describeTileCondition,
   formatTileProgress,
   gridLines,
+  itemCountModalDescription,
   progressPercent,
   tileTaskPhrase,
   type ParticipantStats,
@@ -440,6 +441,26 @@ describe('describeTileCondition', () => {
   it('names a single targeted item directly in mode "all" instead of "every one of these 1 X items"', () => {
     const single: TileCondition = { type: 'itemCount', itemNames: ["Verac's flail"], setName: 'Barrows uniques', mode: 'all', threshold: 1 };
     expect(describeTileCondition(single)).toBe("Verac's flail");
+  });
+});
+
+describe('itemCountModalDescription', () => {
+  it('replaces itemCount mode "all" with a fixed rule sentence, regardless of item count', () => {
+    const single: TileCondition = { type: 'itemCount', itemNames: ["Verac's flail"], setName: 'Barrows uniques', mode: 'all', threshold: 1 };
+    const multi: TileCondition = { type: 'itemCount', itemNames: ['a', 'b'], setName: 'Barrows uniques', mode: 'all', threshold: 2 };
+    const expected = 'Each of the targeted items below must be obtained. Duplicates do not count.';
+    expect(itemCountModalDescription(single)).toBe(expected);
+    expect(itemCountModalDescription(multi)).toBe(expected);
+  });
+
+  it('leaves itemCount mode "any" as plain describeTileCondition text -- duplicates DO count there, so the fixed sentence would be wrong', () => {
+    const any: TileCondition = { type: 'itemCount', itemNames: ['a', 'b'], setName: 'Barrows uniques', threshold: 3 };
+    expect(itemCountModalDescription(any)).toBe(describeTileCondition(any));
+  });
+
+  it('matches plain describeTileCondition for every non-itemCount condition', () => {
+    const xp: TileCondition = { type: 'xpGained', threshold: 500_000 };
+    expect(itemCountModalDescription(xp)).toBe(describeTileCondition(xp));
   });
 });
 

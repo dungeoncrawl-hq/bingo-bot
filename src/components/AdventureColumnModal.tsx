@@ -4,9 +4,9 @@ import type { Challenge, Tile } from '../db/types';
 import {
   checkTile,
   conditionNeedsBaseline,
-  describeTileCondition,
   formatTileGoal,
   formatTileProgress,
+  itemCountModalDescription,
   progressPercent,
   type TileStatus,
 } from '../lib/tileConditions';
@@ -320,7 +320,7 @@ export default function AdventureColumnModal({
                       ) : null}
                     </span>
                   </div>
-                  <p className="text-xs text-stone-500">{describeTileCondition(tile.condition)}</p>
+                  <p className="text-xs text-stone-500">{itemCountModalDescription(tile.condition)}</p>
                   {percent !== null && (
                     <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-stone-900">
                       <div className="h-full" style={{ width: `${percent}%`, backgroundColor: progressColor(percent) }} />

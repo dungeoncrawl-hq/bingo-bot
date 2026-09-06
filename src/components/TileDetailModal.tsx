@@ -3,9 +3,9 @@ import { getSupabase } from '../db/supabaseClient';
 import type { Challenge, Tile } from '../db/types';
 import {
   checkTile,
-  describeTileCondition,
   formatTileGoal,
   formatTileProgress,
+  itemCountModalDescription,
   progressPercent,
   type ParticipantStats,
   type TileStatus,
@@ -336,7 +336,7 @@ export default function TileDetailModal({
           <div>
             {kicker && <p className="text-xs font-semibold uppercase tracking-wide text-red-500">{kicker}</p>}
             <h2 className="text-lg font-semibold">{tile.label}</h2>
-            <p className="text-sm text-stone-400">{describeTileCondition(tile.condition)}</p>
+            <p className="text-sm text-stone-400">{itemCountModalDescription(tile.condition)}</p>
             <p className="text-xs text-stone-500">
               {tile.points} pts
               {tile.first_completer_bonus > 0 && <> · +{tile.first_completer_bonus} bonus for first to complete</>}

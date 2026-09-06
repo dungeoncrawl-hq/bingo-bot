@@ -372,6 +372,25 @@ export function describeTileCondition(cond: TileCondition): string {
   }
 }
 
+// TileDetailModal.tsx/AdventureColumnModal.tsx-specific override for the
+// description line directly under a tile's own label/header. Everywhere
+// else, describeTileCondition's itemCount mode "all" phrasing ("every
+// one of these N items", or just the item's name for a single-item
+// selection) is exactly right -- a tooltip, or "completed the ... task"
+// in Discord. But both of those modals already list the actual targeted
+// items right below this line (BACKLOG.md #17), so repeating the count/
+// setName there is just noise, and for a single item, a *third* repeat
+// on top of the tile's own label (already that item's own name --
+// tileIcons.ts's defaultLabelFor). One fixed sentence explains the
+// actual rule instead of naming anything already named elsewhere on
+// the same modal.
+export function itemCountModalDescription(cond: TileCondition): string {
+  if (cond.type === 'itemCount' && cond.mode === 'all') {
+    return 'Each of the targeted items below must be obtained. Duplicates do not count.';
+  }
+  return describeTileCondition(cond);
+}
+
 // A bare noun-phrase (no leading article) describing what a condition
 // requires -- sized to drop into "completed the {phrase} task" for
 // Discord completion embeds (discordEmbeds.ts). Unlike describeTileCondition

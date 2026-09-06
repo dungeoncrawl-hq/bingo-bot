@@ -841,3 +841,24 @@ instead of renumbering the existing list.
     tooltip line had none before this (`describeTileCondition` wasn't
     tested at all). Live-verified via the board tile's hover tooltip on
     a throwaway single-item tile.
+
+    **Same-day follow-up**: naming the single item directly fixed the
+    grammar, but for a single-item tile it meant the item's name now
+    appeared *three* times on the tile detail modal -- once in the
+    header (`tile.label`, already the item's own name --
+    `defaultLabelFor`), once in this description line, and once more in
+    the "Targeted items" list below. New
+    `itemCountModalDescription(cond)` (`tileConditions.ts`) replaces
+    `describeTileCondition` specifically on `TileDetailModal.tsx`'s/
+    `AdventureColumnModal.tsx`'s description line (not the board tile's
+    hover tooltip or Discord's "completed the ... task", which keep
+    `describeTileCondition`'s own phrasing -- neither of those show an
+    item list underneath, so there's nothing to be redundant with
+    there): for itemCount mode "all", regardless of how many items are
+    targeted, it returns one fixed sentence -- "Each of the targeted
+    items below must be obtained. Duplicates do not count." -- instead
+    of naming the count/setName/item a second time. Mode "any" (where
+    duplicates *do* count, so that sentence would be wrong) keeps
+    `describeTileCondition`'s normal text, as does every non-itemCount
+    condition. Live-verified both the single- and multi-item case in
+    the tile detail modal.
