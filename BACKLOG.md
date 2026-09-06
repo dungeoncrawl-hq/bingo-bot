@@ -769,5 +769,22 @@ instead of renumbering the existing list.
     `EditChallengePage.tsx`'s own name renders, which keep plain
     styling.
 
-    **Migration not yet applied** -- `profiles.color`/its CHECK still
-    need to run against the live Supabase project.
+    Migration ran 2026-09-06 -- verified live end-to-end in production:
+    picked Sky on `/account`, confirmed it persisted
+    (`profiles.color`), and confirmed both consumers render the exact
+    chosen color (`rgb(56, 189, 248)`/`#38bdf8`) -- the Adventure
+    chip's background (computed `border-radius: 4px`, confirming the
+    rounded-square shape too, not a circle) and the leaderboard text --
+    on a throwaway Adventure challenge.
+
+    **Learned the hard way while shipping this**: adding a column to
+    an existing table that's already joined into a live query (here,
+    `profiles(...)` inside `BoardPage.tsx`'s participants fetch) is
+    riskier than adding a whole new standalone table (#18/#20's
+    `feedback`/`announcements`) -- until the migration runs, the
+    *entire query* errors and every leaderboard on the site renders as
+    empty, not just the new field quietly missing. #22's `icon_url`
+    carried this exact same risk (same query, same join) without it
+    being caught at the time -- worth deploying and migrating
+    back-to-back for this whole class of change from now on, not
+    "deploy now, migrate whenever."
