@@ -689,16 +689,27 @@ export default function BoardPage() {
                             {!isFirst && done && <span className="absolute right-1 top-1 text-xs text-green-400">✓</span>}
                             {tile && frontierParticipantsByTileId.get(tile.id) && (
                               <div className="absolute bottom-1 left-1 flex gap-0.5">
-                                {frontierParticipantsByTileId.get(tile.id)!.map((p) => (
-                                  <span
-                                    key={p.id}
-                                    title={`${p.rsn} is here`}
-                                    className="flex h-3.5 w-3.5 items-center justify-center rounded-full text-[7px] font-bold text-stone-950"
-                                    style={{ backgroundColor: chipColorFor(p.id) }}
-                                  >
-                                    {p.rsn.slice(0, 1).toUpperCase()}
-                                  </span>
-                                ))}
+                                {frontierParticipantsByTileId.get(tile.id)!.map((p) =>
+                                  p.icon_url ? (
+                                    <img
+                                      key={p.id}
+                                      src={p.icon_url}
+                                      alt=""
+                                      title={`${p.rsn} is here`}
+                                      className="h-3.5 w-3.5 shrink-0 rounded-full object-contain"
+                                      style={{ backgroundColor: chipColorFor(p.id) }}
+                                    />
+                                  ) : (
+                                    <span
+                                      key={p.id}
+                                      title={`${p.rsn} is here`}
+                                      className="flex h-3.5 w-3.5 items-center justify-center rounded-full text-[7px] font-bold text-stone-950"
+                                      style={{ backgroundColor: chipColorFor(p.id) }}
+                                    >
+                                      {p.rsn.slice(0, 1).toUpperCase()}
+                                    </span>
+                                  ),
+                                )}
                               </div>
                             )}
                             {tile ? (

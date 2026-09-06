@@ -712,12 +712,16 @@ instead of renumbering the existing list.
     `EditChallengePage.tsx`'s Players list, and both
     `TileDetailModal.tsx`'s and `AdventureColumnModal.tsx`'s per-
     participant progress rows (team/pooled rows show no icon -- there's
-    no single profile to represent). Not added to the small per-tile
-    "who's here" initial-letter chips on the Adventure board overlay --
-    those are a board overlay, not a participant list/leaderboard.
+    no single profile to represent). **2026-09-06**: also added to the
+    small per-tile "who's here" chips on the Adventure board overlay --
+    a chosen icon replaces the colored circle-with-initial-letter chip
+    there too now (still falls back to the letter chip when no icon is
+    set), on request after the rest of this item shipped.
 
     Migration ran 2026-09-06 -- verified live end-to-end in production:
     picked an icon on `/account`, confirmed it persisted
     (`profiles.icon_url`), and confirmed it actually renders (a real,
     loaded 16x16 image, not a broken link) next to a participant's rsn
-    on a throwaway challenge's leaderboard.
+    on a throwaway challenge's leaderboard, plus (after the Adventure-
+    chip addition) a real 14x14 render replacing the frontier chip too,
+    verified on a throwaway Adventure board.
