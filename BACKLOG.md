@@ -716,7 +716,8 @@ instead of renumbering the existing list.
     "who's here" initial-letter chips on the Adventure board overlay --
     those are a board overlay, not a participant list/leaderboard.
 
-    **IMPORTANT -- migration not yet applied**: the `profiles.icon_url`
-    column/CHECK appended to `schema.sql` needs to be run against the
-    live Supabase project before this works in production -- same
-    Postgres/DDL limitation as #18/#20.
+    Migration ran 2026-09-06 -- verified live end-to-end in production:
+    picked an icon on `/account`, confirmed it persisted
+    (`profiles.icon_url`), and confirmed it actually renders (a real,
+    loaded 16x16 image, not a broken link) next to a participant's rsn
+    on a throwaway challenge's leaderboard.
