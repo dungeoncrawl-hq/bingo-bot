@@ -28,6 +28,8 @@ interface ParticipantLite {
   // challengeProgress.ts's own server-side check uses.
   adventure_baseline_at: string | null;
   adventure_baseline_snapshot: SnapshotRow | null;
+  // BACKLOG.md #22 -- shown next to this participant's rsn below.
+  icon_url: string | null;
 }
 
 interface CompletionLite {
@@ -297,6 +299,7 @@ export default function AdventureColumnModal({
                 <li key={p.id}>
                   <div className="flex items-center justify-between text-sm">
                     <span className="flex items-center gap-1.5 font-medium">
+                      {p.icon_url && <img src={p.icon_url} alt="" className="h-4 w-4 shrink-0 object-contain" />}
                       {p.rsn}
                       <span className="rounded-full border border-stone-700 px-1.5 py-0.5 text-[10px] uppercase text-stone-500">
                         {chosenLane}
@@ -322,7 +325,10 @@ export default function AdventureColumnModal({
             })}
             {notReached.map((p) => (
               <li key={p.id} className="flex items-center justify-between text-sm text-stone-600">
-                <span>{p.rsn}</span>
+                <span className="flex items-center gap-1.5">
+                  {p.icon_url && <img src={p.icon_url} alt="" className="h-4 w-4 shrink-0 object-contain" />}
+                  {p.rsn}
+                </span>
                 <span>Not reached yet</span>
               </li>
             ))}

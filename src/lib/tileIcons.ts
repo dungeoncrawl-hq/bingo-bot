@@ -19,22 +19,25 @@ export const SKILL_ORDER = [
   'Farming', 'Runecraft', 'Hunter', 'Construction', 'Sailing',
 ] as const;
 
-const COMBAT_ICON_URL = 'https://oldschool.runescape.wiki/images/Combat_icon.png';
-const TOTAL_LEVEL_ICON_URL = 'https://oldschool.runescape.wiki/images/Stats_icon.png';
-const COLLECTION_LOG_ICON_URL = 'https://oldschool.runescape.wiki/images/Collection_log.png';
-const CLUE_ICON_URL = 'https://oldschool.runescape.wiki/images/Clue_scroll.png';
-const BEGINNER_CLUE_ICON_URL = 'https://oldschool.runescape.wiki/images/Clue_scroll_(beginner).png';
-const EASY_CLUE_ICON_URL = 'https://oldschool.runescape.wiki/images/Clue_scroll_(easy).png';
-const MEDIUM_CLUE_ICON_URL = 'https://oldschool.runescape.wiki/images/Clue_scroll_(medium).png';
-const HARD_CLUE_ICON_URL = 'https://oldschool.runescape.wiki/images/Clue_scroll_(hard).png';
-const ELITE_CLUE_ICON_URL = 'https://oldschool.runescape.wiki/images/Clue_scroll_(elite).png';
-const MASTER_CLUE_ICON_URL = 'https://oldschool.runescape.wiki/images/Clue_scroll_(master).png';
-const COINS_ICON_URL = 'https://oldschool.runescape.wiki/images/Coins_10000.png';
-const DEATH_ICON_URL = 'https://oldschool.runescape.wiki/images/Items_kept_on_death.png';
+// Exported (rather than kept module-private) so profileIcons.ts's "Other"
+// group can reuse this exact same set of misc condition-type icons for
+// the profile-icon picker, instead of re-typing the URLs a second time.
+export const COMBAT_ICON_URL = 'https://oldschool.runescape.wiki/images/Combat_icon.png';
+export const TOTAL_LEVEL_ICON_URL = 'https://oldschool.runescape.wiki/images/Stats_icon.png';
+export const COLLECTION_LOG_ICON_URL = 'https://oldschool.runescape.wiki/images/Collection_log.png';
+export const CLUE_ICON_URL = 'https://oldschool.runescape.wiki/images/Clue_scroll.png';
+export const BEGINNER_CLUE_ICON_URL = 'https://oldschool.runescape.wiki/images/Clue_scroll_(beginner).png';
+export const EASY_CLUE_ICON_URL = 'https://oldschool.runescape.wiki/images/Clue_scroll_(easy).png';
+export const MEDIUM_CLUE_ICON_URL = 'https://oldschool.runescape.wiki/images/Clue_scroll_(medium).png';
+export const HARD_CLUE_ICON_URL = 'https://oldschool.runescape.wiki/images/Clue_scroll_(hard).png';
+export const ELITE_CLUE_ICON_URL = 'https://oldschool.runescape.wiki/images/Clue_scroll_(elite).png';
+export const MASTER_CLUE_ICON_URL = 'https://oldschool.runescape.wiki/images/Clue_scroll_(master).png';
+export const COINS_ICON_URL = 'https://oldschool.runescape.wiki/images/Coins_10000.png';
+export const DEATH_ICON_URL = 'https://oldschool.runescape.wiki/images/Items_kept_on_death.png';
 // Baby Mole -- one of the most recognizable pets in OSRS, standing in for
 // "a pet" generically since the wiki has no single generic pet icon.
 const PETS_ICON_URL = 'https://oldschool.runescape.wiki/images/Baby_Mole.png';
-const GOTR_ICON_URL = 'https://oldschool.runescape.wiki/images/Abyssal_lantern.png';
+export const GOTR_ICON_URL = 'https://oldschool.runescape.wiki/images/Abyssal_lantern.png';
 
 // The label is entirely derived from the condition (and its skill/activity/
 // item-catalog/value-threshold parameters) -- not a separate host-editable

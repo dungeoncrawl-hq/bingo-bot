@@ -779,3 +779,16 @@ $$;
 
 revoke all on function subscribed_emails() from public, authenticated, anon;
 grant execute on function subscribed_emails() to service_role;
+
+-- BACKLOG.md #22, 2026-09-06 -- a player-chosen icon shown next to their
+-- rsn on leaderboards/participant lists, picked from icons this app
+-- already uses elsewhere (skills, bosses, item-catalog items, pets --
+-- see src/lib/profileIcons.ts), not a freeform image URL. null means no
+-- icon chosen (today's behavior, nothing shown). The CHECK doesn't
+-- enforce exact catalog membership (that list changes over time and
+-- living twice, once in SQL and once in profileIcons.ts, would drift) --
+-- it enforces the same "no hotlinking/embedding arbitrary images"
+-- boundary already applied to every other icon URL in this schema, by
+-- restricting to the one host every one of them already comes from.
+alter table profiles add column if not exists icon_url text
+  check (icon_url is null or icon_url like 'https://oldschool.runescape.wiki/images/%');

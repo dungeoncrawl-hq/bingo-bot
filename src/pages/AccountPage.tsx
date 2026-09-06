@@ -4,6 +4,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { getSupabase } from '../db/supabaseClient';
 import { formatRelativeTime } from '../lib/format';
+import ProfileIconPicker from '../components/ProfileIconPicker';
 
 export default function AccountPage() {
   const { session, profile, loading } = useAuth();
@@ -17,6 +18,8 @@ export default function AccountPage() {
   const [rsnError, setRsnError] = useState('');
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [notifSaving, setNotifSaving] = useState(false);
+  const [iconUrl, setIconUrl] = useState<string | null>(null);
+  const [showIconPicker, setShowIconPicker] = useState(false);
   const [dinkSecret, setDinkSecret] = useState<string | null>(null);
   const [webhookCopied, setWebhookCopied] = useState(false);
   // 'loading' distinct from null (no events yet) so the line doesn't
@@ -33,6 +36,10 @@ export default function AccountPage() {
 
   useEffect(() => {
     if (profile) setEmailNotifications(profile.email_notifications);
+  }, [profile]);
+
+  useEffect(() => {
+    if (profile) setIconUrl(profile.icon_url);
   }, [profile]);
 
   // BACKLOG.md #13 -- one stable per-account webhook, separate from
@@ -121,9 +128,40 @@ export default function AccountPage() {
     if (error) setEmailNotifications(prev);
   }
 
+  async function handleSelectIcon(next: string | null) {
+    if (!session) return;
+    const prev = iconUrl;
+    setIconUrl(next);
+    setShowIconPicker(false);
+    const { error } = await getSupabase().from('profiles').update({ icon_url: next }).eq('id', session.user.id);
+    if (error) setIconUrl(prev);
+  }
+
   return (
     <div className="mx-auto max-w-lg py-12">
       <h1 className="text-2xl font-semibold">Account</h1>
+
+      <div className="mt-8 max-w-md">
+        <h2 className="text-sm font-semibold text-stone-300">Profile icon</h2>
+        <p className="mt-1 text-xs text-stone-500">Shown next to your name on leaderboards and participant lists.</p>
+        <div className="mt-2 flex items-center gap-3">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-stone-700 bg-stone-900">
+            {iconUrl ? (
+              <img src={iconUrl} alt="" className="h-9 w-9 object-contain" />
+            ) : (
+              <span className="text-xs text-stone-600">None</span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowIconPicker(true)}
+            className="rounded-lg border border-stone-700 px-4 py-2 text-sm text-stone-300"
+          >
+            Choose icon
+          </button>
+        </div>
+        {showIconPicker && <ProfileIconPicker currentIcon={iconUrl} onSelect={handleSelectIcon} onClose={() => setShowIconPicker(false)} />}
+      </div>
 
       <div className="mt-8 max-w-md">
         <h2 className="text-sm font-semibold text-stone-300">Email</h2>

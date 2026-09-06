@@ -64,6 +64,11 @@ interface ParticipantRow {
   // recent event, shown next to "You're in as X" so a player can tell
   // at a glance whether their tracking is actually alive.
   last_webhook_at: string | null;
+  // BACKLOG.md #22 -- flattened out of the raw `profiles(icon_url)` embed
+  // right after fetch (see load() below), so every consumer here and in
+  // the two modals this feeds just reads `icon_url` directly instead of
+  // threading the embed's own nested shape everywhere.
+  icon_url: string | null;
 }
 
 interface CompletionRow {
@@ -140,7 +145,7 @@ export default function BoardPage() {
       supabase
         .from('challenge_participants')
         .select(
-          'id, profile_id, rsn, chosen_lowest_skill, adventure_path, team_id, adventure_baseline_at, adventure_baseline_snapshot, last_webhook_at',
+          'id, profile_id, rsn, chosen_lowest_skill, adventure_path, team_id, adventure_baseline_at, adventure_baseline_snapshot, last_webhook_at, profiles(icon_url)',
         )
         .eq('challenge_id', challengeData.id),
       supabase
@@ -150,7 +155,9 @@ export default function BoardPage() {
       supabase.from('teams').select('*').eq('challenge_id', challengeData.id),
     ]);
     setTiles((tilesData as Tile[]) ?? []);
-    setParticipants((participantsData as ParticipantRow[]) ?? []);
+    const rawParticipants =
+      (participantsData as unknown as (Omit<ParticipantRow, 'icon_url'> & { profiles: { icon_url: string | null } | null })[]) ?? [];
+    setParticipants(rawParticipants.map((p) => ({ ...p, icon_url: p.profiles?.icon_url ?? null })));
     setCompletions((completionsData as CompletionRow[]) ?? []);
     setTeams((teamsData as Team[]) ?? []);
   }, [slug]);
@@ -840,7 +847,10 @@ export default function BoardPage() {
               )}
               <ul className="space-y-1 text-stone-300">
                 {participants.map((p) => (
-                  <li key={p.id}>{p.rsn}</li>
+                  <li key={p.id} className="flex items-center gap-1.5">
+                    {p.icon_url && <img src={p.icon_url} alt="" className="h-4 w-4 shrink-0 object-contain" />}
+                    {p.rsn}
+                  </li>
                 ))}
                 {participants.length === 0 && <li className="text-stone-500">No one's joined yet.</li>}
               </ul>
@@ -860,9 +870,10 @@ export default function BoardPage() {
                     <button
                       type="button"
                       onClick={() => setSearchParams({ p: p.id })}
-                      className={`whitespace-nowrap text-left hover:underline ${isViewed ? 'font-semibold text-amber-400' : 'text-stone-300'}`}
+                      className={`flex items-center gap-1.5 whitespace-nowrap text-left hover:underline ${isViewed ? 'font-semibold text-amber-400' : 'text-stone-300'}`}
                     >
-                      {`#${i + 1}${medal ? ` ${medal}` : ''} ${label} — ${entry.points} pts (${entry.tilesCompleted}/${tilesInPlay} tiles)`}
+                      {!isTeam && p.icon_url && <img src={p.icon_url} alt="" className="h-4 w-4 shrink-0 object-contain" />}
+                      <span>{`#${i + 1}${medal ? ` ${medal}` : ''} ${label} — ${entry.points} pts (${entry.tilesCompleted}/${tilesInPlay} tiles)`}</span>
                     </button>
                     {isYou && <span className="shrink-0 text-xs text-stone-500">(you)</span>}
                     {hasCompletedBoard(p.id) && <span className="shrink-0 text-yellow-400">🏆 Complete!</span>}

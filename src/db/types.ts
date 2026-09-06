@@ -14,6 +14,11 @@ export interface Profile {
   // defaulting to true. Unrelated to Supabase's own auth emails (magic
   // link/signup), which always send regardless of this flag.
   email_notifications: boolean;
+  // BACKLOG.md #22 -- shown next to this player's rsn on leaderboards/
+  // participant lists. null means none chosen (nothing shown, today's
+  // behavior). Always one of profileIcons.ts's PROFILE_ICON_GROUPS
+  // options -- never a freeform URL (see schema.sql's CHECK).
+  icon_url: string | null;
 }
 
 export interface Challenge {

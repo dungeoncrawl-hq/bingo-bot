@@ -18,7 +18,7 @@ const GRID_SIZE = 5;
 interface ParticipantRow {
   id: string;
   rsn: string;
-  profiles: { display_name: string } | null;
+  profiles: { display_name: string; icon_url: string | null } | null;
   screenshot_count: number;
   screenshot_bytes: number;
   team_id: string | null;
@@ -55,7 +55,7 @@ export default function EditChallengePage() {
       supabase.from('tiles').select('*').eq('challenge_id', challengeData.id),
       supabase
         .from('challenge_participants')
-        .select('id, rsn, profiles(display_name), screenshot_count, screenshot_bytes, team_id')
+        .select('id, rsn, profiles(display_name, icon_url), screenshot_count, screenshot_bytes, team_id')
         .eq('challenge_id', challengeData.id),
       supabase.from('teams').select('*').eq('challenge_id', challengeData.id),
     ]);
@@ -458,6 +458,7 @@ export default function EditChallengePage() {
           {participants.map((p) => (
             <li key={p.id} className="flex items-center justify-between gap-2">
               <span className="flex items-center gap-2">
+                {p.profiles?.icon_url && <img src={p.profiles.icon_url} alt="" className="h-4 w-4 shrink-0 object-contain" />}
                 {p.rsn}
                 {p.screenshot_count > 0 && (
                   <span

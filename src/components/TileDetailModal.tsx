@@ -30,6 +30,9 @@ interface ParticipantLite {
   // doneTileIdsFor distinguishes the two, same as AdventureColumnModal.
   adventure_baseline_at: string | null;
   adventure_baseline_snapshot: SnapshotRow | null;
+  // BACKLOG.md #22 -- shown next to this row's label, solo mode only (a
+  // team/pooled row has no single profile to represent).
+  icon_url: string | null;
 }
 
 interface TeamLite {
@@ -97,6 +100,9 @@ interface Row {
   // regardless of what the live stats sweep says.
   completedAt: string | null;
   isFirst: boolean;
+  // BACKLOG.md #22 -- null for a team/pooled row, same reasoning as
+  // ParticipantLite's own icon_url.
+  iconUrl: string | null;
   // Adventure only (BACKLOG.md #4): this participant has completed at
   // least one earlier tile but hasn't logged out since, so no baseline
   // exists yet to measure progress from -- `status` above is meaningless
@@ -256,17 +262,17 @@ export default function TileDetailModal({
       if (gameMode === 'coop') {
         const status = checkTile(tile.condition, poolStats(Object.values(statsById)));
         const completedAt = completedAtFor(ids);
-        result = [{ key: 'pooled', label: 'Everyone', status, completedAt, isFirst: false, awaitingBaselineReset: false }];
+        result = [{ key: 'pooled', label: 'Everyone', status, completedAt, isFirst: false, iconUrl: null, awaitingBaselineReset: false }];
       } else if (gameMode === 'team') {
         result = teams
-          .map((t) => {
+          .map((t): Row | null => {
             const memberIds = participants.filter((p) => p.team_id === t.id).map((p) => p.id);
             if (memberIds.length === 0) return null;
             const status = checkTile(tile.condition, poolStats(memberIds.map((id) => statsById[id])));
             const completedAt = completedAtFor(memberIds);
             const winnerId = firstCompleters[tile.id];
             const isFirst = completedAt != null && tile.condition.type !== 'freeSpace' && memberIds.includes(winnerId);
-            return { key: t.id, label: t.name, status, completedAt, isFirst, awaitingBaselineReset: false };
+            return { key: t.id, label: t.name, status, completedAt, isFirst, iconUrl: null, awaitingBaselineReset: false };
           })
           .filter((r): r is Row => r != null);
       } else {
@@ -274,6 +280,7 @@ export default function TileDetailModal({
           key: p.id,
           awaitingBaselineReset: awaitingBaselineResetById[p.id] ?? false,
           label: p.rsn,
+          iconUrl: p.icon_url,
           status: checkTile(tile.condition, statsById[p.id]),
           completedAt: completedAtFor([p.id]),
           isFirst: false, // set below, once per row, for solo (needs completedAt first)
@@ -354,7 +361,10 @@ export default function TileDetailModal({
               return (
                 <li key={row.key}>
                   <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium">{row.label}</span>
+                    <span className="flex items-center gap-1.5 font-medium">
+                      {row.iconUrl && <img src={row.iconUrl} alt="" className="h-4 w-4 shrink-0 object-contain" />}
+                      {row.label}
+                    </span>
                     <span className={`flex items-center gap-1 ${row.awaitingBaselineReset ? 'text-sky-400' : 'text-stone-400'}`}>
                       {caption}
                       {row.isFirst ? (

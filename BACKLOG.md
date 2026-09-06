@@ -653,3 +653,67 @@ instead of renumbering the existing list.
     off by default, since mixing gameplay completion pings with
     unrelated site news in someone's clan channel uninvited is a good
     way to get the webhook removed.
+
+## Player identity
+22. **A player-chosen profile icon**, shown next to their rsn on
+    leaderboards and participant lists. **Shipped 2026-09-06.** Picked
+    from icons this app already has elsewhere, grouped the same way
+    those already are -- not a freeform image upload/URL.
+
+    **Catalog** (`src/lib/profileIcons.ts`): Skills (24, `SKILL_ORDER`),
+    Bosses (79, `BOSS_ACTIVITIES`), Items (one subgroup per item-catalog
+    set, matching `TileEditorForm.tsx`'s own item-catalog dropdown --
+    flattening all ~28 sets into one list would be hundreds of icons
+    deep with no way to narrow it down), Clue Scrolls (7, all-tiers +
+    each individual tier), Pets, and Other (Combat/Total Level/
+    Collection Log/Coins/Skull/GOTR -- the remaining single-icon
+    condition types). `tileIcons.ts`'s previously-module-private misc
+    icon consts are now exported so this catalog doesn't retype the
+    same URLs a second time.
+
+    **Pets came from the sibling `rs` project, not this one** -- this
+    app only ever used one generic pet icon (Baby Mole, for the
+    `petsObtained` tile condition), which would've made "Pets" a
+    category of one. `rs/src/lib/petIcons.ts` already has a full,
+    wiki-verified, production-tested catalog of every OSRS pet (79
+    boss/skilling/other pets); ported the icon-catalog portion of it
+    into a new `src/lib/petIcons.ts` here (not the Dink-specific
+    per-pet-name reverse lookup, which doesn't apply -- this app's
+    `petsObtained` is a plain counter, not a named-pet log). Several
+    reskinned boss pairs (Artio/Callisto, Spindel/Venenatis, the two
+    Gauntlet variants, Chaos Elemental/Chaos Fanatic, the two Chambers
+    of Xeric variants) share one literal in-game pet -- deduped by icon
+    URL and labeled with the pet's own real name (derived from its icon
+    filename) rather than showing the same icon twice under two
+    different boss names.
+
+    **Data model**: `profiles.icon_url text`, nullable (null = none
+    chosen, nothing shown -- today's behavior for every existing
+    account). CHECK restricts it to the `oldschool.runescape.wiki`
+    host, same "no hotlinking arbitrary images" boundary already
+    applied to every other icon URL in this schema -- doesn't enforce
+    exact catalog membership (that list changes over time and
+    duplicating it in SQL would drift), just blocks embedding an
+    arbitrary external image. No new RLS needed -- profiles' existing
+    "own row write" policy already covers it.
+
+    **Picker** (`ProfileIconPicker.tsx`, opened from a new "Profile
+    icon" section on `AccountPage.tsx`): top-level group tabs, a
+    subgroup `<select>` when a group has more than one (Items, Pets),
+    and a scrollable icon grid below -- same fixed-header/scrollable-
+    middle/fixed-footer shape as `TileEditorForm.tsx`'s own modal,
+    since Items' biggest subgroups run to dozens of icons.
+
+    **Display**: threaded into every participant-facing name render --
+    `BoardPage.tsx`'s ranked leaderboard and Coop roster,
+    `EditChallengePage.tsx`'s Players list, and both
+    `TileDetailModal.tsx`'s and `AdventureColumnModal.tsx`'s per-
+    participant progress rows (team/pooled rows show no icon -- there's
+    no single profile to represent). Not added to the small per-tile
+    "who's here" initial-letter chips on the Adventure board overlay --
+    those are a board overlay, not a participant list/leaderboard.
+
+    **IMPORTANT -- migration not yet applied**: the `profiles.icon_url`
+    column/CHECK appended to `schema.sql` needs to be run against the
+    live Supabase project before this works in production -- same
+    Postgres/DDL limitation as #18/#20.
