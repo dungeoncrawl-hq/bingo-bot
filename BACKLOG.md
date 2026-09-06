@@ -241,15 +241,21 @@ forward, not just tiles, once those exist to copy.
    it exists, this question is actually ready to resolve.
 
 ## Site administration
-9. A page under `/dungeon-master-admin` to manage Discord messaging
-   templates -- today's completion-embed titles/flavor text are hardcoded
-   across `discordEmbeds.ts` and `discordBanter.ts`'s banter pools, so
-   changing any wording needs a code change and a deploy. Scope TBD: at
-   minimum, editing the banter pools' text without touching code;
-   possibly also the fixed (non-randomized) title templates. Needs
-   design work on where the editable content actually lives (a new DB
-   table the banter pools read from at request time, vs. some other
-   store) before this is buildable.
+9. ~~A page under `/dungeon-master-admin` to manage Discord messaging
+   templates~~ -- **Shipped 2026-09-02** (`ad9df85`), verified still
+   live 2026-09-06 (`discord_banter_lines` has real rows in
+   production). Covers the "at minimum" half of the original scope:
+   the 5 randomized completion-embed flavor pools
+   (`discordBanter.ts`) moved from hardcoded arrays to
+   `{points}`/`{rsn}`-templated strings in a new `discord_banter_lines`
+   table, editable at `/dungeon-master-admin/discord-templates` with no
+   code deploy needed. `tileCompletionFlavor`/`boardCompletionFlavor`
+   stay pure and default to the hardcoded pools when none are passed,
+   so no existing caller needed to change. **Not covered, still
+   hardcoded**: `discordEmbeds.ts`'s fixed (non-randomized) title
+   templates -- deferred at the time as a bigger lift (real
+   conditional branching, not just interpolation) than the banter
+   pools were.
 
 ## Infrastructure research
 10. **Build a first-party RuneLite plugin instead of depending on Dink.**
@@ -552,12 +558,9 @@ instead of renumbering the existing list.
     `discord_banter_lines`) -- feedback text could say anything, so
     unlike most of this schema it shouldn't be publicly readable.
 
-    **IMPORTANT -- migration not yet applied**: the `feedback` table/
-    RLS block added to `schema.sql` needs to be run against the live
-    Supabase project (SQL editor) before this feature works in
-    production -- Claude has no direct Postgres/DDL access, only the
-    app's own REST/auth APIs, so this one step couldn't be automated
-    like the rest of the build.
+    Migration ran 2026-09-04 -- verified live (real submitted rows in
+    production, including a since-cleaned-up test one) both then and
+    again 2026-09-06.
 
     **Submit UI** (`FeedbackModal.tsx`): a small modal (styled like
     `TileDetailModal.tsx`), triggered from a "Feedback" link in
