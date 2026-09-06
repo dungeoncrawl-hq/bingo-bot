@@ -5,7 +5,11 @@
 // (schema.sql's CHECK enforces the same list) keeps every possible color
 // pre-verified to look good here, and small enough to render as plain
 // swatches with no picker UI needed.
-export const PLAYER_COLORS = ['#f59e0b', '#38bdf8', '#a78bfa', '#f472b6', '#34d399', '#fb923c'] as const;
+// fb923c (orange) was dropped 2026-09-06 -- too close to f59e0b (amber) to
+// tell apart at a glance, defeating the whole point of this palette.
+// Replaced with a cyan for real hue separation from every other entry,
+// plus a white option.
+export const PLAYER_COLORS = ['#f59e0b', '#38bdf8', '#a78bfa', '#f472b6', '#34d399', '#22d3ee', '#ffffff'] as const;
 
 export function isValidPlayerColor(color: string): color is (typeof PLAYER_COLORS)[number] {
   return (PLAYER_COLORS as readonly string[]).includes(color);

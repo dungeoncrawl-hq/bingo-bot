@@ -805,4 +805,15 @@ alter table profiles add column if not exists icon_url text
 -- not a plain default, so an unset player still reads as a real color,
 -- not "no color."
 alter table profiles add column if not exists color text
-  check (color is null or color in ('#f59e0b', '#38bdf8', '#a78bfa', '#f472b6', '#34d399', '#fb923c'));
+  check (color is null or color in ('#f59e0b', '#38bdf8', '#a78bfa', '#f472b6', '#34d399', '#22d3ee', '#ffffff'));
+
+-- 2026-09-06 -- #fb923c (orange) swapped for a cyan plus a white option
+-- (too close to #f59e0b/amber to tell apart at a glance -- the whole
+-- point of this palette is players being easy to distinguish). The
+-- add-column statement above is a no-op on a database where the column
+-- already exists, so its own CHECK never gets a chance to re-apply --
+-- this re-does it explicitly. Postgres's default name for a column
+-- CHECK added via ADD COLUMN is "<table>_<column>_check".
+alter table profiles drop constraint if exists profiles_color_check;
+alter table profiles add constraint profiles_color_check
+  check (color is null or color in ('#f59e0b', '#38bdf8', '#a78bfa', '#f472b6', '#34d399', '#22d3ee', '#ffffff'));

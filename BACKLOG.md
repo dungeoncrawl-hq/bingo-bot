@@ -788,3 +788,29 @@ instead of renumbering the existing list.
     being caught at the time -- worth deploying and migrating
     back-to-back for this whole class of change from now on, not
     "deploy now, migrate whenever."
+
+    **2026-09-06 follow-up, same day**: four refinements.
+    - **Padding**: every icon badge now has a little breathing room
+      around the icon instead of it touching the badge's edges --
+      pulled into a new shared `PlayerIcon.tsx` (icon + colored
+      background + padding + rounded-square shape in one place) so the
+      fix, and every future one like it, only has to happen once.
+    - **Palette fix**: `#fb923c` (orange) swapped for a cyan, plus a
+      white option added -- orange was too close to `#f59e0b` (amber)
+      to tell apart at a glance, undermining the whole point of a
+      color palette. Needs its own CHECK-constraint migration (Postgres
+      doesn't let a changed inline CHECK re-apply itself against a
+      column that already exists) -- lower-stakes than #23's own
+      column-add risk above, since existing colors keep working either
+      way; only picking one of the two new options would fail (and
+      revert cleanly, not crash) until this runs.
+    - **Icon background everywhere, not just the Adventure chip**:
+      `PlayerIcon` (see above) is now used everywhere a player's icon
+      renders -- the leaderboard, `TileDetailModal.tsx`,
+      `AdventureColumnModal.tsx`, `EditChallengePage.tsx`'s Players
+      list -- not just the chip. Text color stays leaderboard-only, as
+      already scoped above; this is icon-background only.
+    - **Account page preview**: the icon preview box on `/account`
+      shows the chosen color as its own background now too, so a host
+      previews the actual combination before it ever appears on a
+      board.

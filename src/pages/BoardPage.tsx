@@ -24,6 +24,7 @@ import { formatRelativeTime } from '../lib/format';
 import TileDetailModal from '../components/TileDetailModal';
 import AdventureColumnModal from '../components/AdventureColumnModal';
 import AdventureConnector from '../components/AdventureConnector';
+import PlayerIcon from '../components/PlayerIcon';
 import {
   ADVENTURE_SMALL_COLUMNS,
   ADVENTURE_SMALL_FINAL_BOSS_COLUMN,
@@ -698,13 +699,12 @@ export default function BoardPage() {
                               <div className="absolute bottom-1 left-1 flex gap-0.5">
                                 {frontierParticipantsByTileId.get(tile.id)!.map((p) =>
                                   p.icon_url ? (
-                                    <img
+                                    <PlayerIcon
                                       key={p.id}
-                                      src={p.icon_url}
-                                      alt=""
+                                      iconUrl={p.icon_url}
+                                      color={colorFor(p)}
+                                      size={14}
                                       title={`${p.rsn} is here`}
-                                      className="h-3.5 w-3.5 shrink-0 rounded object-contain"
-                                      style={{ backgroundColor: colorFor(p) }}
                                     />
                                   ) : (
                                     <span
@@ -866,7 +866,7 @@ export default function BoardPage() {
               <ul className="space-y-1">
                 {participants.map((p) => (
                   <li key={p.id} className="flex items-center gap-1.5" style={{ color: colorFor(p) }}>
-                    {p.icon_url && <img src={p.icon_url} alt="" className="h-4 w-4 shrink-0 object-contain" />}
+                    {p.icon_url && <PlayerIcon iconUrl={p.icon_url} color={colorFor(p)} />}
                     {p.rsn}
                   </li>
                 ))}
@@ -891,7 +891,7 @@ export default function BoardPage() {
                       className={`flex items-center gap-1.5 whitespace-nowrap text-left hover:underline ${isViewed ? 'font-semibold underline' : ''} ${isTeam ? 'text-stone-300' : ''}`}
                       style={!isTeam ? { color: colorFor(p) } : undefined}
                     >
-                      {!isTeam && p.icon_url && <img src={p.icon_url} alt="" className="h-4 w-4 shrink-0 object-contain" />}
+                      {!isTeam && p.icon_url && <PlayerIcon iconUrl={p.icon_url} color={colorFor(p)} />}
                       <span>{`#${i + 1}${medal ? ` ${medal}` : ''} ${label} — ${entry.points} pts (${entry.tilesCompleted}/${tilesInPlay} tiles)`}</span>
                     </button>
                     {isYou && <span className="shrink-0 text-xs text-stone-500">(you)</span>}

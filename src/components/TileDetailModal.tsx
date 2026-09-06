@@ -15,6 +15,8 @@ import { computeHiscoresRecap, type SnapshotRow } from '../lib/hiscoresRecap';
 import { progressColor } from '../lib/progressColor';
 import { resolveAdventureTileWindow } from '../lib/adventureProgress';
 import { itemIcon } from '../lib/itemSets';
+import { colorForParticipant } from '../lib/playerColors';
+import PlayerIcon from './PlayerIcon';
 
 interface ParticipantLite {
   id: string;
@@ -33,6 +35,11 @@ interface ParticipantLite {
   // BACKLOG.md #22 -- shown next to this row's label, solo mode only (a
   // team/pooled row has no single profile to represent).
   icon_url: string | null;
+  // BACKLOG.md #23 -- background shown behind icon_url above (PlayerIcon
+  // handles the fallback when null -- colorForParticipant, same as
+  // BoardPage.tsx). Not used for text color here -- that's leaderboard-
+  // only, per how #23 was scoped.
+  color: string | null;
 }
 
 interface TeamLite {
@@ -103,6 +110,9 @@ interface Row {
   // BACKLOG.md #22 -- null for a team/pooled row, same reasoning as
   // ParticipantLite's own icon_url.
   iconUrl: string | null;
+  // BACKLOG.md #23 -- background behind iconUrl above, only meaningful
+  // alongside it.
+  iconColor: string | null;
   // Adventure only (BACKLOG.md #4): this participant has completed at
   // least one earlier tile but hasn't logged out since, so no baseline
   // exists yet to measure progress from -- `status` above is meaningless
@@ -262,7 +272,9 @@ export default function TileDetailModal({
       if (gameMode === 'coop') {
         const status = checkTile(tile.condition, poolStats(Object.values(statsById)));
         const completedAt = completedAtFor(ids);
-        result = [{ key: 'pooled', label: 'Everyone', status, completedAt, isFirst: false, iconUrl: null, awaitingBaselineReset: false }];
+        result = [
+          { key: 'pooled', label: 'Everyone', status, completedAt, isFirst: false, iconUrl: null, iconColor: null, awaitingBaselineReset: false },
+        ];
       } else if (gameMode === 'team') {
         result = teams
           .map((t): Row | null => {
@@ -272,7 +284,7 @@ export default function TileDetailModal({
             const completedAt = completedAtFor(memberIds);
             const winnerId = firstCompleters[tile.id];
             const isFirst = completedAt != null && tile.condition.type !== 'freeSpace' && memberIds.includes(winnerId);
-            return { key: t.id, label: t.name, status, completedAt, isFirst, iconUrl: null, awaitingBaselineReset: false };
+            return { key: t.id, label: t.name, status, completedAt, isFirst, iconUrl: null, iconColor: null, awaitingBaselineReset: false };
           })
           .filter((r): r is Row => r != null);
       } else {
@@ -281,6 +293,7 @@ export default function TileDetailModal({
           awaitingBaselineReset: awaitingBaselineResetById[p.id] ?? false,
           label: p.rsn,
           iconUrl: p.icon_url,
+          iconColor: p.color ?? colorForParticipant(p.id),
           status: checkTile(tile.condition, statsById[p.id]),
           completedAt: completedAtFor([p.id]),
           isFirst: false, // set below, once per row, for solo (needs completedAt first)
@@ -362,7 +375,7 @@ export default function TileDetailModal({
                 <li key={row.key}>
                   <div className="flex items-center justify-between text-sm">
                     <span className="flex items-center gap-1.5 font-medium">
-                      {row.iconUrl && <img src={row.iconUrl} alt="" className="h-4 w-4 shrink-0 object-contain" />}
+                      {row.iconUrl && row.iconColor && <PlayerIcon iconUrl={row.iconUrl} color={row.iconColor} />}
                       {row.label}
                     </span>
                     <span className={`flex items-center gap-1 ${row.awaitingBaselineReset ? 'text-sky-400' : 'text-stone-400'}`}>

@@ -159,7 +159,10 @@ export default function AccountPage() {
         <h2 className="text-sm font-semibold text-stone-300">Profile icon</h2>
         <p className="mt-1 text-xs text-stone-500">Shown next to your name on leaderboards and participant lists.</p>
         <div className="mt-2 flex items-center gap-3">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-stone-700 bg-stone-900">
+          <div
+            className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-stone-700 ${color ? '' : 'bg-stone-900'}`}
+            style={color ? { backgroundColor: color } : undefined}
+          >
             {iconUrl ? (
               <img src={iconUrl} alt="" className="h-9 w-9 object-contain" />
             ) : (
