@@ -4,6 +4,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { getSupabase } from '../db/supabaseClient';
 import { formatRelativeTime } from '../lib/format';
+import { PLAYER_COLORS } from '../lib/playerColors';
 import ProfileIconPicker from '../components/ProfileIconPicker';
 
 export default function AccountPage() {
@@ -20,6 +21,7 @@ export default function AccountPage() {
   const [notifSaving, setNotifSaving] = useState(false);
   const [iconUrl, setIconUrl] = useState<string | null>(null);
   const [showIconPicker, setShowIconPicker] = useState(false);
+  const [color, setColor] = useState<string | null>(null);
   const [dinkSecret, setDinkSecret] = useState<string | null>(null);
   const [webhookCopied, setWebhookCopied] = useState(false);
   // 'loading' distinct from null (no events yet) so the line doesn't
@@ -40,6 +42,10 @@ export default function AccountPage() {
 
   useEffect(() => {
     if (profile) setIconUrl(profile.icon_url);
+  }, [profile]);
+
+  useEffect(() => {
+    if (profile) setColor(profile.color);
   }, [profile]);
 
   // BACKLOG.md #13 -- one stable per-account webhook, separate from
@@ -137,6 +143,14 @@ export default function AccountPage() {
     if (error) setIconUrl(prev);
   }
 
+  async function handleSelectColor(next: string | null) {
+    if (!session) return;
+    const prev = color;
+    setColor(next);
+    const { error } = await getSupabase().from('profiles').update({ color: next }).eq('id', session.user.id);
+    if (error) setColor(prev);
+  }
+
   return (
     <div className="mx-auto max-w-lg py-12">
       <h1 className="text-2xl font-semibold">Account</h1>
@@ -161,6 +175,31 @@ export default function AccountPage() {
           </button>
         </div>
         {showIconPicker && <ProfileIconPicker currentIcon={iconUrl} onSelect={handleSelectIcon} onClose={() => setShowIconPicker(false)} />}
+      </div>
+
+      <div className="mt-8 max-w-md">
+        <h2 className="text-sm font-semibold text-stone-300">Player color</h2>
+        <p className="mt-1 text-xs text-stone-500">
+          Your icon's background and your leaderboard text. Leave unset and a color is picked automatically for each
+          dungeon.
+        </p>
+        <div className="mt-2 flex items-center gap-2">
+          {PLAYER_COLORS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              title={c}
+              onClick={() => handleSelectColor(c)}
+              className={`h-8 w-8 rounded-lg border-2 ${color === c ? 'border-stone-100' : 'border-transparent'}`}
+              style={{ backgroundColor: c }}
+            />
+          ))}
+          {color && (
+            <button type="button" onClick={() => handleSelectColor(null)} className="ml-2 text-xs text-stone-500 underline">
+              Clear
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="mt-8 max-w-md">

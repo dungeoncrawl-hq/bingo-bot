@@ -725,3 +725,49 @@ instead of renumbering the existing list.
     on a throwaway challenge's leaderboard, plus (after the Adventure-
     chip addition) a real 14x14 render replacing the frontier chip too,
     verified on a throwaway Adventure board.
+
+23. **A player-chosen color** (#22 follow-up), used for their Adventure
+    "who's here" chip background and their leaderboard text, so
+    players are easier to tell apart at a glance. **Shipped
+    2026-09-06.**
+
+    **Chip shape**: also changed from a circle to a rounded square
+    (both the icon version and the plain-letter fallback) -- requested
+    alongside the color work, unrelated to color itself.
+
+    **Palette**: a small closed set (`src/lib/playerColors.ts`'s
+    `PLAYER_COLORS`, 6 colors), not a freeform color picker -- picked
+    to read well against this site's dark stone background. Small and
+    stable enough that `schema.sql`'s CHECK enumerates the exact list
+    (unlike `icon_url`'s domain-prefix CHECK, whose catalog is too
+    large/changeable to enumerate). `AccountPage.tsx` shows it as 6
+    plain swatch buttons -- no picker modal needed at this size.
+
+    **No color chosen -- random per dungeon**: `BoardPage.tsx`'s old
+    `chipColorFor` (a hash of `challenge_participants.id`, already
+    used for the frontier chip's background before this shipped) moved
+    into `playerColors.ts` as `colorForParticipant` and now backs both
+    the chip and the leaderboard text whenever `profiles.color` is
+    null. Hashing the *participant row* id rather than the profile id
+    is what makes this "random, but stable, per dungeon" rather than
+    one fixed color for the account everywhere -- the same account
+    joining a second challenge gets an independently-hashed color
+    there, since it has a different `challenge_participants.id`.
+
+    **Leaderboard text**: applies to `BoardPage.tsx`'s ranked list and
+    Coop roster (solo/individual rows only -- a team has no single
+    profile's color to use, same reasoning #22 already applied to
+    icons). This retired the ranked list's old amber-for-"currently
+    viewing" text color, which would have fought with a player's own
+    color -- viewing a row is now shown with bold + underline instead,
+    an orthogonal visual channel, so a player's color always means the
+    same thing regardless of what's currently being viewed.
+
+    **Scope**: deliberately just the Adventure chip and the
+    leaderboard, matching what was asked -- not extended to
+    `TileDetailModal.tsx`/`AdventureColumnModal.tsx`/
+    `EditChallengePage.tsx`'s own name renders, which keep plain
+    styling.
+
+    **Migration not yet applied** -- `profiles.color`/its CHECK still
+    need to run against the live Supabase project.

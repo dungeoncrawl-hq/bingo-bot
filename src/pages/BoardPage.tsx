@@ -18,6 +18,7 @@ import { computeHiscoresRecap, type SnapshotRow } from '../lib/hiscoresRecap';
 import { computeLeaderboard } from '../lib/leaderboard';
 import { computeAdventureFirstCompleters, computeFirstCompleters } from '../lib/firstCompletions';
 import { progressColor } from '../lib/progressColor';
+import { colorForParticipant } from '../lib/playerColors';
 import { formatLocalRange, preciseCountdownText } from '../lib/dungeonStatus';
 import { formatRelativeTime } from '../lib/format';
 import TileDetailModal from '../components/TileDetailModal';
@@ -64,11 +65,16 @@ interface ParticipantRow {
   // recent event, shown next to "You're in as X" so a player can tell
   // at a glance whether their tracking is actually alive.
   last_webhook_at: string | null;
-  // BACKLOG.md #22 -- flattened out of the raw `profiles(icon_url)` embed
-  // right after fetch (see load() below), so every consumer here and in
-  // the two modals this feeds just reads `icon_url` directly instead of
-  // threading the embed's own nested shape everywhere.
+  // BACKLOG.md #22 -- flattened out of the raw `profiles(icon_url, color)`
+  // embed right after fetch (see load() below), so every consumer here
+  // and in the two modals this feeds just reads `icon_url`/`color`
+  // directly instead of threading the embed's own nested shape
+  // everywhere.
   icon_url: string | null;
+  // null means unset -- colorFor() below applies the deterministic
+  // per-participant fallback in that case, callers should never fall
+  // back to a plain default themselves.
+  color: string | null;
 }
 
 interface CompletionRow {
@@ -145,7 +151,7 @@ export default function BoardPage() {
       supabase
         .from('challenge_participants')
         .select(
-          'id, profile_id, rsn, chosen_lowest_skill, adventure_path, team_id, adventure_baseline_at, adventure_baseline_snapshot, last_webhook_at, profiles(icon_url)',
+          'id, profile_id, rsn, chosen_lowest_skill, adventure_path, team_id, adventure_baseline_at, adventure_baseline_snapshot, last_webhook_at, profiles(icon_url, color)',
         )
         .eq('challenge_id', challengeData.id),
       supabase
@@ -156,8 +162,10 @@ export default function BoardPage() {
     ]);
     setTiles((tilesData as Tile[]) ?? []);
     const rawParticipants =
-      (participantsData as unknown as (Omit<ParticipantRow, 'icon_url'> & { profiles: { icon_url: string | null } | null })[]) ?? [];
-    setParticipants(rawParticipants.map((p) => ({ ...p, icon_url: p.profiles?.icon_url ?? null })));
+      (participantsData as unknown as (Omit<ParticipantRow, 'icon_url' | 'color'> & {
+        profiles: { icon_url: string | null; color: string | null } | null;
+      })[]) ?? [];
+    setParticipants(rawParticipants.map((p) => ({ ...p, icon_url: p.profiles?.icon_url ?? null, color: p.profiles?.color ?? null })));
     setCompletions((completionsData as CompletionRow[]) ?? []);
     setTeams((teamsData as Team[]) ?? []);
   }, [slug]);
@@ -448,14 +456,13 @@ export default function BoardPage() {
     }
   }
 
-  // Deterministic per-participant color for position chips -- same
-  // participant always gets the same color across renders/reloads
-  // without needing to store one, just a stable hash of their id.
-  const CHIP_COLORS = ['#f59e0b', '#38bdf8', '#a78bfa', '#f472b6', '#34d399', '#fb923c'];
-  function chipColorFor(participantId: string): string {
-    let hash = 0;
-    for (let i = 0; i < participantId.length; i++) hash = (hash * 31 + participantId.charCodeAt(i)) >>> 0;
-    return CHIP_COLORS[hash % CHIP_COLORS.length];
+  // A player's own chosen color if they've set one (BACKLOG.md #22
+  // follow-up), else the same deterministic per-participant hash this
+  // used before that existed -- either way, every participant always has
+  // *some* color, used for both their position chip and their
+  // leaderboard text.
+  function colorFor(p: ParticipantRow): string {
+    return p.color ?? colorForParticipant(p.id);
   }
 
   // Any tile status of the signed-in participant's own (not the viewed
@@ -696,15 +703,15 @@ export default function BoardPage() {
                                       src={p.icon_url}
                                       alt=""
                                       title={`${p.rsn} is here`}
-                                      className="h-3.5 w-3.5 shrink-0 rounded-full object-contain"
-                                      style={{ backgroundColor: chipColorFor(p.id) }}
+                                      className="h-3.5 w-3.5 shrink-0 rounded object-contain"
+                                      style={{ backgroundColor: colorFor(p) }}
                                     />
                                   ) : (
                                     <span
                                       key={p.id}
                                       title={`${p.rsn} is here`}
-                                      className="flex h-3.5 w-3.5 items-center justify-center rounded-full text-[7px] font-bold text-stone-950"
-                                      style={{ backgroundColor: chipColorFor(p.id) }}
+                                      className="flex h-3.5 w-3.5 items-center justify-center rounded text-[7px] font-bold text-stone-950"
+                                      style={{ backgroundColor: colorFor(p) }}
                                     >
                                       {p.rsn.slice(0, 1).toUpperCase()}
                                     </span>
@@ -856,9 +863,9 @@ export default function BoardPage() {
                   {leaderboard[0].points} pts · {leaderboard[0].tilesCompleted}/{tilesInPlay} tiles
                 </p>
               )}
-              <ul className="space-y-1 text-stone-300">
+              <ul className="space-y-1">
                 {participants.map((p) => (
-                  <li key={p.id} className="flex items-center gap-1.5">
+                  <li key={p.id} className="flex items-center gap-1.5" style={{ color: colorFor(p) }}>
                     {p.icon_url && <img src={p.icon_url} alt="" className="h-4 w-4 shrink-0 object-contain" />}
                     {p.rsn}
                   </li>
@@ -881,7 +888,8 @@ export default function BoardPage() {
                     <button
                       type="button"
                       onClick={() => setSearchParams({ p: p.id })}
-                      className={`flex items-center gap-1.5 whitespace-nowrap text-left hover:underline ${isViewed ? 'font-semibold text-amber-400' : 'text-stone-300'}`}
+                      className={`flex items-center gap-1.5 whitespace-nowrap text-left hover:underline ${isViewed ? 'font-semibold underline' : ''} ${isTeam ? 'text-stone-300' : ''}`}
+                      style={!isTeam ? { color: colorFor(p) } : undefined}
                     >
                       {!isTeam && p.icon_url && <img src={p.icon_url} alt="" className="h-4 w-4 shrink-0 object-contain" />}
                       <span>{`#${i + 1}${medal ? ` ${medal}` : ''} ${label} — ${entry.points} pts (${entry.tilesCompleted}/${tilesInPlay} tiles)`}</span>

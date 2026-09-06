@@ -19,6 +19,13 @@ export interface Profile {
   // behavior). Always one of profileIcons.ts's PROFILE_ICON_GROUPS
   // options -- never a freeform URL (see schema.sql's CHECK).
   icon_url: string | null;
+  // BACKLOG.md #22 follow-up -- this player's chosen color (their
+  // Adventure "who's here" chip background, their leaderboard text).
+  // null means unset -- BoardPage.tsx falls back to a deterministic
+  // per-participant hash from playerColors.ts's own palette in that
+  // case, not a plain default color. Always one of PLAYER_COLORS (see
+  // schema.sql's CHECK).
+  color: string | null;
 }
 
 export interface Challenge {

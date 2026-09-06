@@ -792,3 +792,17 @@ grant execute on function subscribed_emails() to service_role;
 -- restricting to the one host every one of them already comes from.
 alter table profiles add column if not exists icon_url text
   check (icon_url is null or icon_url like 'https://oldschool.runescape.wiki/images/%');
+
+-- BACKLOG.md #22 follow-up, 2026-09-06 -- a player-chosen color, used for
+-- their "who's here" chip's background (Adventure board) and their
+-- leaderboard text, so players are easier to tell apart at a glance. A
+-- small closed palette, not a freeform color picker -- unlike icon_url's
+-- domain-prefix CHECK (that catalog is too large/changeable to enumerate
+-- in SQL), this list is short and stable enough to enumerate exactly, so
+-- the CHECK matches src/lib/playerColors.ts's PLAYER_COLORS constant
+-- precisely. null means unset -- BoardPage.tsx falls back to a
+-- deterministic per-participant hash from the same palette in that case,
+-- not a plain default, so an unset player still reads as a real color,
+-- not "no color."
+alter table profiles add column if not exists color text
+  check (color is null or color in ('#f59e0b', '#38bdf8', '#a78bfa', '#f472b6', '#34d399', '#fb923c'));
