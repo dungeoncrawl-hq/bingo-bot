@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   checkTile,
   conditionNeedsBaseline,
+  describeTileCondition,
   formatTileProgress,
   gridLines,
   progressPercent,
@@ -422,6 +423,23 @@ describe('tileTaskPhrase', () => {
       threshold: 2,
     };
     expect(tileTaskPhrase(allPartial)).toBe('2 of these 3 Barrows uniques items');
+  });
+
+  it('names a single targeted item directly in mode "all" instead of "every one of these 1 X items"', () => {
+    const single: TileCondition = { type: 'itemCount', itemNames: ["Verac's flail"], setName: 'Barrows uniques', mode: 'all', threshold: 1 };
+    expect(tileTaskPhrase(single)).toBe("Verac's flail");
+  });
+});
+
+describe('describeTileCondition', () => {
+  it('describes itemCount mode "all" the same way tileTaskPhrase does', () => {
+    const allFull: TileCondition = { type: 'itemCount', itemNames: ['a', 'b'], setName: 'Barrows uniques', mode: 'all', threshold: 2 };
+    expect(describeTileCondition(allFull)).toBe('every one of these 2 Barrows uniques items');
+  });
+
+  it('names a single targeted item directly in mode "all" instead of "every one of these 1 X items"', () => {
+    const single: TileCondition = { type: 'itemCount', itemNames: ["Verac's flail"], setName: 'Barrows uniques', mode: 'all', threshold: 1 };
+    expect(describeTileCondition(single)).toBe("Verac's flail");
   });
 });
 

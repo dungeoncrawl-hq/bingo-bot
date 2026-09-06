@@ -820,3 +820,24 @@ instead of renumbering the existing list.
     the constraint directly rather than trusting the report). Verified
     live: cyan and white both save now, and the removed `#fb923c`
     (orange) is correctly rejected.
+
+24. **Fixed broken grammar in the itemCount ("Obtain specific uniques")
+    mode "all" description when only one item is targeted.** **Shipped
+    2026-09-06.** `describeTileCondition`/`tileTaskPhrase`
+    (`tileConditions.ts`) both built this text as `"every one of these
+    N {setName} items"`, which reads fine for N > 1 but produces
+    nonsense at N = 1 ("every one of these 1 Barrows uniques items")
+    -- reported from the tile detail modal's own description line,
+    also shown as the board tile's hover tooltip and in Discord
+    completion posts ("completed the ... task").
+
+    With only one targeted item there's no "every one of" or "N of M"
+    distinction left to make -- fixed by naming the item directly
+    (`cond.itemNames[0]`, e.g. `"Verac's flail"`) whenever
+    `itemNames.length === 1`, which reads naturally in every context
+    this string gets dropped into (a standalone tooltip/description
+    line, or "completed the {phrase} task"). Multi-item phrasing is
+    unchanged. Added test coverage for both functions -- the modal/
+    tooltip line had none before this (`describeTileCondition` wasn't
+    tested at all). Live-verified via the board tile's hover tooltip on
+    a throwaway single-item tile.

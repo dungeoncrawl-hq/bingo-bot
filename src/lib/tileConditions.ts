@@ -344,11 +344,17 @@ export function describeTileCondition(cond: TileCondition): string {
     case 'skillXpGained':
       return `${cond.threshold.toLocaleString()} ${cond.skill} XP`;
     case 'itemCount':
-      return cond.mode === 'all'
-        ? cond.threshold >= cond.itemNames.length
-          ? `every one of these ${cond.itemNames.length} ${cond.setName} items`
-          : `${cond.threshold} of these ${cond.itemNames.length} ${cond.setName} items`
-        : `${cond.threshold.toLocaleString()} ${cond.setName}`;
+      if (cond.mode !== 'all') return `${cond.threshold.toLocaleString()} ${cond.setName}`;
+      // A single targeted item has nothing left to enumerate -- "every
+      // one of these 1 X items" doesn't parse as English, and there's no
+      // "N of M" distinction possible with only one candidate either.
+      // Naming the item directly reads naturally in every context this
+      // gets dropped into ("completed the {phrase} task", a standalone
+      // tooltip/description line).
+      if (cond.itemNames.length === 1) return cond.itemNames[0];
+      return cond.threshold >= cond.itemNames.length
+        ? `every one of these ${cond.itemNames.length} ${cond.setName} items`
+        : `${cond.threshold} of these ${cond.itemNames.length} ${cond.setName} items`;
     case 'bigDropsCount':
       return `${cond.threshold.toLocaleString()} drops worth ${cond.dropValueThreshold.toLocaleString()}+ GP each`;
     case 'maxDeaths':
@@ -414,11 +420,14 @@ export function tileTaskPhrase(cond: TileCondition): string {
     case 'skillXpGained':
       return `${cond.threshold.toLocaleString()} ${cond.skill} XP`;
     case 'itemCount':
-      return cond.mode === 'all'
-        ? cond.threshold >= cond.itemNames.length
-          ? `every one of these ${cond.itemNames.length} ${cond.setName} items`
-          : `${cond.threshold} of these ${cond.itemNames.length} ${cond.setName} items`
-        : `${cond.threshold.toLocaleString()} ${cond.setName}`;
+      if (cond.mode !== 'all') return `${cond.threshold.toLocaleString()} ${cond.setName}`;
+      // See describeTileCondition's identical case above for why a
+      // single item is named directly rather than "every one of these 1
+      // X items".
+      if (cond.itemNames.length === 1) return cond.itemNames[0];
+      return cond.threshold >= cond.itemNames.length
+        ? `every one of these ${cond.itemNames.length} ${cond.setName} items`
+        : `${cond.threshold} of these ${cond.itemNames.length} ${cond.setName} items`;
     case 'maxDeaths':
       return `${cond.threshold.toLocaleString()} deaths or fewer`;
     case 'petsObtained':
