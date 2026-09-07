@@ -46,7 +46,7 @@ export default function AdminGrowthPage() {
   return (
     <AdminLayout>
       <h1 className="text-2xl font-semibold">Growth</h1>
-      <p className="mt-1 text-sm text-stone-500">Days with no challenges created and no one joining are skipped.</p>
+      <p className="mt-1 text-sm text-stone-500">Days with no dungeons created and no one joining are skipped.</p>
       {loadError && <p className="mt-4 text-sm text-red-400">Couldn't load growth stats. Try refreshing the page.</p>}
       {!loadError && !rows && <p className="mt-4 text-stone-500">Loading…</p>}
       {rows && rows.length === 0 && <p className="mt-4 text-stone-500">No activity yet.</p>}
@@ -55,7 +55,7 @@ export default function AdminGrowthPage() {
           <thead>
             <tr className="border-b border-stone-800 text-xs uppercase text-stone-500">
               <th className="py-2 pr-4">Date</th>
-              <th className="py-2 pr-4">Challenges created</th>
+              <th className="py-2 pr-4">Dungeons created</th>
               <th className="py-2 pr-4">Participants joined</th>
             </tr>
           </thead>

@@ -387,14 +387,14 @@ export default function BoardPage() {
 
   async function handleLeave() {
     if (!myParticipant) return;
-    if (!window.confirm('Leave this challenge? Your progress history on this board will be deleted.')) return;
+    if (!window.confirm('Leave this dungeon? Your progress history on this board will be deleted.')) return;
     await getSupabase().from('challenge_participants').delete().eq('id', myParticipant.id);
     await load();
   }
 
   if (challenge === null) return null;
   if (challenge === 'not-found') {
-    return <p className="mx-auto max-w-lg py-24 text-center text-stone-400">Challenge not found.</p>;
+    return <p className="mx-auto max-w-lg py-24 text-center text-stone-400">Dungeon not found.</p>;
   }
 
   const tileAt = (row: number, col: number) =>
@@ -910,7 +910,7 @@ export default function BoardPage() {
                 <Link to="/login" className="underline">
                   Sign in
                 </Link>{' '}
-                to join this challenge.{' '}
+                to join this dungeon.{' '}
                 <Link to={`/c/${challenge.slug}/setup`} className="underline">
                   See what's involved
                 </Link>
@@ -1044,7 +1044,7 @@ export default function BoardPage() {
                 onClick={handleLeave}
                 className="w-full rounded-lg border border-red-900 px-4 py-2 text-sm text-red-400 hover:bg-red-950/40"
               >
-                Leave Challenge
+                Leave Dungeon
               </button>
             )}
             {isHost && (
@@ -1052,7 +1052,7 @@ export default function BoardPage() {
                 to={`/c/${challenge.slug}/edit`}
                 className="block w-full rounded-lg border border-stone-700 px-4 py-2 text-center text-sm text-stone-300 hover:border-amber-500"
               >
-                Edit Challenge
+                Edit Dungeon
               </Link>
             )}
           </div>

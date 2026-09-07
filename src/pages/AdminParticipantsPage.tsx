@@ -19,7 +19,7 @@ type SortKey = 'rsn' | 'challenge' | 'joined_at' | 'screenshot_count' | 'webhook
 
 const COLUMNS: { key: SortKey; label: string }[] = [
   { key: 'rsn', label: 'RSN' },
-  { key: 'challenge', label: 'Challenge' },
+  { key: 'challenge', label: 'Dungeon' },
   { key: 'joined_at', label: 'Joined' },
   { key: 'screenshot_count', label: 'Screenshots' },
   { key: 'webhook_call_count', label: 'Webhook calls' },
@@ -93,7 +93,7 @@ export default function AdminParticipantsPage() {
       <h1 className="text-2xl font-semibold">Participants</h1>
       {loadError && <p className="mt-4 text-sm text-red-400">Couldn't load participants. Try refreshing the page.</p>}
       {!loadError && !rows && <p className="mt-4 text-stone-500">Loading…</p>}
-      {rows && rows.length === 0 && <p className="mt-4 text-stone-500">No one's joined any challenge yet.</p>}
+      {rows && rows.length === 0 && <p className="mt-4 text-stone-500">No one's joined any dungeon yet.</p>}
       {rows && rows.length > 0 && (
         <div className="mt-6 overflow-x-auto">
           <table className="w-full min-w-[720px] text-left text-sm">

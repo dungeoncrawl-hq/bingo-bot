@@ -201,7 +201,7 @@ export default function NewChallengePage() {
           disabled={submitting}
           className="rounded-lg bg-amber-500 hover:bg-amber-400 transition-colors px-4 py-2 text-sm font-semibold text-stone-950 disabled:opacity-40"
         >
-          {submitting ? 'Creating…' : 'Create challenge'}
+          {submitting ? 'Creating…' : 'Create dungeon'}
         </button>
       </form>
     </div>

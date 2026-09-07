@@ -57,7 +57,7 @@ export default function SetupGuidePage() {
 
   if (challenge === null) return null;
   if (challenge === 'not-found') {
-    return <p className="mx-auto max-w-lg py-24 text-center text-stone-400">Challenge not found.</p>;
+    return <p className="mx-auto max-w-lg py-24 text-center text-stone-400">Dungeon not found.</p>;
   }
 
   const accountWebhookUrl = accountSecret ? `${window.location.origin}/api/dink/${accountSecret}` : null;
@@ -80,7 +80,7 @@ export default function SetupGuidePage() {
         {accountWebhookUrl ? (
           <>
             <p className="mt-1 text-xs text-stone-400">
-              One URL, set up once -- it works for every challenge you join, current and future, so you never paste
+              One URL, set up once -- it works for every dungeon you join, current and future, so you never paste
               in a new one again.
             </p>
             <div className="mt-2 flex gap-2">
@@ -118,7 +118,7 @@ export default function SetupGuidePage() {
                 <Link to="/login" className="text-amber-400 underline hover:text-amber-300">
                   Sign in
                 </Link>{' '}
-                to grab your personal webhook URL -- it works for every challenge you join, current and future.
+                to grab your personal webhook URL -- it works for every dungeon you join, current and future.
               </>
             )}
           </p>

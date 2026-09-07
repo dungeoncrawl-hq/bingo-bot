@@ -234,7 +234,7 @@ export default function AccountPage() {
 
       <div className="mt-8 max-w-md">
         <h2 className="text-sm font-semibold text-stone-300">Default RSN</h2>
-        <p className="mt-1 text-xs text-stone-500">Pre-fills the join form so you don't have to retype it for every new challenge.</p>
+        <p className="mt-1 text-xs text-stone-500">Pre-fills the join form so you don't have to retype it for every new dungeon.</p>
         <form onSubmit={handleSaveDefaultRsn} className="mt-2 flex gap-2">
           <input
             value={defaultRsn}
@@ -273,9 +273,9 @@ export default function AccountPage() {
         <div className="mt-8 max-w-md">
           <h2 className="text-sm font-semibold text-stone-300">Your Dink webhook URL</h2>
           <p className="mt-1 text-xs text-stone-500">
-            Paste this into the same Dink fields any challenge's setup guide lists (Slayer, Pets, Kill Count, Death,
+            Paste this into the same Dink fields any dungeon's setup guide lists (Slayer, Pets, Kill Count, Death,
             Collection Log, Loot -- plus Advanced &gt; Custom Metadata Handler for instant logout sync). It works for
-            every challenge you join, now and in the future -- no need to add a new link each time.
+            every dungeon you join, now and in the future -- no need to add a new link each time.
           </p>
           <div className="mt-2 flex gap-2">
             <input

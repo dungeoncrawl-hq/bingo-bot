@@ -24,7 +24,7 @@ function DungeonRow({ c, today }: { c: ChallengeRow; today: string }) {
   const [inviteCopied, setInviteCopied] = useState(false);
   // Same wording as EditChallengePage.tsx's own invite box, so a host sees
   // one consistent message regardless of which page they copied it from.
-  const inviteMessage = `Come join my Dungeon Crawl challenge, "${c.name}"! Jump in here: ${window.location.origin}/c/${c.slug}`;
+  const inviteMessage = `Come join my dungeon on Dungeon Crawl, "${c.name}"! Jump in here: ${window.location.origin}/c/${c.slug}`;
 
   async function handleCopyInvite(e: React.MouseEvent) {
     e.stopPropagation();

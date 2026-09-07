@@ -30,7 +30,7 @@ export const DEFAULT_BANTER_POOLS: BanterPools = {
   firstTile: [
     "Aren't they just showing off at this point?",
     'Absolutely no chill.',
-    "Somebody's speedrunning this challenge.",
+    "Somebody's speedrunning this dungeon.",
     'The rest of the lobby should be nervous.',
     'Zero hesitation on that one.',
     "Didn't even let anyone else try.",

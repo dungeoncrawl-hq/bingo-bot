@@ -862,3 +862,48 @@ instead of renumbering the existing list.
     `describeTileCondition`'s normal text, as does every non-itemCount
     condition. Live-verified both the single- and multi-item case in
     the tile detail modal.
+
+25. **"Challenge" → "Dungeon" user-facing terminology sweep.** **Shipped
+    2026-09-06/07.** Started as one button + one page title
+    (`DashboardPage.tsx`'s "New Dungeon" button, `NewChallengePage.tsx`'s
+    heading), then widened into a full audit of every literal
+    "challenge"/"Challenge" string actually shown to a user, since the
+    site's own branding ("My Dungeons," etc.) had never been carried
+    through consistently.
+
+    **Audited and fixed** (12 files): `HomePage.tsx` (CTA + subhead),
+    `NewChallengePage.tsx` (heading + submit button), `AboutPage.tsx`,
+    `AccountPage.tsx` (Default RSN caption, Dink webhook caption),
+    `BoardPage.tsx` (leave-dungeon confirm dialog, not-found state,
+    sign-in prompt, Leave/Edit Dungeon buttons), `EditChallengePage.tsx`
+    (publish/delete confirm dialogs, not-found and not-your-dungeon
+    states, the invite-message template), `DashboardPage.tsx` (the same
+    invite-message template, kept word-for-word in sync with
+    `EditChallengePage.tsx`'s per an existing comment),
+    `SetupGuidePage.tsx` (not-found state, two webhook captions),
+    `TileEditorForm.tsx` (locked-tile notice), `discordBanter.ts` (one
+    default flavor line), `AdminGrowthPage.tsx`/`AdminParticipantsPage.tsx`
+    (table headers/captions -- `key: 'challenge'`'s own internal sort
+    identifier left untouched, only its `label` changed).
+
+    **The invite-message rewrite needed real thought, not a literal
+    swap**: "Come join my Dungeon Crawl challenge" naively becomes "Come
+    join my Dungeon Crawl dungeon" -- the word stacks awkwardly right
+    next to the site's own name. Reworded to "Come join my dungeon on
+    Dungeon Crawl, ..." instead, in both files at once.
+
+    **Deliberately not touched**: `'Chambers of Xeric: Challenge Mode'`
+    (`bossActivities.ts`/`petIcons.ts`/`randomizeSettings.ts`) -- the
+    verbatim official OSRS Hiscores/game activity name, not this app's
+    own branding; changing it would silently break matching against
+    Jagex's own API and Dink's webhook payloads. Every `Challenge`/
+    `challenge` type name, variable, prop, Supabase table/column
+    (`challenges`, `challenge_participants`, `challenge_id`), file name,
+    and code comment stays as-is -- internal identifiers, never shown to
+    a user, and renaming them site-wide would be a large, purely
+    cosmetic-to-nobody diff for zero user-facing benefit.
+
+    Live-verified: About page copy, Account page captions, a
+    nonexistent-slug "Dungeon not found." state, the Leave/Edit Dungeon
+    buttons, and the reworded invite-message text (read directly out of
+    the DOM) on a throwaway challenge.

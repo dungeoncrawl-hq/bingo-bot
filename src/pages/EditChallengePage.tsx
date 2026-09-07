@@ -167,7 +167,7 @@ export default function EditChallengePage() {
     if (
       nextStatus === 'active' &&
       !window.confirm(
-        "Publish this challenge? It'll become visible and joinable. Once its start date arrives, tile " +
+        "Publish this dungeon? It'll become visible and joinable. Once its start date arrives, tile " +
           "conditions can no longer be changed -- only points, the first-completer bonus, and adding new tiles " +
           'stay editable after that.',
       )
@@ -186,7 +186,7 @@ export default function EditChallengePage() {
     if (!challenge || challenge === 'not-found') return;
     if (
       !window.confirm(
-        `Delete "${challenge.name}"? This can't be undone -- the challenge, its tiles, and any join history will be permanently gone.`,
+        `Delete "${challenge.name}"? This can't be undone -- the dungeon, its tiles, and any join history will be permanently gone.`,
       )
     ) {
       return;
@@ -236,14 +236,17 @@ export default function EditChallengePage() {
   if (authLoading || challenge === null) return null;
   if (!session) return <Navigate to="/login" replace />;
   if (challenge === 'not-found') {
-    return <p className="mx-auto max-w-lg py-24 text-center text-stone-400">Challenge not found.</p>;
+    return <p className="mx-auto max-w-lg py-24 text-center text-stone-400">Dungeon not found.</p>;
   }
   if (challenge.host_id !== session.user.id) {
-    return <p className="mx-auto max-w-lg py-24 text-center text-stone-400">This isn't your challenge to edit.</p>;
+    return <p className="mx-auto max-w-lg py-24 text-center text-stone-400">This isn't your dungeon to edit.</p>;
   }
 
   const editingTile = editingCell ? tileAt(editingCell) : null;
-  const inviteMessage = `Come join my Dungeon Crawl challenge, "${challenge.name}"! Jump in here: ${window.location.origin}/c/${challenge.slug}`;
+  // "...on Dungeon Crawl" rather than "my Dungeon Crawl dungeon" -- avoids
+  // stacking the site's own name right next to the word "dungeon" twice
+  // in a row.
+  const inviteMessage = `Come join my dungeon on Dungeon Crawl, "${challenge.name}"! Jump in here: ${window.location.origin}/c/${challenge.slug}`;
   // "Started" = published and its start_date has arrived -- matches
   // displayStatus's 'active'/'past', not just "not a draft," so a
   // published-but-not-yet-started challenge stays fully editable (nothing

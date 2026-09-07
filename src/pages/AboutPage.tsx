@@ -12,7 +12,7 @@ export default function AboutPage() {
 
       <div className="mt-6 space-y-4 text-sm text-stone-400">
         <p>
-          Dungeon Crawl is a small, no-frills way to run OSRS bingo and challenge boards with your friends -- host a
+          Dungeon Crawl is a small, no-frills way to run OSRS bingo and dungeon boards with your friends -- host a
           board, invite your group, and watch it fill in on its own.
         </p>
         <p>

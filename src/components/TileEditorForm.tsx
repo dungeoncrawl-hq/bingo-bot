@@ -342,7 +342,7 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
           </div>
           {fieldsLocked && (
             <p className="mt-4 rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-xs text-stone-400">
-              This challenge has started, so this tile's condition can't be changed anymore -- it might invalidate
+              This dungeon has started, so this tile's condition can't be changed anymore -- it might invalidate
               progress players already made toward it. Points and the first-completer bonus can still be adjusted.
             </p>
           )}
