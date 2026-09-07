@@ -130,7 +130,7 @@ export default function DashboardPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">My Dungeons</h1>
         <Link to="/new" className="rounded-lg bg-amber-500 hover:bg-amber-400 transition-colors px-4 py-2 text-sm font-semibold text-stone-950">
-          New challenge
+          New Dungeon
         </Link>
       </div>
       <p className="mt-2 text-xs text-stone-500">

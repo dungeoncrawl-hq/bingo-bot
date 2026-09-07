@@ -83,7 +83,7 @@ export default function NewChallengePage() {
 
   return (
     <div className="mx-auto max-w-lg py-12">
-      <h1 className="text-2xl font-semibold">New challenge</h1>
+      <h1 className="text-2xl font-semibold">New Dungeon</h1>
       <form onSubmit={handleSubmit} className="mt-6 space-y-4">
         <div>
           <label className="block text-sm text-stone-400">Name</label>
