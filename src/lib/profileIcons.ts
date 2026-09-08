@@ -1,8 +1,10 @@
 // Every icon a player can pick as their own profile icon (ProfileIconPicker.tsx,
-// used from AccountPage.tsx) -- entirely made of icon sets this app already
-// has elsewhere for tile authoring, grouped the same way those already are
+// used from AccountPage.tsx) -- mostly icon sets this app already has
+// elsewhere for tile authoring, grouped the same way those already are
 // (skills, bosses, item catalog sets, pets) rather than curating a
-// separate image library just for this.
+// separate image library just for this. Food (foodIcons.js) is the
+// exception -- purely cosmetic, so it's its own small catalog rather than
+// reusing itemSets.ts's tile-authoring/notable-loot list.
 import {
   skillIconUrl,
   SKILL_ORDER,
@@ -23,6 +25,7 @@ import {
 import { BOSS_ACTIVITIES } from './bossActivities.js';
 import { PRESET_ITEM_SETS, itemIcon } from './itemSets.js';
 import { ALL_PETS, type PetCategory } from './petIcons.js';
+import { ALL_FOOD } from './foodIcons.js';
 
 export interface IconOption {
   name: string;
@@ -91,6 +94,10 @@ export const PROFILE_ICON_GROUPS: IconGroup[] = [
   {
     group: 'Pets',
     subgroups: petSubgroups(),
+  },
+  {
+    group: 'Food',
+    subgroups: [{ name: 'Food', options: ALL_FOOD.map((f) => ({ name: f.name, icon: f.icon })) }],
   },
   {
     group: 'Other',
