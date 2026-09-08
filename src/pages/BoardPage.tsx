@@ -93,6 +93,9 @@ export default function BoardPage() {
   const [tiles, setTiles] = useState<Tile[]>([]);
   const [participants, setParticipants] = useState<ParticipantRow[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
+  // BACKLOG.md #26 -- profile ids of this challenge's co-hosts (never
+  // includes challenge.host_id itself, which is tracked separately).
+  const [coHostProfileIds, setCoHostProfileIds] = useState<Set<string>>(new Set());
   const [completions, setCompletions] = useState<CompletionRow[]>([]);
   const [rsn, setRsn] = useState('');
   const [joining, setJoining] = useState(false);
@@ -147,20 +150,22 @@ export default function BoardPage() {
       return;
     }
     setChallenge(challengeData as Challenge);
-    const [{ data: tilesData }, { data: participantsData }, { data: completionsData }, { data: teamsData }] = await Promise.all([
-      supabase.from('tiles').select('*').eq('challenge_id', challengeData.id),
-      supabase
-        .from('challenge_participants')
-        .select(
-          'id, profile_id, rsn, chosen_lowest_skill, adventure_path, team_id, adventure_baseline_at, adventure_baseline_snapshot, last_webhook_at, profiles(icon_url, color)',
-        )
-        .eq('challenge_id', challengeData.id),
-      supabase
-        .from('tile_completions')
-        .select('participant_id, kind, ref, completed_at')
-        .eq('challenge_id', challengeData.id),
-      supabase.from('teams').select('*').eq('challenge_id', challengeData.id),
-    ]);
+    const [{ data: tilesData }, { data: participantsData }, { data: completionsData }, { data: teamsData }, { data: hostsData }] =
+      await Promise.all([
+        supabase.from('tiles').select('*').eq('challenge_id', challengeData.id),
+        supabase
+          .from('challenge_participants')
+          .select(
+            'id, profile_id, rsn, chosen_lowest_skill, adventure_path, team_id, adventure_baseline_at, adventure_baseline_snapshot, last_webhook_at, profiles(icon_url, color)',
+          )
+          .eq('challenge_id', challengeData.id),
+        supabase
+          .from('tile_completions')
+          .select('participant_id, kind, ref, completed_at')
+          .eq('challenge_id', challengeData.id),
+        supabase.from('teams').select('*').eq('challenge_id', challengeData.id),
+        supabase.from('challenge_hosts').select('profile_id').eq('challenge_id', challengeData.id),
+      ]);
     setTiles((tilesData as Tile[]) ?? []);
     const rawParticipants =
       (participantsData as unknown as (Omit<ParticipantRow, 'icon_url' | 'color'> & {
@@ -169,6 +174,7 @@ export default function BoardPage() {
     setParticipants(rawParticipants.map((p) => ({ ...p, icon_url: p.profiles?.icon_url ?? null, color: p.profiles?.color ?? null })));
     setCompletions((completionsData as CompletionRow[]) ?? []);
     setTeams((teamsData as Team[]) ?? []);
+    setCoHostProfileIds(new Set(((hostsData as { profile_id: string }[]) ?? []).map((h) => h.profile_id)));
   }, [slug]);
 
   useEffect(() => {
@@ -401,7 +407,11 @@ export default function BoardPage() {
     tiles.find((t) => 'row' in t.layout && t.layout.row === row && t.layout.col === col) ?? null;
   const adventureTileAt = (column: number, lane: 'top' | 'bottom' | 'center') =>
     tiles.find((t) => 'lane' in t.layout && t.layout.column === column && t.layout.lane === lane) ?? null;
-  const isHost = session?.user.id === challenge.host_id;
+  // BACKLOG.md #26 -- true for the primary host or any co-host, gates the
+  // "Edit Dungeon" link below. RLS enforces the real permission split
+  // (a co-host can't delete the dungeon) -- this boolean only decides
+  // whether the link is worth showing at all.
+  const isHost = session?.user.id === challenge.host_id || (session != null && coHostProfileIds.has(session.user.id));
   const viewedParticipant = participants.find((p) => p.id === viewedParticipantId);
   const viewedTileStatuses = (viewedParticipantId && tileStatusesByParticipant[viewedParticipantId]) || {};
   const viewedCompletedTileIds = new Set(
@@ -410,6 +420,19 @@ export default function BoardPage() {
 
   function hasCompletedBoard(participantId: string): boolean {
     return completions.some((c) => c.kind === 'board' && c.participant_id === participantId);
+  }
+
+  // The small 👑 next to a host's/co-host's name on the leaderboard --
+  // null for anyone else, so callers can just `{hostBadge(p) && ...}`.
+  // Captures challenge.host_id into a plain local rather than reading
+  // `challenge.host_id` directly inside this nested function -- a
+  // function declaration (unlike the surrounding component body) doesn't
+  // retain the early-return narrowing of `challenge` above.
+  const primaryHostId = challenge.host_id;
+  function hostBadge(p: ParticipantRow): 'Host' | 'Co-host' | null {
+    if (p.profile_id === primaryHostId) return 'Host';
+    if (coHostProfileIds.has(p.profile_id)) return 'Co-host';
+    return null;
   }
 
   // Real (already-recorded) completions only -- never the checkTile-
@@ -868,6 +891,7 @@ export default function BoardPage() {
                   <li key={p.id} className="flex items-center gap-1.5" style={{ color: colorFor(p) }}>
                     {p.icon_url && <PlayerIcon iconUrl={p.icon_url} color={colorFor(p)} />}
                     {p.rsn}
+                    {hostBadge(p) && <span title={hostBadge(p)!}>👑</span>}
                   </li>
                 ))}
                 {participants.length === 0 && <li className="text-stone-500">No one's joined yet.</li>}
@@ -894,6 +918,7 @@ export default function BoardPage() {
                       {!isTeam && p.icon_url && <PlayerIcon iconUrl={p.icon_url} color={colorFor(p)} />}
                       <span>{`#${i + 1}${medal ? ` ${medal}` : ''} ${label} — ${entry.points} pts (${entry.tilesCompleted}/${tilesInPlay} tiles)`}</span>
                     </button>
+                    {!isTeam && hostBadge(p) && <span title={hostBadge(p)!}>👑</span>}
                     {isYou && <span className="shrink-0 text-xs text-stone-500">(you)</span>}
                     {hasCompletedBoard(p.id) && <span className="shrink-0 text-yellow-400">🏆 Complete!</span>}
                   </li>

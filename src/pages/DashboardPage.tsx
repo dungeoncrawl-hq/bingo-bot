@@ -6,7 +6,12 @@ import type { Challenge } from '../db/types';
 import { displayStatus, formatDateRange, countdownText, type DisplayStatus } from '../lib/dungeonStatus';
 
 type ChallengeRow = Pick<Challenge, 'id' | 'name' | 'slug' | 'status' | 'start_date' | 'end_date' | 'created_at'> & {
+  // True for the primary host AND a co-host (BACKLOG.md #26) -- gates
+  // the Edit link/past-dungeon visibility exactly as it always has,
+  // since a co-host gets the same access there. `isPrimaryHost` is only
+  // for the HOST-vs-CO-HOST-vs-PARTICIPANT badge text below.
   isHost: boolean;
+  isPrimaryHost: boolean;
 };
 
 const STATUS_STYLE: Record<DisplayStatus, { label: string; className: string }> = {
@@ -46,7 +51,7 @@ function DungeonRow({ c, today }: { c: ChallengeRow; today: string }) {
       <div className="flex items-center justify-between gap-2">
         <span className="font-medium">{c.name}</span>
         <div className="flex shrink-0 items-center gap-2">
-          <span className="text-xs uppercase text-stone-500">{c.isHost ? 'Host' : 'Participant'}</span>
+          <span className="text-xs uppercase text-stone-500">{c.isPrimaryHost ? 'Host' : c.isHost ? 'Co-host' : 'Participant'}</span>
           <span className={`rounded-full border px-2 py-0.5 text-xs ${style.className}`}>{style.label}</span>
         </div>
       </div>
@@ -91,23 +96,32 @@ export default function DashboardPage() {
     if (!session) return;
     const supabase = getSupabase();
     const fields = 'id, name, slug, status, start_date, end_date, created_at';
+    type BareRow = Omit<ChallengeRow, 'isHost' | 'isPrimaryHost'>;
     Promise.all([
       supabase.from('challenges').select(fields).eq('host_id', session.user.id),
+      // BACKLOG.md #26 -- co-hosted dungeons get the same Edit access as
+      // hosted ones, just a different badge below.
+      supabase.from('challenge_hosts').select(`challenges(${fields})`).eq('profile_id', session.user.id),
       supabase.from('challenge_participants').select(`challenges(${fields})`).eq('profile_id', session.user.id),
     ])
-      .then(([hosted, joined]) => {
+      .then(([hosted, coHosted, joined]) => {
         const byId = new Map<string, ChallengeRow>();
-        for (const c of (hosted.data as Omit<ChallengeRow, 'isHost'>[]) ?? []) {
-          byId.set(c.id, { ...c, isHost: true });
+        for (const c of (hosted.data as BareRow[]) ?? []) {
+          byId.set(c.id, { ...c, isHost: true, isPrimaryHost: true });
         }
         // Each row's `challenges` comes back as a single object, not an
-        // array -- challenge_participants.challenge_id -> challenges is
-        // many-to-one from this side, so PostgREST embeds the parent as
-        // one object.
-        const joinedRows = (joined.data as { challenges: Omit<ChallengeRow, 'isHost'> | null }[] | null) ?? [];
+        // array -- challenge_hosts.challenge_id/challenge_participants.
+        // challenge_id -> challenges is many-to-one from this side, so
+        // PostgREST embeds the parent as one object.
+        const coHostedRows = (coHosted.data as { challenges: BareRow | null }[] | null) ?? [];
+        for (const row of coHostedRows) {
+          const c = row.challenges;
+          if (c && !byId.has(c.id)) byId.set(c.id, { ...c, isHost: true, isPrimaryHost: false });
+        }
+        const joinedRows = (joined.data as { challenges: BareRow | null }[] | null) ?? [];
         for (const row of joinedRows) {
           const c = row.challenges;
-          if (c && !byId.has(c.id)) byId.set(c.id, { ...c, isHost: false });
+          if (c && !byId.has(c.id)) byId.set(c.id, { ...c, isHost: false, isPrimaryHost: false });
         }
         const merged = [...byId.values()].sort((a, b) => b.created_at.localeCompare(a.created_at));
         setChallenges(merged);

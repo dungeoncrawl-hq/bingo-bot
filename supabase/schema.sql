@@ -817,3 +817,91 @@ alter table profiles add column if not exists color text
 alter table profiles drop constraint if exists profiles_color_check;
 alter table profiles add constraint profiles_color_check
   check (color is null or color in ('#f59e0b', '#38bdf8', '#a78bfa', '#f472b6', '#34d399', '#22d3ee', '#ffffff'));
+
+-- BACKLOG.md #26, 2026-09-07 -- co-hosting. A co-host candidate must
+-- already be a participant (challenge_participants row) -- app code
+-- enforces this, nothing in the schema requires it, keeping this table's
+-- own shape simple. Join table rather than a second co_host_id column on
+-- challenges, matching this schema's existing pattern for a challenge's
+-- other many-relationships (challenge_participants, teams) -- no cap on
+-- co-host count.
+create table if not exists challenge_hosts (
+  challenge_id uuid not null references challenges(id) on delete cascade,
+  profile_id uuid not null references profiles(id) on delete cascade,
+  added_at timestamptz not null default now(),
+  primary key (challenge_id, profile_id)
+);
+
+alter table challenge_hosts enable row level security;
+drop policy if exists "public read" on challenge_hosts;
+create policy "public read" on challenge_hosts for select using (true);
+-- Primary host only -- deliberately NOT also checking challenge_hosts
+-- itself, so a co-host can never add/remove co-hosts (confirmed 2026-09-07:
+-- no promotion chaining, primary host stays the only one who can grant or
+-- revoke co-host status).
+drop policy if exists "primary host writes" on challenge_hosts;
+create policy "primary host writes" on challenge_hosts for all
+  to authenticated using (
+    exists (select 1 from challenges c where c.id = challenge_hosts.challenge_id and c.host_id = auth.uid())
+  ) with check (
+    exists (select 1 from challenges c where c.id = challenge_hosts.challenge_id and c.host_id = auth.uid())
+  );
+
+-- A co-host gets the same full rights as the primary host on tiles/teams/
+-- participants -- OR'd into the existing policies rather than a second
+-- policy, since the permission is identical either way (unlike
+-- challenges itself, below, where it isn't).
+drop policy if exists "host writes own challenge's tiles" on tiles;
+create policy "host writes own challenge's tiles" on tiles for all
+  to authenticated using (
+    exists (select 1 from challenges c where c.id = tiles.challenge_id and c.host_id = auth.uid())
+    or exists (select 1 from challenge_hosts ch where ch.challenge_id = tiles.challenge_id and ch.profile_id = auth.uid())
+  ) with check (
+    exists (select 1 from challenges c where c.id = tiles.challenge_id and c.host_id = auth.uid())
+    or exists (select 1 from challenge_hosts ch where ch.challenge_id = tiles.challenge_id and ch.profile_id = auth.uid())
+  );
+
+drop policy if exists "host writes own challenge's teams" on teams;
+create policy "host writes own challenge's teams" on teams for all
+  to authenticated using (
+    exists (select 1 from challenges c where c.id = teams.challenge_id and c.host_id = auth.uid())
+    or exists (select 1 from challenge_hosts ch where ch.challenge_id = teams.challenge_id and ch.profile_id = auth.uid())
+  ) with check (
+    exists (select 1 from challenges c where c.id = teams.challenge_id and c.host_id = auth.uid())
+    or exists (select 1 from challenge_hosts ch where ch.challenge_id = teams.challenge_id and ch.profile_id = auth.uid())
+  );
+
+drop policy if exists "self or host writes" on challenge_participants;
+create policy "self or host writes" on challenge_participants for all
+  to authenticated using (
+    profile_id = auth.uid()
+    or exists (select 1 from challenges c where c.id = challenge_participants.challenge_id and c.host_id = auth.uid())
+    or exists (select 1 from challenge_hosts ch where ch.challenge_id = challenge_participants.challenge_id and ch.profile_id = auth.uid())
+  ) with check (
+    profile_id = auth.uid()
+    or exists (select 1 from challenges c where c.id = challenge_participants.challenge_id and c.host_id = auth.uid())
+    or exists (select 1 from challenge_hosts ch where ch.challenge_id = challenge_participants.challenge_id and ch.profile_id = auth.uid())
+  );
+
+-- challenges itself is the one genuinely asymmetric case: a co-host may
+-- UPDATE (name/dates/status/discord_webhook_url -- everything BACKLOG.md
+-- #6/#7's "host tooling" framing already means by board management) but
+-- never DELETE -- no delete policy for co-hosts at all, only the primary
+-- host's own "host writes own" (for all, unchanged) covers delete.
+drop policy if exists "co-host updates challenge" on challenges;
+create policy "co-host updates challenge" on challenges for update
+  to authenticated using (
+    exists (select 1 from challenge_hosts ch where ch.challenge_id = challenges.id and ch.profile_id = auth.uid())
+  ) with check (
+    exists (select 1 from challenge_hosts ch where ch.challenge_id = challenges.id and ch.profile_id = auth.uid())
+  );
+
+-- A co-host's UPDATE policy above can't itself stop them reassigning
+-- host_id -- WITH CHECK only sees the new row, not the old one, so
+-- there's no plain-RLS way to say "host_id must be unchanged." Same
+-- anti-tamper pattern already applied to profiles.is_site_admin: revoke
+-- the column outright. Nobody -- co-host or even the primary host
+-- themselves -- can reassign ownership through the client at all.
+-- Transfer-of-ownership was never a requested feature, so permanently
+-- closing this off is simpler than building it.
+revoke update (host_id) on challenges from authenticated;

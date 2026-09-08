@@ -9,16 +9,21 @@ import AdventureConnector from '../components/AdventureConnector';
 import PlayerIcon from '../components/PlayerIcon';
 import { colorForParticipant } from '../lib/playerColors';
 import { formatTileGoal, type TileCondition } from '../lib/tileConditions';
-import { displayStatus } from '../lib/dungeonStatus';
+import { displayStatus, formatLocalRange } from '../lib/dungeonStatus';
 import { formatBytes } from '../lib/format';
 import { ADVENTURE_SMALL_COLUMNS, ADVENTURE_SMALL_FINAL_BOSS_COLUMN, isBossColumn, laneCountForColumn } from '../lib/adventureProgress';
 import { randomizeBoard } from '../lib/randomizeBoard';
 import { DEFAULT_RANDOMIZE_SETTINGS, type Difficulty, type RandomizeSettings } from '../lib/randomizeSettings';
 
 const GRID_SIZE = 5;
+// Same reasoning as NewChallengePage.tsx's own copy -- dates are a fixed
+// UTC calendar date (BACKLOG.md #14), shown converted to the viewer's own
+// zone so a host editing an evening date isn't surprised later.
+const VIEWER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 interface ParticipantRow {
   id: string;
+  profile_id: string;
   rsn: string;
   profiles: { display_name: string; icon_url: string | null; color: string | null } | null;
   screenshot_count: number;
@@ -34,6 +39,9 @@ export default function EditChallengePage() {
   const [tiles, setTiles] = useState<Tile[]>([]);
   const [participants, setParticipants] = useState<ParticipantRow[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
+  // BACKLOG.md #26 -- profile ids of this challenge's co-hosts (never
+  // includes challenge.host_id itself, which is tracked separately).
+  const [coHostProfileIds, setCoHostProfileIds] = useState<Set<string>>(new Set());
   const [newTeamName, setNewTeamName] = useState('');
   const [addingTeam, setAddingTeam] = useState(false);
   const [editingCell, setEditingCell] = useState<TileLayout | null>(null);
@@ -43,6 +51,14 @@ export default function EditChallengePage() {
   const [inviteCopied, setInviteCopied] = useState(false);
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [randomizing, setRandomizing] = useState(false);
+  // Name/dates -- editable pre-publish only (see the "Dungeon details"
+  // section below).
+  const [editName, setEditName] = useState('');
+  const [editStartDate, setEditStartDate] = useState('');
+  const [editEndDate, setEditEndDate] = useState('');
+  const [savingDetails, setSavingDetails] = useState(false);
+  const [detailsSaved, setDetailsSaved] = useState(false);
+  const [detailsError, setDetailsError] = useState('');
 
   const load = useCallback(async () => {
     if (!slug) return;
@@ -53,17 +69,19 @@ export default function EditChallengePage() {
       return;
     }
     setChallenge(challengeData as Challenge);
-    const [{ data: tilesData }, { data: participantsData }, { data: teamsData }] = await Promise.all([
+    const [{ data: tilesData }, { data: participantsData }, { data: teamsData }, { data: hostsData }] = await Promise.all([
       supabase.from('tiles').select('*').eq('challenge_id', challengeData.id),
       supabase
         .from('challenge_participants')
-        .select('id, rsn, profiles(display_name, icon_url, color), screenshot_count, screenshot_bytes, team_id')
+        .select('id, profile_id, rsn, profiles(display_name, icon_url, color), screenshot_count, screenshot_bytes, team_id')
         .eq('challenge_id', challengeData.id),
       supabase.from('teams').select('*').eq('challenge_id', challengeData.id),
+      supabase.from('challenge_hosts').select('profile_id').eq('challenge_id', challengeData.id),
     ]);
     setTiles((tilesData as Tile[]) ?? []);
     setParticipants((participantsData as unknown as ParticipantRow[]) ?? []);
     setTeams((teamsData as Team[]) ?? []);
+    setCoHostProfileIds(new Set(((hostsData as { profile_id: string }[]) ?? []).map((h) => h.profile_id)));
   }, [slug]);
 
   useEffect(() => {
@@ -73,6 +91,9 @@ export default function EditChallengePage() {
   useEffect(() => {
     if (challenge && challenge !== 'not-found') {
       setDiscordWebhookUrl(challenge.discord_webhook_url ?? '');
+      setEditName(challenge.name);
+      setEditStartDate(challenge.start_date);
+      setEditEndDate(challenge.end_date);
     }
   }, [challenge]);
 
@@ -161,6 +182,33 @@ export default function EditChallengePage() {
     }
   }
 
+  // BACKLOG.md #26 -- name/dates are only offered while still a draft
+  // (see the section's own `{challenge.status === 'draft' && ...}` guard
+  // below) -- once published, nothing about "when"/"what" this dungeon is
+  // should move out from under players who've already seen the invite.
+  async function handleSaveDetails(e: FormEvent) {
+    e.preventDefault();
+    if (!challenge || challenge === 'not-found' || !editName.trim() || !editStartDate || !editEndDate) return;
+    if (editEndDate < editStartDate) {
+      setDetailsError('End date must be on or after the start date.');
+      return;
+    }
+    setSavingDetails(true);
+    setDetailsError('');
+    const { error } = await getSupabase()
+      .from('challenges')
+      .update({ name: editName.trim(), start_date: editStartDate, end_date: editEndDate })
+      .eq('id', challenge.id);
+    setSavingDetails(false);
+    if (error) {
+      setDetailsError(error.message);
+      return;
+    }
+    setDetailsSaved(true);
+    setTimeout(() => setDetailsSaved(false), 2000);
+    await load();
+  }
+
   async function togglePublish() {
     if (!challenge || challenge === 'not-found') return;
     const nextStatus = challenge.status === 'draft' ? 'active' : 'draft';
@@ -196,11 +244,44 @@ export default function EditChallengePage() {
   }
 
   async function handleRemoveParticipant(participant: ParticipantRow) {
+    if (!challenge || challenge === 'not-found') return;
     const name = participant.profiles?.display_name ?? participant.rsn;
+    const isCoHostParticipant = coHostProfileIds.has(participant.profile_id);
+    // A separate, extra confirmation ahead of the normal one (confirmed
+    // 2026-09-07) -- removing someone as a participant silently costing
+    // them board-edit access too is exactly the kind of thing a host
+    // shouldn't discover after the fact.
+    if (
+      isCoHostParticipant &&
+      !window.confirm(`${name} (${participant.rsn}) is a co-host. Removing them will also remove their co-host access. Continue?`)
+    ) {
+      return;
+    }
     if (!window.confirm(`Remove ${name} (${participant.rsn})? Their progress history on this board will be deleted.`)) {
       return;
     }
     await getSupabase().from('challenge_participants').delete().eq('id', participant.id);
+    // Application-level cascade -- challenge_hosts has no FK to
+    // challenge_participants to cascade through on its own (it's keyed
+    // to challenges/profiles directly, see schema.sql's own comment).
+    if (isCoHostParticipant) {
+      await getSupabase().from('challenge_hosts').delete().eq('challenge_id', challenge.id).eq('profile_id', participant.profile_id);
+    }
+    await load();
+  }
+
+  // Primary-host-only (enforced both by the button's own visibility below
+  // and by challenge_hosts' RLS, which only lets challenges.host_id write
+  // here) -- confirmed 2026-09-07: co-hosts can never promote/demote
+  // other co-hosts, so there's no path for this to be called by anyone
+  // but the primary host.
+  async function handleToggleCoHost(participant: ParticipantRow) {
+    if (!challenge || challenge === 'not-found') return;
+    if (coHostProfileIds.has(participant.profile_id)) {
+      await getSupabase().from('challenge_hosts').delete().eq('challenge_id', challenge.id).eq('profile_id', participant.profile_id);
+    } else {
+      await getSupabase().from('challenge_hosts').insert({ challenge_id: challenge.id, profile_id: participant.profile_id });
+    }
     await load();
   }
 
@@ -238,7 +319,9 @@ export default function EditChallengePage() {
   if (challenge === 'not-found') {
     return <p className="mx-auto max-w-lg py-24 text-center text-stone-400">Dungeon not found.</p>;
   }
-  if (challenge.host_id !== session.user.id) {
+  const isPrimaryHost = challenge.host_id === session.user.id;
+  const isCoHost = coHostProfileIds.has(session.user.id);
+  if (!isPrimaryHost && !isCoHost) {
     return <p className="mx-auto max-w-lg py-24 text-center text-stone-400">This isn't your dungeon to edit.</p>;
   }
 
@@ -266,7 +349,10 @@ export default function EditChallengePage() {
           </Link>
         </div>
         <div className="flex shrink-0 gap-2">
-          {challenge.status === 'draft' && (
+          {/* Delete stays primary-host-only (BACKLOG.md #26) -- a co-host
+              gets full board-management rights but never the ability to
+              delete the dungeon out from under its actual owner. */}
+          {challenge.status === 'draft' && isPrimaryHost && (
             <button
               type="button"
               onClick={handleDeleteChallenge}
@@ -280,6 +366,61 @@ export default function EditChallengePage() {
           </button>
         </div>
       </div>
+
+      {challenge.status === 'draft' && (
+        <div className="mt-6 max-w-md">
+          <h2 className="text-sm font-semibold text-stone-300">Dungeon details</h2>
+          <p className="mt-1 text-xs text-stone-500">Only editable while still a draft -- publishing locks the name and dates.</p>
+          <form onSubmit={handleSaveDetails} className="mt-2 space-y-3">
+            <div>
+              <label className="block text-xs text-stone-400">Name</label>
+              <input
+                required
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+              />
+            </div>
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="block text-xs text-stone-400">Start date</label>
+                <input
+                  type="date"
+                  required
+                  min={today}
+                  value={editStartDate}
+                  onChange={(e) => setEditStartDate(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs text-stone-400">End date</label>
+                <input
+                  type="date"
+                  required
+                  min={today}
+                  value={editEndDate}
+                  onChange={(e) => setEditEndDate(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+            </div>
+            {editStartDate && editEndDate && (
+              <p className="text-xs text-stone-500">
+                Dates run on a fixed UTC clock -- in your timezone that's {formatLocalRange(editStartDate, editEndDate, VIEWER_TIMEZONE)}.
+              </p>
+            )}
+            {detailsError && <p className="text-xs text-red-400">{detailsError}</p>}
+            <button
+              type="submit"
+              disabled={savingDetails}
+              className="rounded-lg border border-stone-700 px-4 py-2 text-sm text-stone-300 disabled:opacity-40"
+            >
+              {savingDetails ? 'Saving…' : detailsSaved ? 'Saved ✓' : 'Save'}
+            </button>
+          </form>
+        </div>
+      )}
 
       <div className="mt-6 max-w-md">
         <h2 className="text-sm font-semibold text-stone-300">Invite players</h2>
@@ -460,43 +601,61 @@ export default function EditChallengePage() {
       <div className="mt-10 max-w-md">
         <h2 className="text-lg font-semibold">Players</h2>
         <ul className="mt-3 space-y-2 text-sm text-stone-300">
-          {participants.map((p) => (
-            <li key={p.id} className="flex items-center justify-between gap-2">
-              <span className="flex items-center gap-2">
-                {p.profiles?.icon_url && (
-                  <PlayerIcon iconUrl={p.profiles.icon_url} color={p.profiles.color ?? colorForParticipant(p.id)} />
-                )}
-                {p.rsn}
-                {p.screenshot_count > 0 && (
-                  <span
-                    title={`${p.screenshot_count} Dink screenshots sent (${formatBytes(p.screenshot_bytes)}) -- their "Send screenshot" setting is still on. Ask them to turn it off in Dink's settings.`}
-                    className="shrink-0 rounded-full border border-amber-800 bg-amber-950/40 px-1.5 py-0.5 text-[10px] text-amber-400"
-                  >
-                    ⚠ {p.screenshot_count} screenshots
-                  </span>
-                )}
-              </span>
-              <span className="flex shrink-0 items-center gap-2">
-                {challenge.game_mode === 'team' && (
-                  <select
-                    value={p.team_id ?? ''}
-                    onChange={(e) => handleAssignTeam(p, e.target.value || null)}
-                    className="rounded-lg border border-stone-700 bg-stone-900 px-2 py-1 text-xs text-stone-300"
-                  >
-                    <option value="">Unassigned</option>
-                    {teams.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <button type="button" onClick={() => handleRemoveParticipant(p)} className="text-xs text-red-400 underline">
-                  Remove
-                </button>
-              </span>
-            </li>
-          ))}
+          {participants.map((p) => {
+            const isPrimaryHostRow = p.profile_id === challenge.host_id;
+            const isCoHostRow = coHostProfileIds.has(p.profile_id);
+            return (
+              <li key={p.id} className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2">
+                  {p.profiles?.icon_url && (
+                    <PlayerIcon iconUrl={p.profiles.icon_url} color={p.profiles.color ?? colorForParticipant(p.id)} />
+                  )}
+                  {p.rsn}
+                  {(isPrimaryHostRow || isCoHostRow) && (
+                    <span title={isPrimaryHostRow ? 'Host' : 'Co-host'} aria-label={isPrimaryHostRow ? 'Host' : 'Co-host'}>
+                      👑
+                    </span>
+                  )}
+                  {p.screenshot_count > 0 && (
+                    <span
+                      title={`${p.screenshot_count} Dink screenshots sent (${formatBytes(p.screenshot_bytes)}) -- their "Send screenshot" setting is still on. Ask them to turn it off in Dink's settings.`}
+                      className="shrink-0 rounded-full border border-amber-800 bg-amber-950/40 px-1.5 py-0.5 text-[10px] text-amber-400"
+                    >
+                      ⚠ {p.screenshot_count} screenshots
+                    </span>
+                  )}
+                </span>
+                <span className="flex shrink-0 items-center gap-2">
+                  {challenge.game_mode === 'team' && (
+                    <select
+                      value={p.team_id ?? ''}
+                      onChange={(e) => handleAssignTeam(p, e.target.value || null)}
+                      className="rounded-lg border border-stone-700 bg-stone-900 px-2 py-1 text-xs text-stone-300"
+                    >
+                      <option value="">Unassigned</option>
+                      {teams.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {/* Co-host promotion/demotion stays primary-host-only
+                      (BACKLOG.md #26) -- a co-host viewing this same list
+                      doesn't get this control, matching challenge_hosts'
+                      own RLS (only challenges.host_id can write there). */}
+                  {isPrimaryHost && !isPrimaryHostRow && (
+                    <button type="button" onClick={() => handleToggleCoHost(p)} className="text-xs text-stone-400 underline">
+                      {isCoHostRow ? 'Remove co-host' : 'Make co-host'}
+                    </button>
+                  )}
+                  <button type="button" onClick={() => handleRemoveParticipant(p)} className="text-xs text-red-400 underline">
+                    Remove
+                  </button>
+                </span>
+              </li>
+            );
+          })}
           {participants.length === 0 && <li className="text-stone-500">No one's joined yet.</li>}
         </ul>
       </div>

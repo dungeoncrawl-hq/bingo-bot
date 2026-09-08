@@ -911,7 +911,8 @@ instead of renumbering the existing list.
 ## Co-hosting
 26. **Let a host designate a co-host, who gets the same board-management
     access, plus a visual showing who the host(s) are on a dungeon.**
-    Scoped 2026-09-07, not built yet.
+    Scoped 2026-09-07, **shipped the same day** -- migration not yet
+    applied (see the bottom of this item).
 
     **Data model**: new join table `challenge_hosts` (`challenge_id`,
     `profile_id`, `added_at`, composite primary key) rather than a
@@ -1000,15 +1001,35 @@ instead of renumbering the existing list.
     for consistency, though it's less load-bearing there since the
     "Make/Remove co-host" button already makes the status obvious.
 
-    **Open questions for the host to weigh in on before this gets
-    built** (defaults above are my best guess, not settled):
-    - Should a co-host be allowed to promote *other* participants to
-      co-host, or does that stay primary-host-only forever? Defaulted
-      to primary-host-only above.
-    - Any cap on how many co-hosts one dungeon can have? Defaulted to
-      no hard cap -- easy to add a client-side limit later if it's ever
-      actually abused.
-    - Does removing someone as a participant while they're a co-host
-      need an extra confirmation ("this will also remove their
-      co-host access"), or is silently clearing it alongside the
-      existing remove-confirmation enough?
+    **Confirmed 2026-09-07** (all three open questions above): co-hosts
+    can't promote/demote other co-hosts (primary-host-only, as
+    defaulted); no cap on co-host count (as defaulted); removing a
+    co-host participant gets an *extra*, separate confirmation dialog
+    ahead of the normal remove one (`handleRemoveParticipant` in
+    `EditChallengePage.tsx`), not folded into a single combined prompt.
+
+    **Same-day follow-up, requested mid-build**: hosts (primary or
+    co-host) can also edit a dungeon's name/start date/end date, but
+    only while it's still a draft -- publishing locks them, matching
+    how tile conditions lock once a dungeon starts. New "Dungeon
+    details" section on `EditChallengePage.tsx` (own name/date inputs +
+    Save, same validation shape as `NewChallengePage.tsx`'s creation
+    form -- end date can't precede start date), gated on
+    `challenge.status === 'draft'` rather than on `tilesLocked`
+    (published-but-not-yet-started still locks these, unlike tile
+    conditions) and visible to anyone who already passed the page's own
+    host-or-co-host gate, no separate permission check needed since it
+    writes to the same `challenges` row the co-host UPDATE policy above
+    already covers.
+
+    **Migration not yet applied.** Notably lower-risk than #22's/#23's
+    equivalent notes: `challenge_hosts` is queried as its own separate
+    `Promise.all` entry in `BoardPage.tsx`/`EditChallengePage.tsx`/
+    `DashboardPage.tsx`'s loaders, not joined into an existing query
+    (unlike `profiles.icon_url`/`profiles.color`, which extended a
+    `profiles(...)` embed already inside the participants query) -- a
+    missing table there resolves to `{data: null, error}` for that one
+    query only, so tiles/participants/completions/teams all keep
+    loading normally even before this migration runs. Nobody can be
+    designated a co-host yet, and the crown badge just never renders --
+    a soft feature gap, not a broken leaderboard.

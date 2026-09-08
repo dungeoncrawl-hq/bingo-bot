@@ -58,6 +58,17 @@ export interface Team {
   created_at: string;
 }
 
+// BACKLOG.md #26 -- a co-host, who gets the same tile/team/participant
+// management rights as the primary host (challenges.host_id) but can't
+// delete the dungeon or manage other co-hosts. A co-host candidate must
+// already be a challenge_participants row -- app code enforces this, not
+// a schema constraint.
+export interface ChallengeHost {
+  challenge_id: string;
+  profile_id: string;
+  added_at: string;
+}
+
 // board_type='grid5x5' (today's Standard board).
 export interface GridLayout {
   row: number;
