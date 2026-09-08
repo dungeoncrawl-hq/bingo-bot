@@ -18,6 +18,11 @@ export default function AdminAnnouncementsPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [sendingId, setSendingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editBody, setEditBody] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState('');
 
   useEffect(() => {
     load();
@@ -49,6 +54,36 @@ export default function AdminAnnouncementsPage() {
       setError(err instanceof Error ? err.message : 'Something went wrong.');
     } finally {
       setSaving(false);
+    }
+  }
+
+  function startEdit(row: Announcement) {
+    setEditingId(row.id);
+    setEditTitle(row.title);
+    setEditBody(row.body);
+    setEditError('');
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+  }
+
+  async function handleSaveEdit(id: string) {
+    if (!editTitle.trim() || !editBody.trim()) return;
+    setEditSaving(true);
+    setEditError('');
+    try {
+      const { error } = await getSupabase()
+        .from('announcements')
+        .update({ title: editTitle.trim(), body: editBody.trim() })
+        .eq('id', id);
+      if (error) throw error;
+      setEditingId(null);
+      await load();
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Something went wrong.');
+    } finally {
+      setEditSaving(false);
     }
   }
 
@@ -124,44 +159,74 @@ export default function AdminAnnouncementsPage() {
       {rows && rows.length === 0 && <p className="mt-4 text-stone-500">No announcements yet.</p>}
       {rows && rows.length > 0 && (
         <ul className="mt-6 space-y-3">
-          {rows.map((r) => (
-            <li key={r.id} className="rounded-lg border border-stone-800 px-4 py-3">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold">{r.title}</p>
-                  <p className="mt-1 whitespace-pre-wrap text-sm text-stone-400">{r.body}</p>
-                  <p className="mt-2 text-xs text-stone-500">
-                    {r.published_at ? `Published ${new Date(r.published_at).toLocaleString()}` : 'Draft'}
-                    {r.emailed_at && ` · Emailed ${new Date(r.emailed_at).toLocaleString()}`}
-                  </p>
-                </div>
-                <div className="flex shrink-0 flex-col gap-1.5">
-                  {r.published_at ? (
-                    <button type="button" onClick={() => handleUnpublish(r.id)} className={actionButtonClass}>
-                      Unpublish
-                    </button>
-                  ) : (
-                    <button type="button" onClick={() => handlePublish(r.id)} className={actionButtonClass}>
-                      Publish
-                    </button>
-                  )}
-                  {r.published_at && !r.emailed_at && (
-                    <button
-                      type="button"
-                      onClick={() => handleSendEmail(r)}
-                      disabled={sendingId === r.id}
-                      className={actionButtonClass}
-                    >
-                      {sendingId === r.id ? 'Sending…' : 'Email subscribers'}
-                    </button>
-                  )}
-                  <button type="button" onClick={() => handleDelete(r.id)} className="shrink-0 text-xs text-red-400 underline">
-                    Delete
+          {rows.map((r) =>
+            editingId === r.id ? (
+              <li key={r.id} className="space-y-3 rounded-lg border border-amber-800 bg-amber-950/10 px-4 py-3">
+                <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="Title" className={inputClass} />
+                <textarea
+                  value={editBody}
+                  onChange={(e) => setEditBody(e.target.value)}
+                  rows={4}
+                  placeholder="What's new..."
+                  className={inputClass}
+                />
+                {editError && <p className="text-sm text-red-400">{editError}</p>}
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleSaveEdit(r.id)}
+                    disabled={editSaving || !editTitle.trim() || !editBody.trim()}
+                    className="rounded-lg bg-amber-500 hover:bg-amber-400 transition-colors px-4 py-2 text-sm font-semibold text-stone-950 disabled:opacity-40"
+                  >
+                    {editSaving ? 'Saving…' : 'Save changes'}
+                  </button>
+                  <button type="button" onClick={cancelEdit} className={actionButtonClass}>
+                    Cancel
                   </button>
                 </div>
-              </div>
-            </li>
-          ))}
+              </li>
+            ) : (
+              <li key={r.id} className="rounded-lg border border-stone-800 px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold">{r.title}</p>
+                    <p className="mt-1 whitespace-pre-wrap text-sm text-stone-400">{r.body}</p>
+                    <p className="mt-2 text-xs text-stone-500">
+                      {r.published_at ? `Published ${new Date(r.published_at).toLocaleString()}` : 'Draft'}
+                      {r.emailed_at && ` · Emailed ${new Date(r.emailed_at).toLocaleString()}`}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-col gap-1.5">
+                    <button type="button" onClick={() => startEdit(r)} className={actionButtonClass}>
+                      Edit
+                    </button>
+                    {r.published_at ? (
+                      <button type="button" onClick={() => handleUnpublish(r.id)} className={actionButtonClass}>
+                        Unpublish
+                      </button>
+                    ) : (
+                      <button type="button" onClick={() => handlePublish(r.id)} className={actionButtonClass}>
+                        Publish
+                      </button>
+                    )}
+                    {r.published_at && !r.emailed_at && (
+                      <button
+                        type="button"
+                        onClick={() => handleSendEmail(r)}
+                        disabled={sendingId === r.id}
+                        className={actionButtonClass}
+                      >
+                        {sendingId === r.id ? 'Sending…' : 'Email subscribers'}
+                      </button>
+                    )}
+                    <button type="button" onClick={() => handleDelete(r.id)} className="shrink-0 text-xs text-red-400 underline">
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </li>
+            ),
+          )}
         </ul>
       )}
     </AdminLayout>
