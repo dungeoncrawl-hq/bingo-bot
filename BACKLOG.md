@@ -1022,14 +1022,38 @@ instead of renumbering the existing list.
     writes to the same `challenges` row the co-host UPDATE policy above
     already covers.
 
-    **Migration not yet applied.** Notably lower-risk than #22's/#23's
-    equivalent notes: `challenge_hosts` is queried as its own separate
-    `Promise.all` entry in `BoardPage.tsx`/`EditChallengePage.tsx`/
-    `DashboardPage.tsx`'s loaders, not joined into an existing query
-    (unlike `profiles.icon_url`/`profiles.color`, which extended a
-    `profiles(...)` embed already inside the participants query) -- a
-    missing table there resolves to `{data: null, error}` for that one
-    query only, so tiles/participants/completions/teams all keep
-    loading normally even before this migration runs. Nobody can be
-    designated a co-host yet, and the crown badge just never renders --
-    a soft feature gap, not a broken leaderboard.
+    **Migration applied and verified 2026-09-08.** The `challenge_hosts`
+    table itself was low-risk to roll out the way #22's/#23's notes
+    describe: queried as its own separate `Promise.all` entry in
+    `BoardPage.tsx`/`EditChallengePage.tsx`/`DashboardPage.tsx`'s
+    loaders, not joined into an existing query, so a missing table
+    resolved to `{data: null, error}` for that one query only and
+    everything else kept loading normally in the window before the
+    migration ran.
+
+    **Real bug found and fixed during verification**: the migration's
+    `revoke update (host_id) on challenges from authenticated;` line
+    was silently a no-op, twice, even after the user re-ran it. Root
+    cause -- Postgres tracks table-level and column-level grants
+    separately, and `authenticated` already holds a blanket table-level
+    UPDATE grant on `challenges` (needed for the ordinary name/dates/
+    status/webhook edits). That blanket grant implies UPDATE on every
+    column including `host_id` regardless of any column-level revoke,
+    so a co-host really could reassign ownership to themselves -- caught
+    live via a minted-session test, not just trusted from the "sql ran"
+    report. Fixed by revoking the table-level grant entirely and
+    re-granting UPDATE on an explicit column allowlist instead (see
+    `supabase/schema.sql`'s end-of-file block).
+
+    Auditing turned up the *identical* bug already live in production on
+    two unrelated, pre-existing anti-tamper columns that used the same
+    column-only-revoke pattern: `profiles.is_site_admin` (any
+    authenticated user could apparently have granted themselves site
+    admin) and `challenge_participants`'s screenshot/webhook counters
+    (any participant could apparently have zeroed their own tamper
+    signal). Both fixed the same way, alongside the co-hosting fix, and
+    all three re-verified live: `host_id` reassignment, `is_site_admin`
+    self-promotion, and counter tampering now all correctly fail with
+    `42501 permission denied`, while every legitimate client update path
+    (dungeon details, account settings, rsn/team/adventure-path edits)
+    still succeeds.

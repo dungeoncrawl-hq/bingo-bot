@@ -383,10 +383,12 @@ create policy "public read" on participant_snapshots for select using (true);
 -- no new role system, since there's exactly one admin. profiles' existing
 -- "own row write" policy is `for all`, which would otherwise let any
 -- authenticated user grant themselves this flag via a plain client-side
--- .update() -- explicitly revoke column-level UPDATE from `authenticated`
--- so only the service role (or the Supabase SQL editor) can ever flip it.
+-- .update() -- lock it down so only the service role (or the Supabase
+-- SQL editor) can ever flip it. The actual revoke/grant lives at the end
+-- of this file (2026-09-08 fix), once every profiles column referenced
+-- there (default_rsn, icon_url, etc.) has actually been created by the
+-- ALTERs further down -- see the note there for why.
 alter table profiles add column if not exists is_site_admin boolean not null default false;
-revoke update (is_site_admin) on profiles from authenticated;
 
 -- General webhook-call volume, not just screenshots -- answers "who's
 -- generating traffic" and "is an ended challenge still getting hit,"
@@ -413,7 +415,10 @@ $$;
 -- plain client update and erase the exact signal these columns exist to
 -- surface. screenshot_count/screenshot_bytes had this same gap already --
 -- closed here alongside the new columns rather than left inconsistent.
-revoke update (screenshot_count, screenshot_bytes, webhook_call_count, last_webhook_at) on challenge_participants from authenticated;
+-- The actual revoke/grant lives at the end of this file (2026-09-08 fix),
+-- once every challenge_participants column referenced there (team_id,
+-- adventure_path, etc.) has actually been created by the ALTERs further
+-- down -- see the note there for why.
 
 -- Adventure mode (BACKLOG.md #7): a second board_type, a branching path
 -- instead of the 5x5 grid. board_type itself needs no migration (already
@@ -898,10 +903,39 @@ create policy "co-host updates challenge" on challenges for update
 
 -- A co-host's UPDATE policy above can't itself stop them reassigning
 -- host_id -- WITH CHECK only sees the new row, not the old one, so
--- there's no plain-RLS way to say "host_id must be unchanged." Same
--- anti-tamper pattern already applied to profiles.is_site_admin: revoke
--- the column outright. Nobody -- co-host or even the primary host
--- themselves -- can reassign ownership through the client at all.
--- Transfer-of-ownership was never a requested feature, so permanently
--- closing this off is simpler than building it.
-revoke update (host_id) on challenges from authenticated;
+-- there's no plain-RLS way to say "host_id must be unchanged." Nobody --
+-- co-host or even the primary host themselves -- can reassign ownership
+-- through the client at all. Transfer-of-ownership was never a
+-- requested feature, so permanently closing this off is simpler than
+-- building it.
+--
+-- IMPORTANT: `revoke update (host_id) on challenges from authenticated`
+-- alone is NOT enough -- table-level and column-level grants are tracked
+-- separately in Postgres, and `authenticated` already holds a blanket
+-- table-level UPDATE grant on challenges (needed for name/dates/status/
+-- webhook edits above). That blanket grant implies UPDATE on every
+-- column regardless of any column-level revoke, so a column-only revoke
+-- is silently a no-op -- confirmed live 2026-09-08 (a co-host could
+-- still reassign host_id after the column-only revoke had supposedly
+-- been applied, twice). The fix is to revoke the table-level grant
+-- entirely and re-grant UPDATE on an explicit column allowlist instead.
+revoke update on challenges from authenticated;
+grant update (name, start_date, end_date, status, discord_webhook_url) on challenges to authenticated;
+
+-- 2026-09-08 fix, deferred from profiles.is_site_admin's declaration
+-- near the top of this file: same table-vs-column-grant issue as
+-- challenges.host_id just above -- a column-only revoke on is_site_admin
+-- was silently a no-op against `authenticated`'s blanket table-level
+-- UPDATE grant on profiles. Placed here (not up by is_site_admin) so
+-- every column in the allowlist below (default_rsn, icon_url, color,
+-- email_notifications) already exists -- all four are added by ALTERs
+-- later in the file than is_site_admin's own declaration.
+revoke update on profiles from authenticated;
+grant update (default_rsn, email_notifications, icon_url, color) on profiles to authenticated;
+
+-- 2026-09-08 fix, deferred from challenge_participants' screenshot/
+-- webhook counter columns' declaration earlier in this file: same
+-- table-vs-column-grant issue. Placed here so team_id and adventure_path
+-- (added by ALTERs later than the counters) already exist.
+revoke update on challenge_participants from authenticated;
+grant update (rsn, team_id, chosen_lowest_skill, adventure_path) on challenge_participants to authenticated;
