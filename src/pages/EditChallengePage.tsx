@@ -6,8 +6,7 @@ import { getSupabase } from '../db/supabaseClient';
 import type { Challenge, GridLayout, Team, Tile, TileLayout } from '../db/types';
 import TileEditorForm from '../components/TileEditorForm';
 import AdventureConnector from '../components/AdventureConnector';
-import PlayerIcon from '../components/PlayerIcon';
-import { colorForParticipant } from '../lib/playerColors';
+import PlayerChip from '../components/PlayerChip';
 import { formatTileGoal, type TileCondition } from '../lib/tileConditions';
 import { displayStatus, formatLocalRange } from '../lib/dungeonStatus';
 import { formatBytes } from '../lib/format';
@@ -607,9 +606,7 @@ export default function EditChallengePage() {
             return (
               <li key={p.id} className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-2">
-                  {p.profiles?.icon_url && (
-                    <PlayerIcon iconUrl={p.profiles.icon_url} color={p.profiles.color ?? colorForParticipant(p.id)} />
-                  )}
+                  <PlayerChip iconUrl={p.profiles?.icon_url ?? null} color={p.profiles?.color ?? null} participantId={p.id} rsn={p.rsn} />
                   {p.rsn}
                   {(isPrimaryHostRow || isCoHostRow) && (
                     <span title={isPrimaryHostRow ? 'Host' : 'Co-host'} aria-label={isPrimaryHostRow ? 'Host' : 'Co-host'}>

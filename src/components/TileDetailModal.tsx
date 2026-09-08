@@ -15,8 +15,7 @@ import { computeHiscoresRecap, type SnapshotRow } from '../lib/hiscoresRecap';
 import { progressColor } from '../lib/progressColor';
 import { resolveAdventureTileWindow } from '../lib/adventureProgress';
 import { itemIcon } from '../lib/itemSets';
-import { colorForParticipant } from '../lib/playerColors';
-import PlayerIcon from './PlayerIcon';
+import PlayerChip from './PlayerChip';
 
 interface ParticipantLite {
   id: string;
@@ -35,10 +34,10 @@ interface ParticipantLite {
   // BACKLOG.md #22 -- shown next to this row's label, solo mode only (a
   // team/pooled row has no single profile to represent).
   icon_url: string | null;
-  // BACKLOG.md #23 -- background shown behind icon_url above (PlayerIcon
-  // handles the fallback when null -- colorForParticipant, same as
-  // BoardPage.tsx). Not used for text color here -- that's leaderboard-
-  // only, per how #23 was scoped.
+  // BACKLOG.md #23 -- background shown behind icon_url above, or behind
+  // the letter-initial fallback chip when there's no icon (PlayerChip
+  // handles both, same as BoardPage.tsx). Not used for text color here --
+  // that's leaderboard-only, per how #23 was scoped.
   color: string | null;
 }
 
@@ -110,9 +109,14 @@ interface Row {
   // BACKLOG.md #22 -- null for a team/pooled row, same reasoning as
   // ParticipantLite's own icon_url.
   iconUrl: string | null;
-  // BACKLOG.md #23 -- background behind iconUrl above, only meaningful
-  // alongside it.
+  // BACKLOG.md #23/2026-09-08 -- background behind iconUrl (or behind
+  // the letter-initial fallback chip when iconUrl is null and
+  // participantId isn't -- see PlayerChip).
   iconColor: string | null;
+  // Solo-mode participant id, for the fallback chip's colorForParticipant
+  // hash and its letter initial. null for a team/pooled row -- there's no
+  // single profile to represent, so no chip (fallback or otherwise) shows.
+  participantId: string | null;
   // Adventure only (BACKLOG.md #4): this participant has completed at
   // least one earlier tile but hasn't logged out since, so no baseline
   // exists yet to measure progress from -- `status` above is meaningless
@@ -273,7 +277,7 @@ export default function TileDetailModal({
         const status = checkTile(tile.condition, poolStats(Object.values(statsById)));
         const completedAt = completedAtFor(ids);
         result = [
-          { key: 'pooled', label: 'Everyone', status, completedAt, isFirst: false, iconUrl: null, iconColor: null, awaitingBaselineReset: false },
+          { key: 'pooled', label: 'Everyone', status, completedAt, isFirst: false, iconUrl: null, iconColor: null, participantId: null, awaitingBaselineReset: false },
         ];
       } else if (gameMode === 'team') {
         result = teams
@@ -284,7 +288,7 @@ export default function TileDetailModal({
             const completedAt = completedAtFor(memberIds);
             const winnerId = firstCompleters[tile.id];
             const isFirst = completedAt != null && tile.condition.type !== 'freeSpace' && memberIds.includes(winnerId);
-            return { key: t.id, label: t.name, status, completedAt, isFirst, iconUrl: null, iconColor: null, awaitingBaselineReset: false };
+            return { key: t.id, label: t.name, status, completedAt, isFirst, iconUrl: null, iconColor: null, participantId: null, awaitingBaselineReset: false };
           })
           .filter((r): r is Row => r != null);
       } else {
@@ -293,7 +297,8 @@ export default function TileDetailModal({
           awaitingBaselineReset: awaitingBaselineResetById[p.id] ?? false,
           label: p.rsn,
           iconUrl: p.icon_url,
-          iconColor: p.color ?? colorForParticipant(p.id),
+          iconColor: p.color,
+          participantId: p.id,
           status: checkTile(tile.condition, statsById[p.id]),
           completedAt: completedAtFor([p.id]),
           isFirst: false, // set below, once per row, for solo (needs completedAt first)
@@ -375,7 +380,9 @@ export default function TileDetailModal({
                 <li key={row.key}>
                   <div className="flex items-center justify-between text-sm">
                     <span className="flex items-center gap-1.5 font-medium">
-                      {row.iconUrl && row.iconColor && <PlayerIcon iconUrl={row.iconUrl} color={row.iconColor} />}
+                      {row.participantId && (
+                        <PlayerChip iconUrl={row.iconUrl} color={row.iconColor} participantId={row.participantId} rsn={row.label} />
+                      )}
                       {row.label}
                     </span>
                     <span className={`flex items-center gap-1 ${row.awaitingBaselineReset ? 'text-sky-400' : 'text-stone-400'}`}>

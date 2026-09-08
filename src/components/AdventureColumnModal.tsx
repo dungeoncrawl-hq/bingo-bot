@@ -15,8 +15,7 @@ import type { SnapshotRow } from '../lib/hiscoresRecap';
 import { progressColor } from '../lib/progressColor';
 import { resolveAdventureTileWindow, resolveFrontier } from '../lib/adventureProgress';
 import { itemIcon } from '../lib/itemSets';
-import { colorForParticipant } from '../lib/playerColors';
-import PlayerIcon from './PlayerIcon';
+import PlayerChip from './PlayerChip';
 
 interface ParticipantLite {
   id: string;
@@ -305,7 +304,7 @@ export default function AdventureColumnModal({
                 <li key={p.id}>
                   <div className="flex items-center justify-between text-sm">
                     <span className="flex items-center gap-1.5 font-medium">
-                      {p.icon_url && <PlayerIcon iconUrl={p.icon_url} color={p.color ?? colorForParticipant(p.id)} />}
+                      <PlayerChip iconUrl={p.icon_url} color={p.color} participantId={p.id} rsn={p.rsn} />
                       {p.rsn}
                       <span className="rounded-full border border-stone-700 px-1.5 py-0.5 text-[10px] uppercase text-stone-500">
                         {chosenLane}
@@ -332,7 +331,7 @@ export default function AdventureColumnModal({
             {notReached.map((p) => (
               <li key={p.id} className="flex items-center justify-between text-sm text-stone-600">
                 <span className="flex items-center gap-1.5">
-                  {p.icon_url && <PlayerIcon iconUrl={p.icon_url} color={p.color ?? colorForParticipant(p.id)} />}
+                  <PlayerChip iconUrl={p.icon_url} color={p.color} participantId={p.id} rsn={p.rsn} />
                   {p.rsn}
                 </span>
                 <span>Not reached yet</span>

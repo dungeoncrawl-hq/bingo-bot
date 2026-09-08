@@ -24,7 +24,7 @@ import { formatRelativeTime } from '../lib/format';
 import TileDetailModal from '../components/TileDetailModal';
 import AdventureColumnModal from '../components/AdventureColumnModal';
 import AdventureConnector from '../components/AdventureConnector';
-import PlayerIcon from '../components/PlayerIcon';
+import PlayerChip from '../components/PlayerChip';
 import {
   ADVENTURE_SMALL_COLUMNS,
   ADVENTURE_SMALL_FINAL_BOSS_COLUMN,
@@ -720,26 +720,17 @@ export default function BoardPage() {
                             {!isFirst && done && <span className="absolute right-1 top-1 text-xs text-green-400">✓</span>}
                             {tile && frontierParticipantsByTileId.get(tile.id) && (
                               <div className="absolute bottom-1 left-1 flex gap-0.5">
-                                {frontierParticipantsByTileId.get(tile.id)!.map((p) =>
-                                  p.icon_url ? (
-                                    <PlayerIcon
-                                      key={p.id}
-                                      iconUrl={p.icon_url}
-                                      color={colorFor(p)}
-                                      size={14}
-                                      title={`${p.rsn} is here`}
-                                    />
-                                  ) : (
-                                    <span
-                                      key={p.id}
-                                      title={`${p.rsn} is here`}
-                                      className="flex h-3.5 w-3.5 items-center justify-center rounded text-[7px] font-bold text-stone-950"
-                                      style={{ backgroundColor: colorFor(p) }}
-                                    >
-                                      {p.rsn.slice(0, 1).toUpperCase()}
-                                    </span>
-                                  ),
-                                )}
+                                {frontierParticipantsByTileId.get(tile.id)!.map((p) => (
+                                  <PlayerChip
+                                    key={p.id}
+                                    iconUrl={p.icon_url}
+                                    color={p.color}
+                                    participantId={p.id}
+                                    rsn={p.rsn}
+                                    size={14}
+                                    title={`${p.rsn} is here`}
+                                  />
+                                ))}
                               </div>
                             )}
                             {tile ? (
@@ -889,7 +880,7 @@ export default function BoardPage() {
               <ul className="space-y-1">
                 {participants.map((p) => (
                   <li key={p.id} className="flex items-center gap-1.5" style={{ color: colorFor(p) }}>
-                    {p.icon_url && <PlayerIcon iconUrl={p.icon_url} color={colorFor(p)} />}
+                    <PlayerChip iconUrl={p.icon_url} color={p.color} participantId={p.id} rsn={p.rsn} />
                     {p.rsn}
                     {hostBadge(p) && <span title={hostBadge(p)!}>👑</span>}
                   </li>
@@ -915,7 +906,7 @@ export default function BoardPage() {
                       className={`flex items-center gap-1.5 whitespace-nowrap text-left hover:underline ${isViewed ? 'font-semibold underline' : ''} ${isTeam ? 'text-stone-300' : ''}`}
                       style={!isTeam ? { color: colorFor(p) } : undefined}
                     >
-                      {!isTeam && p.icon_url && <PlayerIcon iconUrl={p.icon_url} color={colorFor(p)} />}
+                      {!isTeam && <PlayerChip iconUrl={p.icon_url} color={p.color} participantId={p.id} rsn={p.rsn} />}
                       <span>{`#${i + 1}${medal ? ` ${medal}` : ''} ${label} — ${entry.points} pts (${entry.tilesCompleted}/${tilesInPlay} tiles)`}</span>
                     </button>
                     {!isTeam && hostBadge(p) && <span title={hostBadge(p)!}>👑</span>}
