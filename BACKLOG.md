@@ -907,3 +907,108 @@ instead of renumbering the existing list.
     nonexistent-slug "Dungeon not found." state, the Leave/Edit Dungeon
     buttons, and the reworded invite-message text (read directly out of
     the DOM) on a throwaway challenge.
+
+## Co-hosting
+26. **Let a host designate a co-host, who gets the same board-management
+    access, plus a visual showing who the host(s) are on a dungeon.**
+    Scoped 2026-09-07, not built yet.
+
+    **Data model**: new join table `challenge_hosts` (`challenge_id`,
+    `profile_id`, `added_at`, composite primary key) rather than a
+    second `co_host_id` column on `challenges` -- matches this schema's
+    existing pattern for a challenge's other many-relationships
+    (`challenge_participants`, `teams`), and doesn't cap it at exactly
+    one co-host if that turns out to be wanted later. A co-host
+    candidate must already be a participant (`challenge_participants`
+    row) -- keeps the UI simple (pick from the existing Players list,
+    no separate invite-by-username flow) and means there's always a
+    real row to attach a "Remove co-host" action to.
+
+    **Permission split -- primary host keeps strictly more power than a
+    co-host**, mirroring an owner/admin distinction rather than treating
+    every host as interchangeable:
+    - **Primary host** (`challenges.host_id`, unchanged): everything,
+      including deleting the dungeon and adding/removing co-hosts.
+    - **Co-host**: full tile/team/participant management (create, edit,
+      delete tiles; assign teams; remove participants; edit the
+      Discord webhook URL; publish/unpublish) -- everything BACKLOG.md
+      #6/#7's own "host tooling" framing already means by "host
+      access." **Cannot**: delete the dungeon, or add/remove co-hosts
+      (including themselves) -- both stay primary-host-only, so there's
+      always one clear owner and co-hosting can't chain into someone
+      handing out access unbounded.
+
+    **RLS changes** (4 existing policies, `schema.sql`): `tiles`'s and
+    `teams`'s own `for all` "host writes own challenge's X" policies
+    just need their `exists(...)` clause OR'd with a matching
+    `challenge_hosts` check -- co-hosts need the same full rights there
+    as the host, no split needed. `challenge_participants`'s "self or
+    host writes" policy gets the same OR'd clause (removing a
+    participant/assigning a team). `challenges` itself is the one
+    genuinely different case: a co-host may UPDATE (a new, separate
+    `for update` policy, `exists(...)` against `challenge_hosts`) but
+    never DELETE (no delete policy for co-hosts at all) -- and even
+    within UPDATE, a co-host reassigning `host_id` itself has to be
+    blocked. Plain RLS can't express "the new row's host_id must equal
+    the old row's" in a `WITH CHECK` clause (no old-row reference
+    there), so this reuses the exact anti-tamper pattern already
+    applied to `profiles.is_site_admin`: `revoke update (host_id) on
+    challenges from authenticated;` -- nobody, co-host or even the
+    primary host themselves, can reassign ownership through the client
+    at all (not a requested feature here, so permanently closing it off
+    is simpler than building transfer-of-ownership). `challenge_hosts`
+    itself: public read (needed for the visual badge below to render
+    for every viewer, not just the host), write restricted to the
+    primary host only (`challenges.host_id = auth.uid()` -- deliberately
+    NOT also checking `challenge_hosts`, so a co-host can never write
+    to this table themselves).
+
+    **Client changes needed**:
+    - `EditChallengePage.tsx`: the host gate (currently
+      `challenge.host_id !== session.user.id`) needs a `challenge_hosts`
+      lookup OR'd in. The Players list (`src/pages/EditChallengePage.tsx`'s
+      existing per-participant row, next to today's team-assignment
+      `<select>`/Remove button) gets a new "Make co-host"/"Remove
+      co-host" action -- visible only to the *primary* host, matching
+      the RLS restriction, so a co-host viewing this same list doesn't
+      see (and can't use, if they tried via a direct API call) a
+      control that would fail anyway. Removing a participant who's
+      also a co-host should clear their `challenge_hosts` row in the
+      same action (application-level, not a DB-level cascade --
+      `challenge_hosts` has no FK to `challenge_participants` to
+      cascade through, only to `challenges`/`profiles` separately).
+    - `BoardPage.tsx`: the `isHost` boolean (line ~404, gates the "Edit
+      Dungeon" button) becomes host-OR-co-host.
+    - `DashboardPage.tsx`: "My Dungeons"' load query (currently two
+      branches -- challenges you host, challenges you've joined) needs
+      a third branch for challenges you co-host, merged in with a role
+      distinct enough for the existing HOST/PARTICIPANT badge
+      (`DungeonRow`) to show "Co-host" as its own third label rather
+      than collapsing into either existing one.
+
+    **The visual host indicator** (the second half of this request,
+    genuinely independent of the permission work -- worth building even
+    on its own): a small 👑 next to a host's/co-host's rsn wherever
+    participants are listed by name, matching this app's existing
+    emoji-badge visual language (🥇🥈🥉 medals, ⭐ first-completer, ✓
+    done, 🏆 board complete) rather than introducing a new icon system.
+    Primary spot: `BoardPage.tsx`'s ranked leaderboard and Coop roster,
+    since that's the one place every viewer already sees every
+    participant's name together. `title="Host"` vs `title="Co-host"`
+    on hover distinguishes the two without needing two different
+    glyphs. `EditChallengePage.tsx`'s Players list gets the same badge
+    for consistency, though it's less load-bearing there since the
+    "Make/Remove co-host" button already makes the status obvious.
+
+    **Open questions for the host to weigh in on before this gets
+    built** (defaults above are my best guess, not settled):
+    - Should a co-host be allowed to promote *other* participants to
+      co-host, or does that stay primary-host-only forever? Defaulted
+      to primary-host-only above.
+    - Any cap on how many co-hosts one dungeon can have? Defaulted to
+      no hard cap -- easy to add a client-side limit later if it's ever
+      actually abused.
+    - Does removing someone as a participant while they're a co-host
+      need an extra confirmation ("this will also remove their
+      co-host access"), or is silently clearing it alongside the
+      existing remove-confirmation enough?
