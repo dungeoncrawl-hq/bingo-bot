@@ -649,6 +649,14 @@ instead of renumbering the existing list.
     `resendEmail.ts` already matched -- just needed its stale TODO
     comment cleared).
 
+    **2026-09-08 follow-up**: `AdminAnnouncementsPage.tsx` only ever
+    supported create/publish/unpublish/delete -- there was no way to fix
+    a typo or reword an existing announcement (draft or already
+    published) short of deleting and recreating it, found while drafting
+    the site's actual first announcement. Added an inline Edit form per
+    row (reuses the same `site admin all` RLS write access
+    publish/unpublish already relies on -- no migration needed).
+
 21. Broadcast new announcements (#20) to Discord too, opt-in per
     challenge, reusing that challenge's own `discord_webhook_url` --
     reaches players who never revisit the site between events, which
