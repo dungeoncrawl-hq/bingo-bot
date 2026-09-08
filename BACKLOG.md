@@ -1057,3 +1057,38 @@ instead of renumbering the existing list.
     `42501 permission denied`, while every legitimate client update path
     (dungeon details, account settings, rsn/team/adventure-path edits)
     still succeeds.
+
+## Player icon updates
+27. **Default fallback chip for players with no icon set.** **Shipped
+    2026-09-08.** A player without a chosen `icon_url` previously
+    rendered nothing at all next to their name -- every consuming page
+    gated the chip on `icon_url` being truthy, so a brand-new profile
+    just showed blank space on the leaderboard, participant lists, tile
+    "who's here" chips, and both tile-detail modals.
+
+    New shared `PlayerChip.tsx` (wrapping the existing `PlayerIcon.tsx`)
+    is now the one place every one of those call sites goes through:
+    shows the player's icon on their chosen/random background when
+    `icon_url` is set (unchanged from #22/#23), otherwise a same-shaped
+    rounded-square chip with the player's first initial -- on their
+    chosen color if they picked one, plain white if they've set neither
+    an icon nor a color. Consolidates what used to be several
+    near-duplicate copies of this same background-fallback logic
+    (`BoardPage.tsx` already had its own, just for the Adventure
+    frontier chip) into one component. Team/pooled rows are unaffected
+    -- no single profile to represent, so still no chip at all there,
+    same as #22/#23's own scoping.
+
+28. **A Food icon group added to the profile icon picker.** **Shipped
+    2026-09-08.** 15 food-themed OSRS items (Potato, Shrimps, Trout,
+    Cooked chicken, Burnt meat, Lobster, Swordfish, Monkfish, Shark,
+    Anglerfish, Cooked karambwan, Cake, Pineapple pizza, Jug of wine,
+    Beer) a player can pick as their profile icon (#22), alongside the
+    existing Skills/Bosses/Items/Clue Scrolls/Pets/Other groups.
+
+    Kept as its own small catalog (`src/lib/foodIcons.ts`), not added to
+    `itemSets.ts`'s `PRESET_ITEM_SETS` (#2/#16's catalog) -- that list
+    also drives `isNotableLootItem` (which loot items get their own
+    tracked-drop row), and food is common, mundane loot that shouldn't
+    start getting individually logged just because it's now a pickable
+    icon. Every wiki icon URL verified live before wiring up.
