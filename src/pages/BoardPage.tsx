@@ -11,9 +11,10 @@ import {
   formatTileGoal,
   formatTileProgress,
   progressPercent,
+  type ParticipantStats,
   type TileStatus,
 } from '../lib/tileConditions';
-import { computeParticipantStats, type RawParticipantData } from '../lib/participantStats';
+import { computeParticipantStats, poolStats, type RawParticipantData } from '../lib/participantStats';
 import { computeHiscoresRecap, type SnapshotRow } from '../lib/hiscoresRecap';
 import { computeLeaderboard } from '../lib/leaderboard';
 import { computeAdventureFirstCompleters, computeFirstCompleters } from '../lib/firstCompletions';
@@ -105,6 +106,14 @@ export default function BoardPage() {
   const [savingRsn, setSavingRsn] = useState(false);
   const [rsnError, setRsnError] = useState('');
   const [tileStatusesByParticipant, setTileStatusesByParticipant] = useState<Record<string, Record<string, TileStatus>>>({});
+  // Coop/Team boards (BACKLOG.md #10) share one pooled progress number per
+  // tile, not one per participant -- tileStatusesByParticipant above stays
+  // solo-only (still needed there for the grid's "who's closest" badge
+  // coloring below). Coop pools every participant into a single set of
+  // statuses; Team pools per team_id, keyed by team id, since the grid
+  // shows whichever team is currently being viewed.
+  const [pooledTileStatuses, setPooledTileStatuses] = useState<Record<string, TileStatus> | null>(null);
+  const [teamTileStatuses, setTeamTileStatuses] = useState<Record<string, Record<string, TileStatus>>>({});
   const [selectedTile, setSelectedTile] = useState<Tile | null>(null);
   const [selectedColumn, setSelectedColumn] = useState<number | null>(null);
   const [baselineBannerDismissed, setBaselineBannerDismissed] = useState(false);
@@ -269,9 +278,21 @@ export default function BoardPage() {
 
       const chosenSkillByParticipant = new Map(participants.map((p) => [p.id, p.chosen_lowest_skill]));
       const statuses: Record<string, Record<string, TileStatus>> = {};
+      // Coop/Team pooling below needs each participant's own raw
+      // ParticipantStats (poolStats reduces those, not already-checked
+      // TileStatus objects -- summing/maxing has to happen per-field
+      // before checkTile runs, the same way TileDetailModal.tsx already
+      // does it for the tile-detail modal's own pooled row). Boards using
+      // Coop/Team are always board_type='grid5x5' (NewChallengePage.tsx
+      // forces game_mode back to 'solo' the moment board_type becomes
+      // 'adventure'), so the challenge-wide `stats` computed here --
+      // before any Adventure-only frontier override below -- is always
+      // the right one to pool.
+      const statsByParticipant: Record<string, ParticipantStats> = {};
       for (const pid of participantIds) {
         const hiscoresRecap = computeHiscoresRecap(snapshotsByParticipant[pid] ?? [], window);
         const stats = computeParticipantStats(rawByParticipant[pid], window, hiscoresRecap, chosenSkillByParticipant.get(pid) ?? null);
+        statsByParticipant[pid] = stats;
         const tileStatuses: Record<string, TileStatus> = {};
         for (const tile of tiles) {
           tileStatuses[tile.id] = checkTile(tile.condition, stats);
@@ -324,6 +345,30 @@ export default function BoardPage() {
         }
       }
       setTileStatusesByParticipant(statuses);
+
+      if (challenge.game_mode === 'coop') {
+        const pooled = poolStats(participantIds.map((pid) => statsByParticipant[pid]));
+        const pooledStatuses: Record<string, TileStatus> = {};
+        for (const tile of tiles) pooledStatuses[tile.id] = checkTile(tile.condition, pooled);
+        setPooledTileStatuses(pooledStatuses);
+      } else {
+        setPooledTileStatuses(null);
+      }
+
+      if (challenge.game_mode === 'team') {
+        const teamIds = new Set(participants.map((p) => p.team_id).filter((t): t is string => t != null));
+        const byTeam: Record<string, Record<string, TileStatus>> = {};
+        for (const teamId of teamIds) {
+          const memberIds = participants.filter((p) => p.team_id === teamId).map((p) => p.id);
+          const pooled = poolStats(memberIds.map((pid) => statsByParticipant[pid]));
+          const teamStatuses: Record<string, TileStatus> = {};
+          for (const tile of tiles) teamStatuses[tile.id] = checkTile(tile.condition, pooled);
+          byTeam[teamId] = teamStatuses;
+        }
+        setTeamTileStatuses(byTeam);
+      } else {
+        setTeamTileStatuses({});
+      }
     })();
   }, [participants, tiles, challenge, completions]);
 
@@ -413,7 +458,16 @@ export default function BoardPage() {
   // whether the link is worth showing at all.
   const isHost = session?.user.id === challenge.host_id || (session != null && coHostProfileIds.has(session.user.id));
   const viewedParticipant = participants.find((p) => p.id === viewedParticipantId);
-  const viewedTileStatuses = (viewedParticipantId && tileStatusesByParticipant[viewedParticipantId]) || {};
+  // Coop shows the one shared pooled progress regardless of who's
+  // viewing; Team shows the viewed participant's own team's pooled
+  // progress; Solo (including every Adventure board, always solo) keeps
+  // showing just the viewed participant's own individual stats.
+  const viewedTileStatuses =
+    challenge.game_mode === 'coop'
+      ? (pooledTileStatuses ?? {})
+      : challenge.game_mode === 'team'
+        ? (viewedParticipant?.team_id && teamTileStatuses[viewedParticipant.team_id]) || {}
+        : (viewedParticipantId && tileStatusesByParticipant[viewedParticipantId]) || {};
   const viewedCompletedTileIds = new Set(
     completions.filter((c) => c.kind === 'tile' && c.participant_id === viewedParticipantId).map((c) => c.ref),
   );
@@ -794,18 +848,25 @@ export default function BoardPage() {
               const someoneElseCompleted =
                 tile != null && !done && completions.some((c) => c.kind === 'tile' && c.ref === tile.id);
               // How close the closest participant is to finishing this
-              // still-unclaimed tile, across everyone (not just the viewer)
-              // -- colors the circle badge below from red (no one's close)
-              // to green (someone's nearly there).
+              // still-unclaimed tile, across everyone (not just the
+              // viewer) -- colors the circle badge below from red (no
+              // one's close) to green (someone's nearly there). Only a
+              // Solo board has separate individual boards worth maxing
+              // over this way -- Coop/Team already share one pooled
+              // number (the same `percent` just computed above from the
+              // now-pooled `status`), so there's no "closest participant"
+              // distinct from that shared figure to look for.
               const closestPercent =
                 tile && noOneCompleted
-                  ? Math.max(
-                      0,
-                      ...participants.map((p) => {
-                        const s = tileStatusesByParticipant[p.id]?.[tile.id];
-                        return s ? (progressPercent(tile.condition, s) ?? 0) : 0;
-                      }),
-                    )
+                  ? challenge.game_mode === 'solo'
+                    ? Math.max(
+                        0,
+                        ...participants.map((p) => {
+                          const s = tileStatusesByParticipant[p.id]?.[tile.id];
+                          return s ? (progressPercent(tile.condition, s) ?? 0) : 0;
+                        }),
+                      )
+                    : (percent ?? 0)
                   : 0;
               const badge: { glyph: string; className?: string; color?: string } | null = !tile
                 ? null

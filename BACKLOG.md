@@ -1176,3 +1176,50 @@ instead of renumbering the existing list.
     empty-state guard hides the section rather than showing an empty
     box). A plain "Total XP" tile confirmed Contributions renders alone,
     with neither ledger, on a condition type neither applies to.
+
+30. **Fixed: a Coop/Team board's main grid showed one participant's own
+    individual progress instead of the shared pooled/team total.**
+    **Shipped 2026-09-09**, caught by a host asking why Ototo Dungeon's
+    Collection Log tile still read "1 / 40" after a second player's
+    collection log event had landed (should've read "2 / 40" -- both
+    events were real, confirmed against `collection_log_entries`
+    directly).
+
+    **Root cause**: `BoardPage.tsx`'s main tile grid has always computed
+    each tile's live caption/percent/badge from `viewedTileStatuses`,
+    which was unconditionally `tileStatusesByParticipant[viewedParticipantId]`
+    -- the signed-in viewer's *own* individually-computed stats, never
+    pooled. This was correct for Solo (each participant genuinely has
+    their own separate board) but silently wrong for Coop/Team, which
+    have shared this exact code path since game modes shipped (#10) --
+    the grid was effectively always showing "my own contribution" and
+    mislabeling it as the shared/team total, for every Coop/Team board
+    that's ever existed, not just Ototo's. `TileDetailModal.tsx` (the
+    tile-detail popup) was never affected -- it already pools correctly
+    via `poolStats`, which is exactly how this discrepancy became
+    checkable: the modal's own "Everyone" row and the grid caption
+    beneath the same tile could disagree.
+
+    **Fix**: the data-loading effect now also captures each participant's
+    raw `ParticipantStats` (not just their already-`checkTile`'d
+    `TileStatus`), then pools them the same way `TileDetailModal.tsx`
+    does -- once across everyone for Coop (`pooledTileStatuses`), once
+    per `team_id` for Team (`teamTileStatuses`, keyed by team since the
+    grid shows whichever team is currently being viewed). `viewedTileStatuses`
+    now branches on `challenge.game_mode`: Coop reads the pooled set,
+    Team reads the viewed participant's own team's set, Solo (and every
+    Adventure board, which is always Solo) is unchanged. The "who's
+    closest" badge-color heuristic (`closestPercent`) had the identical
+    bug one level down -- it maxed over each individual participant's own
+    percent even for Coop/Team, where that's not a meaningful question
+    (there's one shared number, not several people to compare); it now
+    reuses the tile's own already-pooled percent for those two modes,
+    keeping the original per-participant max only for Solo.
+
+    Live-verified against Ototo Dungeon: Collection Log corrected from
+    1/40 to 2/40 immediately on reload, matching the two real
+    `collection_log_entries` rows (26 Limont's Huntsman's kit, otototo's
+    Blue tricorn hat); Total Boss KC and every other tile's numbers were
+    unaffected (already correct, since either only one participant had
+    contributed or both events fell on the same tile type that happened
+    to still read right).
