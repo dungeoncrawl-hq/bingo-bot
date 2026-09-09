@@ -71,8 +71,10 @@ function pick<T>(pool: T[], rng: () => number): T {
 // Generic {key} substitution -- a template that doesn't reference a given
 // key (e.g. boardCompletion's lines, which take no variables) just ignores
 // it, so one substitution function covers every pool without each needing
-// its own shape.
-function fill(template: string, vars: Record<string, string>): string {
+// its own shape. Exported for discordTitles.ts's admin-editable title
+// templates (BACKLOG.md #9) -- same mechanism, no reason for a second
+// implementation.
+export function fill(template: string, vars: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (_, key: string) => vars[key] ?? '');
 }
 

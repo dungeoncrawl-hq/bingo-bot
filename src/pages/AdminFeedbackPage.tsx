@@ -51,12 +51,12 @@ export default function AdminFeedbackPage() {
 
   return (
     <AdminLayout>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Feedback</h1>
           <p className="mt-1 text-sm text-stone-500">Submitted from the "Feedback" link in the site footer.</p>
         </div>
-        <label className="flex items-center gap-2 text-xs text-stone-400">
+        <label className="flex shrink-0 items-center gap-2 text-xs text-stone-400">
           <input type="checkbox" checked={showReviewed} onChange={(e) => setShowReviewed(e.target.checked)} />
           Show reviewed
         </label>

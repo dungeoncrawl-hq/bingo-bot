@@ -257,7 +257,7 @@ forward, not just tiles, once those exist to copy.
    conditional branching, not just interpolation) than the banter
    pools were.
 
-   **Scoped 2026-09-09** (not yet built). `discordEmbeds.ts` currently
+   **Scoped and shipped 2026-09-09.** `discordEmbeds.ts` currently
    hardcodes 6 distinct title strings, not 5 like the banter pools --
    unlike a banter pool (many randomized variants, one picked per
    event), each title slot is a single deterministic string, so this
@@ -346,6 +346,52 @@ forward, not just tiles, once those exist to copy.
    real Discord webhooks -- the live client-side preview (point 2 above)
    is the safe substitute, same as how the banter page already proves
    itself without ever touching a real channel.
+
+   **Built as scoped**, one deliberate simplification: `discordTitles.ts`
+   (new module, mirrors `discordBanter.ts`'s shape) holds
+   `DEFAULT_TITLE_TEMPLATES` and the three pure title-builder functions;
+   `discordEmbeds.ts`'s three embed builders each gained a `titles?`
+   param threaded the same way `pools?` already was;
+   `discordTitleStore.ts` (mirrors `discordBanterStore.ts`, same 60s TTL
+   cache and per-slot default fallback) is fetched in
+   `challengeProgress.ts` alongside the existing banter-pool fetch --
+   unlike pools (only needed for tile/board embeds), titles are fetched
+   whenever *any* embed will be built, since a line-completion title
+   needs one too. `discordBanter.ts`'s own `fill()` is now exported and
+   reused rather than reimplemented, per the scoping doc's own note.
+
+   `AdminDiscordTemplatesPage.tsx` gained a "Titles" section above the
+   existing flavor-pool section (one combined Save button covers both;
+   the "Reset to defaults" button now resets both too), built exactly to
+   the four UX decisions in the scoping doc above -- placeholder badges,
+   realistic live preview, a soft (non-blocking) `{subject}` warning, and
+   a per-slot Reset alongside the page-wide one. Also fixed this same
+   page's header row to wrap instead of cramping on a narrow screen,
+   part of the mobile-friendliness/nav pass done alongside this (see the
+   `## Admin UX` note below).
+
+   New table `discord_title_templates` -- migration written, **not yet
+   run** (see bottom of this item for the SQL). Until it runs, both
+   `discordTitleStore.ts` (server) and the admin page (client) degrade
+   the same way #22/#26 already established this codebase's pattern for
+   a brand-new standalone table: a missing-table query resolves to
+   `{data: null, error}` for that one fetch, so every title/caption
+   correctly falls back to `DEFAULT_TITLE_TEMPLATES` and the admin page
+   still loads and previews correctly -- confirmed live (four expected
+   404s in the console, nothing else broken).
+
+   **Found and fixed in passing**: a live production `discord_banter_lines`
+   row (`firstTile`'s "Somebody's speedrunning this challenge.") still had
+   pre-#25 wording -- the terminology sweep only touched hardcoded source
+   strings, never rows an admin had already saved to the DB before it ran.
+   Fixed directly (now "...this dungeon.", matching the hardcoded default
+   it was cloned from).
+
+   Live-verified: the {subject}-missing warning correctly appears/clears
+   when editing/resetting `tileFirst`'s input; per-slot Reset correctly
+   restores just that one slot's default text without touching any
+   other field; the page renders with no horizontal overflow at a
+   375px-wide viewport, tab bar included.
 
 ## Infrastructure research
 10. **Build a first-party RuneLite plugin instead of depending on Dink.**
@@ -1433,3 +1479,47 @@ instead of renumbering the existing list.
     real "0 / 3" progress; WheresMyGear and otototo (neither has reached
     it) both now correctly read "Not reached yet" instead of a live
     number.
+
+## Admin UX
+33. **Made the site-admin pages mobile-friendly and easier to navigate
+    into/between.** **Shipped 2026-09-09**, done alongside #9 (the
+    Discord-templates admin work directly needed a page that already
+    worked well on a phone). Every `/dungeon-master-admin/*` page shares
+    `AdminLayout.tsx`'s tab bar and gets this for free at once, rather
+    than needing a per-page fix.
+
+    **Found**: no way *into* `/dungeon-master-admin` existed anywhere in
+    normal site navigation -- bookmark/typed-URL only, despite
+    `is_site_admin` already being known client-side (`useAuth`'s
+    `profile`). `AdminLayout.tsx`'s own 8-tab subnav was a plain
+    `flex items-center gap-2` with no wrap or scroll handling at all, so
+    a narrow phone would either clip tabs or force the whole page into
+    horizontal scroll. `AdminRandomizeSettingsPage.tsx`'s KC farm-rate
+    tier boxes were a fixed `grid-cols-3` (three cramped columns on any
+    width, phone included) and its header row (title + Reset/Save
+    buttons) had no wrap guard. `AdminGrowthPage.tsx`'s table was the
+    only one of the three site-wide data tables with no
+    `overflow-x-auto` wrapper.
+
+    **Fixed**: `Header.tsx` gained an "Admin" link (shown only when
+    `profile?.is_site_admin`) next to "My Dungeons" -- the first way in
+    from normal navigation this site has ever had; that nav row and
+    `AdminLayout.tsx`'s tab bar both now `flex-wrap` instead of
+    overflowing, so every tab stays visible and tappable at any width
+    rather than requiring a swipe-to-see-more gesture nobody's cued to
+    try. `AdminRandomizeSettingsPage.tsx`'s tier grid is now
+    `grid-cols-1 sm:grid-cols-3` (stacks on a phone, 3-across once there's
+    room) and its header row wraps; `AdminGrowthPage.tsx`'s table got the
+    same `overflow-x-auto` wrapper the other two data tables
+    (`AdminAccountsPage.tsx`/`AdminParticipantsPage.tsx`) already had, for
+    consistency even though its 3 columns are narrow enough to rarely
+    need it. `AdminFeedbackPage.tsx`'s header row got the same wrap
+    treatment as Randomize Settings' and the new Discord-templates
+    section's.
+
+    Live-verified at a 375px-wide viewport (`resize_window` "mobile"
+    preset): no horizontal overflow anywhere on the Discord-templates or
+    Randomize Settings pages (`document.documentElement.scrollWidth`
+    equals `clientWidth` on both, and a screenshot of each confirms the
+    tab bar/tier cards actually read as a clean single-column stack, not
+    just an absence-of-scrollbar technicality).

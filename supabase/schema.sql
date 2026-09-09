@@ -939,3 +939,38 @@ grant update (default_rsn, email_notifications, icon_url, color) on profiles to 
 -- (added by ALTERs later than the counters) already exist.
 revoke update on challenge_participants from authenticated;
 grant update (rsn, team_id, chosen_lowest_skill, adventure_path) on challenge_participants to authenticated;
+
+-- BACKLOG.md #9, 2026-09-09 -- the other half of discord_banter_lines
+-- above: admin-editable Discord embed TITLE text, not just the flavor
+-- pools. `slot` is unique (unlike `pool` above) -- a title slot is a
+-- single deterministic string, not a pool of randomized variants to pick
+-- from, so there's exactly one row per slot, upserted on save, not
+-- deleted-and-reinserted like the banter pools' whole ordered list is.
+-- No default rows seeded here -- discordTitleStore.ts (server) and
+-- AdminDiscordTemplatesPage.tsx (client) both fall back to
+-- DEFAULT_TITLE_TEMPLATES per-slot when a row is missing or blank, same
+-- as the banter pools already do, so an empty table behaves identically
+-- to one seeded with the defaults.
+create table if not exists discord_title_templates (
+  id uuid primary key default gen_random_uuid(),
+  slot text not null unique check (
+    slot in ('tileFirst', 'tileNotFirst', 'bossFirst', 'bossNotFirst', 'lineCompletion', 'boardCompletion')
+  ),
+  -- {subject}/{phrase}/{bossLabel} placeholders, substituted generically
+  -- at render time (discordBanter.ts's fill(), shared with the banter
+  -- pools) -- not every slot uses all three; lineCompletion/
+  -- boardCompletion use only {subject}.
+  template text not null,
+  updated_at timestamptz not null default now()
+);
+
+alter table discord_title_templates enable row level security;
+drop policy if exists "public read" on discord_title_templates;
+create policy "public read" on discord_title_templates for select using (true);
+drop policy if exists "site admin writes" on discord_title_templates;
+create policy "site admin writes" on discord_title_templates for all
+  to authenticated using (
+    exists (select 1 from profiles p where p.id = auth.uid() and p.is_site_admin)
+  ) with check (
+    exists (select 1 from profiles p where p.id = auth.uid() and p.is_site_admin)
+  );

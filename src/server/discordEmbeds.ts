@@ -4,6 +4,7 @@
 import { tileTaskPhrase } from '../lib/tileConditions.js';
 import { ADVENTURE_SMALL_FINAL_BOSS_COLUMN } from '../lib/adventureProgress.js';
 import { tileCompletionFlavor, boardCompletionFlavor, type BanterPools } from './discordBanter.js';
+import { tileCompletionTitle, lineCompletionTitle, boardCompletionTitle, type TitleTemplates } from './discordTitles.js';
 import type { LeaderboardEntry } from '../lib/leaderboard.js';
 import type { AdventureLayout, Tile } from '../db/types.js';
 import type { DiscordEmbed, DiscordEmbedField } from './discordRelay.js';
@@ -85,8 +86,11 @@ export function buildTileCompletionEmbed(params: {
   // fetchBanterPools()), defaulting to the hardcoded pools when omitted
   // (every existing caller, including this file's own test suite).
   pools?: BanterPools;
+  // BACKLOG.md #9 -- same shape, for the admin-editable title text
+  // (discordTitleStore.ts's fetchTitleTemplates()).
+  titles?: TitleTemplates;
 }): DiscordEmbed {
-  const { participant, tile, isFirst, firstCompleterRsn, noFirstConcept, leaderboard, participants, challenge, pools } = params;
+  const { participant, tile, isFirst, firstCompleterRsn, noFirstConcept, leaderboard, participants, challenge, pools, titles } = params;
   const subject = params.subject ?? participant.rsn;
   // Two tiles can share the same label (e.g. two "Big Drop" tiles with
   // different thresholds) -- spelling out the exact requirement in the
@@ -111,13 +115,7 @@ export function buildTileCompletionEmbed(params: {
     ? undefined
     : tileCompletionFlavor({ isFirst, isBoss, points: totalPoints, firstCompleterRsn }, pools);
   const bossLabel = isFinalBoss ? 'the FINAL BOSS' : 'a boss';
-  const title = isBoss
-    ? isFirst
-      ? `${subject} was first to defeat ${bossLabel} -- the ${phrase} boss!`
-      : `${subject} defeated ${bossLabel} -- the ${phrase} boss.`
-    : isFirst
-      ? `${subject} was first to complete the ${phrase} task!`
-      : `${subject} completed the ${phrase} task.`;
+  const title = tileCompletionTitle({ isFirst, isBoss, subject, phrase, bossLabel }, titles);
 
   return {
     title,
@@ -136,11 +134,16 @@ export function buildTileCompletionEmbed(params: {
   };
 }
 
-export function buildLineCompletionEmbed(params: { participant: ParticipantLite; subject?: string; challenge: ChallengeLite }): DiscordEmbed {
-  const { participant, challenge } = params;
+export function buildLineCompletionEmbed(params: {
+  participant: ParticipantLite;
+  subject?: string;
+  challenge: ChallengeLite;
+  titles?: TitleTemplates;
+}): DiscordEmbed {
+  const { participant, challenge, titles } = params;
   const subject = params.subject ?? participant.rsn;
   return {
-    title: `${subject} completed a line!`,
+    title: lineCompletionTitle(subject, titles),
     color: LINE_COLOR,
     image: { url: boardImageUrl(participant.id) },
     fields: [boardLinkField(challenge)],
@@ -152,11 +155,12 @@ export function buildBoardCompletionEmbed(params: {
   subject?: string;
   challenge: ChallengeLite;
   pools?: BanterPools;
+  titles?: TitleTemplates;
 }): DiscordEmbed {
-  const { participant, challenge, pools } = params;
+  const { participant, challenge, pools, titles } = params;
   const subject = params.subject ?? participant.rsn;
   return {
-    title: `${subject} completed the whole board!`,
+    title: boardCompletionTitle(subject, titles),
     description: boardCompletionFlavor(pools),
     color: BOARD_COLOR,
     image: challenge.board_type === 'adventure' ? undefined : { url: boardImageUrl(participant.id) },

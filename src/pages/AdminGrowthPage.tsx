@@ -51,24 +51,26 @@ export default function AdminGrowthPage() {
       {!loadError && !rows && <p className="mt-4 text-stone-500">Loading…</p>}
       {rows && rows.length === 0 && <p className="mt-4 text-stone-500">No activity yet.</p>}
       {rows && rows.length > 0 && (
-        <table className="mt-6 w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-stone-800 text-xs uppercase text-stone-500">
-              <th className="py-2 pr-4">Date</th>
-              <th className="py-2 pr-4">Dungeons created</th>
-              <th className="py-2 pr-4">Participants joined</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.date} className="border-b border-stone-900">
-                <td className="py-2 pr-4">{r.date}</td>
-                <td className="py-2 pr-4">{r.challengesCreated}</td>
-                <td className="py-2 pr-4">{r.participantsJoined}</td>
+        <div className="mt-6 overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-stone-800 text-xs uppercase text-stone-500">
+                <th className="py-2 pr-4">Date</th>
+                <th className="py-2 pr-4">Dungeons created</th>
+                <th className="py-2 pr-4">Participants joined</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.date} className="border-b border-stone-900">
+                  <td className="py-2 pr-4">{r.date}</td>
+                  <td className="py-2 pr-4">{r.challengesCreated}</td>
+                  <td className="py-2 pr-4">{r.participantsJoined}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </AdminLayout>
   );

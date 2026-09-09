@@ -10,6 +10,7 @@ import { relayToDiscord } from './discordRelay.js';
 import { buildTileCompletionEmbed, buildLineCompletionEmbed, buildBoardCompletionEmbed } from './discordEmbeds.js';
 import type { ParticipantLite } from './discordEmbeds.js';
 import { fetchBanterPools } from './discordBanterStore.js';
+import { fetchTitleTemplates } from './discordTitleStore.js';
 import { checkTile, gridLines } from '../lib/tileConditions.js';
 import { computeParticipantStats, poolStats } from '../lib/participantStats.js';
 import type { RawParticipantData } from '../lib/participantStats.js';
@@ -420,6 +421,11 @@ export async function checkChallengeProgress(participantId: string, isLogout: bo
   // actually a tile or board completion to flavor -- buildLineCompletionEmbed
   // takes no pools, so a line-only completion skips this fetch entirely.
   const pools = insertedTileIds.length > 0 || boardInserted ? await fetchBanterPools() : undefined;
+  // Titles are needed for every embed shape (tile/line/board all have
+  // one), unlike pools above -- fetched whenever anything at all is
+  // about to be posted.
+  const titles =
+    insertedTileIds.length > 0 || insertedLineIndices.length > 0 || boardInserted ? await fetchTitleTemplates() : undefined;
 
   for (const tileId of insertedTileIds) {
     const tile = tiles.find((t) => t.id === tileId);
@@ -453,19 +459,20 @@ export async function checkChallengeProgress(participantId: string, isLogout: bo
       participants: embedParticipants,
       challenge: challengeLite,
       pools,
+      titles,
     });
     await relayToDiscord(challenge.discord_webhook_url, embed);
   }
   for (let i = 0; i < insertedLineIndices.length; i++) {
     await relayToDiscord(
       challenge.discord_webhook_url,
-      buildLineCompletionEmbed({ participant: participantLite, subject, challenge: challengeLite }),
+      buildLineCompletionEmbed({ participant: participantLite, subject, challenge: challengeLite, titles }),
     );
   }
   if (boardInserted) {
     await relayToDiscord(
       challenge.discord_webhook_url,
-      buildBoardCompletionEmbed({ participant: participantLite, subject, challenge: challengeLite, pools }),
+      buildBoardCompletionEmbed({ participant: participantLite, subject, challenge: challengeLite, pools, titles }),
     );
   }
 }

@@ -18,8 +18,12 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="mx-auto max-w-4xl py-12">
-      <div className="flex items-center gap-2 border-b border-stone-800 pb-4">
+    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
+      {/* flex-wrap, not a horizontal scroller -- 8 tabs on a narrow phone
+          read better wrapped into a grid where every tab is visible at
+          once than as a swipe-to-see-more strip, which hides how many
+          tabs there even are. */}
+      <div className="flex flex-wrap gap-1.5 border-b border-stone-800 pb-4 sm:gap-2">
         <NavLink to="/dungeon-master-admin" end className={tabClass}>
           Dashboard
         </NavLink>

@@ -119,7 +119,7 @@ export default function AdminRandomizeSettingsPage() {
 
   return (
     <AdminLayout>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Randomize settings</h1>
           <p className="mt-1 text-sm text-stone-500">
@@ -128,7 +128,7 @@ export default function AdminRandomizeSettingsPage() {
           </p>
         </div>
         {settings && (
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
               onClick={() => setSettings(deepClone(DEFAULT_RANDOMIZE_SETTINGS))}
@@ -155,7 +155,7 @@ export default function AdminRandomizeSettingsPage() {
         <>
           <section className="mt-8">
             <h2 className="text-lg font-semibold">Points per difficulty</h2>
-            <div className="mt-3 flex gap-6">
+            <div className="mt-3 flex flex-wrap gap-6">
               {DIFFICULTIES.map((d) => (
                 <label key={d} className="flex flex-col gap-1 text-xs capitalize text-stone-400">
                   {d}
@@ -231,7 +231,7 @@ export default function AdminRandomizeSettingsPage() {
               A `kcGained` tile's threshold comes from its boss's tier here, not a flat number -- 79 bosses span too
               wide a farm-rate range for one KC goal to make sense for all of them.
             </p>
-            <div className="mt-3 grid grid-cols-3 gap-4">
+            <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
               {KC_TIERS.map((tier) => (
                 <div key={tier} className="rounded-lg border border-stone-800 p-3">
                   <p className="text-sm font-medium capitalize text-stone-200">{tier}</p>

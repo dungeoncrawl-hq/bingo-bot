@@ -7,16 +7,23 @@ export default function Header() {
   const navigate = useNavigate();
 
   return (
-    <header className="flex items-center justify-between border-b border-stone-800 px-6 py-4">
+    <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-stone-800 px-6 py-4">
       <Link to="/" className="font-display text-lg font-semibold tracking-wide text-amber-500">
         Dungeon Crawl
       </Link>
-      <nav className="flex items-center gap-4 text-sm">
+      <nav className="flex flex-wrap items-center gap-4 text-sm">
         {session ? (
           <>
             <Link to="/dashboard" className="text-stone-300 hover:text-stone-100">
               My Dungeons
             </Link>
+            {/* The only entry point into /dungeon-master-admin from
+                normal site navigation -- previously bookmark/URL-only. */}
+            {profile?.is_site_admin && (
+              <Link to="/dungeon-master-admin" className="text-stone-300 hover:text-stone-100">
+                Admin
+              </Link>
+            )}
             <Link to="/account" className="text-stone-500 hover:text-stone-300">
               {profile?.display_name ?? session.user.email}
             </Link>
