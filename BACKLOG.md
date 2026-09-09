@@ -257,6 +257,96 @@ forward, not just tiles, once those exist to copy.
    conditional branching, not just interpolation) than the banter
    pools were.
 
+   **Scoped 2026-09-09** (not yet built). `discordEmbeds.ts` currently
+   hardcodes 6 distinct title strings, not 5 like the banter pools --
+   unlike a banter pool (many randomized variants, one picked per
+   event), each title slot is a single deterministic string, so this
+   needs a materially different admin UI, not a copy of the banter
+   page's add/remove-a-line pattern.
+
+   **The 6 slots**, extracted as-is from today's inline ternary chain in
+   `buildTileCompletionEmbed`/`buildLineCompletionEmbed`/
+   `buildBoardCompletionEmbed`, each becoming the new
+   `DEFAULT_TITLE_TEMPLATES`:
+   - `tileFirst`: `"{subject} was first to complete the {phrase} task!"`
+   - `tileNotFirst`: `"{subject} completed the {phrase} task."`
+   - `bossFirst`: `"{subject} was first to defeat {bossLabel} -- the {phrase} boss!"`
+   - `bossNotFirst`: `"{subject} defeated {bossLabel} -- the {phrase} boss."`
+   - `lineCompletion`: `"{subject} completed a line!"`
+   - `boardCompletion`: `"{subject} completed the whole board!"`
+
+   `{bossLabel}` (today's "a boss" / "the FINAL BOSS" distinction) stays
+   a substituted variable rather than becoming 4 separate boss slots
+   (mid-boss vs. final-boss × first vs. not-first) -- considered and
+   rejected: doubles the boss section for a distinction an admin who
+   cares can already express by using `{bossLabel}` prominently in their
+   own wording. Same generic `{key}` substitution `discordBanter.ts`'s
+   `fill()` already does, reused rather than reimplemented.
+
+   **Data model**: new `discord_title_templates` table -- `slot` (the 6
+   values above, `unique`, unlike `discord_banter_lines`' `pool` column
+   which intentionally allows many rows per pool), `template`,
+   `updated_at`. One row per slot, so saving is a per-slot upsert, not
+   banter's delete-everything-then-reinsert-everything (that pattern
+   exists there because a pool's *entire ordered list* is what's being
+   replaced each save; a single title string doesn't need that). Same
+   RLS shape as `discord_banter_lines` (public read, site-admin write).
+   New `discordTitleStore.ts` (mirrors `discordBanterStore.ts` exactly,
+   including its 60s TTL cache and per-slot fallback to the hardcoded
+   default when a slot's row is missing or blank -- an admin clearing a
+   field to empty must never post a blank Discord embed title).
+   `challengeProgress.ts` fetches `titles` alongside its existing `pools`
+   fetch and threads it through the same way.
+
+   **Admin UI -- same page (`AdminDiscordTemplatesPage.tsx`), a new
+   section above the existing banter pools** (titles are the first thing
+   a reader sees in the embed, so editing them first matches the
+   embed's own reading order; keeps every piece of Discord-embed
+   customization on the one page rather than splitting it across two nav
+   items). Concretely, *not* a reskin of the banter section's
+   add/remove-a-line list -- six single-line inputs, grouped the way a
+   host actually thinks about them rather than as an undifferentiated
+   flat list of 6: a "Tile completions" group (`tileFirst`/`tileNotFirst`
+   side by side), a "Boss completions" group (`bossFirst`/`bossNotFirst`,
+   Adventure-only but shown regardless of board type, same as the
+   banter page already does for its own boss pools), then
+   `lineCompletion` and `boardCompletion` each on their own.
+
+   Four specific UX decisions, each because titles carry more risk than
+   a banter line (a banter line is supplementary flavor text below the
+   fold; a broken title is the very first thing anyone reads):
+   1. **A placeholder legend per field, not repeated prose.** A boss
+      title can reference three placeholders at once
+      (`{subject}`/`{bossLabel}`/`{phrase}`) -- the banter page's "Use
+      `{rsn}` where it should go" sentence, repeated three times, reads
+      clumsy. Show the available placeholders for that slot as small
+      inline badges instead, once, above the input.
+   2. **Live preview substituted with a realistic example, not literal
+      placeholder text** -- e.g. `bossFirst`'s preview renders
+      "ExampleRSN was first to defeat the FINAL BOSS -- the 1,000,000
+      total XP boss!", not a sentence with `{phrase}` left unfilled.
+      Directly reuses the banter page's existing preview-under-the-input
+      pattern, just with a richer fixed example-variable set.
+   3. **A required-placeholder warning, not a hard block.** If a saved
+      template drops `{subject}` entirely, warn inline (a title with no
+      one named in it reads as broken almost every time) but still allow
+      saving -- an admin who genuinely wants a subject-less title has a
+      legitimate reason to, the same way this app never blocks a host
+      from an unusual-but-valid choice elsewhere.
+   4. **Per-slot "Reset to default," alongside the existing page-wide
+      "Reset to defaults."** Losing one of many banter lines to a
+      misclick is low-stakes; losing your only custom board-completion
+      title because a global reset also touched the other 5 you'd
+      already gotten right is a real regression the current page's
+      all-or-nothing reset doesn't protect against once titles have
+      their own per-slot values to lose.
+
+   **Deliberately not building**: a "send a real test post" button.
+   Matches this project's own standing rule against posting test data to
+   real Discord webhooks -- the live client-side preview (point 2 above)
+   is the safe substitute, same as how the banter page already proves
+   itself without ever touching a real channel.
+
 ## Infrastructure research
 10. **Build a first-party RuneLite plugin instead of depending on Dink.**
     Full research written up in
