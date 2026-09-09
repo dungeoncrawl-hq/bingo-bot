@@ -72,7 +72,12 @@ export default function SetupGuidePage() {
       </div>
       <p className="mt-2 text-sm text-stone-400">
         Everything on your board fills in automatically from RuneLite's <Box>Dink</Box> plugin -- no manual updates.
-        It's all copy-pasting a link and checking boxes in Dink's settings, no technical know-how needed.
+        It's all copy-pasting a link and checking boxes in Dink's settings, no technical know-how needed. Curious
+        exactly what counts toward each tile, and how fast it updates?{' '}
+        <Link to="/tracking" className="text-amber-400 underline hover:text-amber-300">
+          See how tracking works
+        </Link>
+        .
       </p>
 
       <div className="mt-6 rounded-lg border border-amber-800/60 bg-amber-950/10 p-4">

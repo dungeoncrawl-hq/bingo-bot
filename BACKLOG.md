@@ -1604,3 +1604,51 @@ instead of renumbering the existing list.
     one item). Every one of the 20 wiki icon URLs live-verified with a
     HEAD request before adding, then confirmed actually loading
     (`naturalWidth > 0`) in the live picker afterward.
+
+## Player-facing docs
+36. **A player-facing page explaining how each tile condition actually
+    gets its data.** **Shipped 2026-09-09.** New `/tracking`
+    (`TrackingInfoPage.tsx`), linked from `Footer.tsx` (next to "Updates"/
+    "About us") and cross-linked from `SetupGuidePage.tsx`'s intro
+    paragraph.
+
+    **Made public, not admin-only** -- the recurring pattern this same
+    session kept surfacing (a player asking "why isn't this tile
+    updating," which turned out to be a Dink-vs-Hiscores mixup, twice:
+    the Otototo boss-tile reachedness question and the Barrows naming
+    bug) is exactly the confusion this page exists to head off before it
+    becomes a support question. An admin-only version would only ever
+    reach the host, not the player actually confused mid-dungeon.
+
+    **Content**, grouped by data source rather than by `TileCondition`'s
+    own type names (a player thinks "why hasn't this updated," not
+    "what's my condition's discriminant"):
+    - **Synced instantly from Dink** -- one card per Dink notifier
+      (Kill Count, Slayer, Loot, Collection Log, Death, Pets), matching
+      `SetupGuidePage.tsx`'s own 6-section webhook walkthrough exactly,
+      so a player who's already ticked those boxes can map each straight
+      back to what they enabled.
+    - **Synced from the OSRS Hiscores** -- XP/level/lowest-skill/clue-tier
+      conditions, plus Guardians of the Rift (called out specifically:
+      it reads like a minigame completion but rides the Hiscores sync
+      instead, since Dink's Kill Count notifier can't detect "Rifts
+      closed" -- the same fact `tileConditions.ts`'s own
+      `gotrCompleted` comment documents).
+    - An Adventure-specific callout (matching `SetupGuidePage.tsx`'s
+      amber-box styling): a Hiscores-backed room needs an actual logout
+      to start counting once reached; a Dink-backed room doesn't.
+    - **Special tiles** -- Free space and TBD, no live data involved.
+
+    Sourced directly from `tileConditions.ts`'s own header comments
+    (which condition types Dink drives vs. which need
+    `conditionNeedsBaseline`) rather than re-deriving the grouping from
+    scratch, so the page can't silently drift from what the code
+    actually does.
+
+    Same visual language as `AboutPage.tsx`/`SetupGuidePage.tsx`
+    (`max-w-2xl`, amber section headers, `rounded-lg` cards) --
+    deliberately not a new design, so it reads as part of the existing
+    docs set rather than a bolted-on admin report. Build/lint/test all
+    passed; live-verified in the browser at both desktop and 375px-wide
+    mobile viewports, no console errors, footer link and the
+    `SetupGuidePage.tsx` cross-link both confirmed working.

@@ -8,6 +8,7 @@ import NewChallengePage from './pages/NewChallengePage';
 import EditChallengePage from './pages/EditChallengePage';
 import BoardPage from './pages/BoardPage';
 import SetupGuidePage from './pages/SetupGuidePage';
+import TrackingInfoPage from './pages/TrackingInfoPage';
 import AboutPage from './pages/AboutPage';
 import AccountPage from './pages/AccountPage';
 import ChangelogPage from './pages/ChangelogPage';
@@ -35,6 +36,7 @@ function App() {
             <Route path="/c/:slug" element={<BoardPage />} />
             <Route path="/c/:slug/edit" element={<EditChallengePage />} />
             <Route path="/c/:slug/setup" element={<SetupGuidePage />} />
+            <Route path="/tracking" element={<TrackingInfoPage />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/account" element={<AccountPage />} />
             <Route path="/changelog" element={<ChangelogPage />} />

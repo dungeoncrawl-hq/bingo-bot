@@ -38,6 +38,10 @@ export default function Footer() {
         {hasNewAnnouncement && <span className="absolute -right-2 -top-0.5 h-1.5 w-1.5 rounded-full bg-amber-500" />}
       </Link>{' '}
       <span aria-hidden="true">·</span>{' '}
+      <Link to="/tracking" className="hover:text-stone-400">
+        How tracking works
+      </Link>{' '}
+      <span aria-hidden="true">·</span>{' '}
       <Link to="/about" className="hover:text-stone-400">
         About us
       </Link>
