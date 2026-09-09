@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { computeParticipantStats, mergeCounts, poolStats, qualifyingBigDrops, type RawParticipantData } from './participantStats';
+import {
+  collectionLogEntriesInWindow,
+  computeParticipantStats,
+  mergeCounts,
+  poolStats,
+  qualifyingBigDrops,
+  type RawParticipantData,
+} from './participantStats';
 import type { HiscoresRecap } from './hiscoresRecap';
 import type { ParticipantStats } from './tileConditions';
 
@@ -326,5 +333,20 @@ describe('qualifyingBigDrops (BACKLOG.md #29)', () => {
       { source: 'Zulrah', items: [], total_value: 15_000_000, created_at: '2026-08-01T00:00:00Z' },
     ];
     expect(qualifyingBigDrops(drops, WINDOW, 10_000_000)).toEqual([]);
+  });
+});
+
+describe('collectionLogEntriesInWindow (BACKLOG.md #31)', () => {
+  it('keeps every in-window entry, unfiltered otherwise', () => {
+    const entries: RawParticipantData['collectionLogEntries'] = [
+      { item_name: "Ahrim's hood", created_at: '2026-09-01T00:00:00Z' },
+      { item_name: 'Zulrah scale', created_at: '2026-09-02T00:00:00Z' },
+    ];
+    expect(collectionLogEntriesInWindow(entries, WINDOW)).toEqual(entries);
+  });
+
+  it('excludes an entry outside the window', () => {
+    const entries: RawParticipantData['collectionLogEntries'] = [{ item_name: 'Twisted bow', created_at: '2026-08-01T00:00:00Z' }];
+    expect(collectionLogEntriesInWindow(entries, WINDOW)).toEqual([]);
   });
 });

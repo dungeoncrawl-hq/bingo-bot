@@ -1223,3 +1223,28 @@ instead of renumbering the existing list.
     unaffected (already correct, since either only one participant had
     contributed or both events fell on the same tile type that happened
     to still read right).
+
+31. **A Collection Log ledger, matching #29's Boss KC/Big Drop pattern.**
+    **Shipped 2026-09-09.** For `collectionLogGained` tiles, an "Items
+    added" section now lists every collection-log entry that actually
+    counted -- item name plus who got it -- below the Contributions
+    ranking, newest first (unlike KC/drop value, there's no size to rank
+    an item by, so recency is the only meaningful order for a log).
+
+    Same shape as #29's other two ledgers: `RawParticipantData.collectionLogEntries`
+    gained an optional `item_name` field (both modals' `collection_log_entries`
+    select queries now fetch it, previously just `participant_id, created_at`),
+    and new `collectionLogEntriesInWindow()` (`participantStats.ts`) filters
+    a participant's raw entries to the relevant window -- no threshold to
+    clear here, unlike `qualifyingBigDrops`, since every in-window entry
+    already counts toward `collectionLogGained` as-is. Wired into both
+    `TileDetailModal.tsx` (per row -- solo/Coop's one pooled row/each Team
+    row) and `AdventureColumnModal.tsx` (per participant, Adventure being
+    always-solo).
+
+    Live-verified against Ototo Dungeon: opened the Collection Log tile
+    (3/40 pooled) and confirmed Contributions read 26 Limont 2 items,
+    otototo 1 item, with the ledger listing all three real entries newest
+    first -- "Guthan's platebody -- 26 Limont", "Blue tricorn hat --
+    otototo", "Huntsman's kit -- 26 Limont" -- matching `collection_log_entries`
+    exactly.

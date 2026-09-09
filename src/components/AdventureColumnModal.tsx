@@ -11,7 +11,12 @@ import {
   progressPercent,
   type TileStatus,
 } from '../lib/tileConditions';
-import { computeParticipantStats, qualifyingBigDrops, type RawParticipantData } from '../lib/participantStats';
+import {
+  collectionLogEntriesInWindow,
+  computeParticipantStats,
+  qualifyingBigDrops,
+  type RawParticipantData,
+} from '../lib/participantStats';
 import type { SnapshotRow } from '../lib/hiscoresRecap';
 import { progressColor } from '../lib/progressColor';
 import { resolveAdventureTileWindow, resolveFrontier } from '../lib/adventureProgress';
@@ -102,6 +107,10 @@ interface DropLedgerEntry {
   items: string;
   value: number;
 }
+interface CollectionLogLedgerEntry {
+  itemName: string;
+  createdAt: string;
+}
 
 // A fork column shows every participant grouped by whichever lane THEY
 // picked (not one shared condition applied to everyone, unlike a regular
@@ -123,6 +132,7 @@ export default function AdventureColumnModal({
   const [statuses, setStatuses] = useState<Record<string, TileStatus>>({});
   const [bossLedgers, setBossLedgers] = useState<Record<string, BossLedgerEntry[]>>({});
   const [dropLedgers, setDropLedgers] = useState<Record<string, DropLedgerEntry[]>>({});
+  const [collectionLogLedgers, setCollectionLogLedgers] = useState<Record<string, CollectionLogLedgerEntry[]>>({});
 
   // useCallback with real dependencies, not a plain function -- these are
   // called from the data-fetch effect below, so a fresh reference on
@@ -167,7 +177,7 @@ export default function AdventureColumnModal({
           .select('participant_id, source, items, total_value, created_at, is_misc, max_single_value')
           .in('participant_id', ids),
         supabase.from('deaths').select('participant_id, created_at').in('participant_id', ids),
-        supabase.from('collection_log_entries').select('participant_id, created_at').in('participant_id', ids),
+        supabase.from('collection_log_entries').select('participant_id, item_name, created_at').in('participant_id', ids),
         supabase.from('pet_obtains').select('participant_id, updated_at').in('participant_id', ids),
         supabase
           .from('participant_snapshots')
@@ -186,6 +196,7 @@ export default function AdventureColumnModal({
       const result: Record<string, TileStatus> = {};
       const bossLedgerResult: Record<string, BossLedgerEntry[]> = {};
       const dropLedgerResult: Record<string, DropLedgerEntry[]> = {};
+      const collectionLogLedgerResult: Record<string, CollectionLogLedgerEntry[]> = {};
       for (const p of participants) {
         const tile = tileFor(p);
         if (!tile) continue; // hasn't picked a lane for this fork yet, or the host hasn't authored that slot
@@ -233,6 +244,10 @@ export default function AdventureColumnModal({
             dropLedgerResult[p.id] = qualifyingBigDrops(raw.lootDrops, resolved.window, tile.condition.threshold)
               .map((d) => ({ source: d.source ?? 'Unknown', items: d.items.map((it) => it.name).join(', '), value: d.total_value }))
               .sort((a, b) => b.value - a.value);
+          } else if (tile.condition.type === 'collectionLogGained') {
+            collectionLogLedgerResult[p.id] = collectionLogEntriesInWindow(raw.collectionLogEntries, resolved.window)
+              .map((e) => ({ itemName: e.item_name ?? 'Unknown item', createdAt: e.created_at }))
+              .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
           }
         }
         // else: 'awaiting-baseline' -- this IS their frontier, but a
@@ -244,6 +259,7 @@ export default function AdventureColumnModal({
         setStatuses(result);
         setBossLedgers(bossLedgerResult);
         setDropLedgers(dropLedgerResult);
+        setCollectionLogLedgers(collectionLogLedgerResult);
         setLoading(false);
       }
     })();
@@ -386,6 +402,19 @@ export default function AdventureColumnModal({
                               {d.source} -- {d.items}
                             </span>
                             <span className="shrink-0">{formatContributionValue(tile.condition, d.value)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {(collectionLogLedgers[p.id]?.length ?? 0) > 0 && (
+                    <div className="mt-2 space-y-1 border-t border-stone-900 pt-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-600">Items added</p>
+                      <div className="max-h-28 space-y-1 overflow-y-auto">
+                        {collectionLogLedgers[p.id].map((e, i) => (
+                          <div key={i} className="flex items-center gap-2 text-xs text-stone-400">
+                            <img src={itemIcon(e.itemName)} alt="" className="h-4 w-4 shrink-0 object-contain" />
+                            <span className="truncate">{e.itemName}</span>
                           </div>
                         ))}
                       </div>

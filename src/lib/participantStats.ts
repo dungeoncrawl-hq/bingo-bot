@@ -35,7 +35,14 @@ export interface RawParticipantData {
     source?: string;
   }[];
   deaths: { created_at: string }[];
-  collectionLogEntries: { created_at: string }[];
+  collectionLogEntries: {
+    created_at: string;
+    // The item that landed (collection_log_entries.item_name) -- optional
+    // so older callers/fixtures that only ever needed the count keep
+    // compiling. Only consumed by the Collection Log ledger
+    // (BACKLOG.md #31, TileDetailModal.tsx/AdventureColumnModal.tsx).
+    item_name?: string;
+  }[];
   petObtains: { updated_at: string }[];
 }
 
@@ -190,6 +197,18 @@ export function qualifyingBigDrops(
   minValue: number,
 ): RawParticipantData['lootDrops'] {
   return lootDrops.filter((d) => !d.is_misc && d.total_value >= minValue && inWindow(d.created_at, window));
+}
+
+// The Collection Log ledger (BACKLOG.md #31) -- every collection-log
+// entry within the window, unfiltered otherwise (unlike qualifyingBigDrops
+// above, there's no per-entry threshold to clear -- collectionLogGained
+// already counts every in-window entry as +1, so every one of them
+// belongs in the ledger).
+export function collectionLogEntriesInWindow(
+  entries: RawParticipantData['collectionLogEntries'],
+  window: DateWindow,
+): RawParticipantData['collectionLogEntries'] {
+  return entries.filter((e) => inWindow(e.created_at, window));
 }
 
 // Combines a Coop/Team pool's already-computed per-participant stats into

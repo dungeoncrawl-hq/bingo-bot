@@ -13,6 +13,7 @@ import {
   type TileStatus,
 } from '../lib/tileConditions';
 import {
+  collectionLogEntriesInWindow,
   computeParticipantStats,
   mergeCounts,
   poolStats,
@@ -133,6 +134,15 @@ interface DropLedgerEntry {
   value: number;
 }
 
+// collectionLogGained only -- every item that actually landed toward the
+// tile, newest first (there's no "value" to rank by the way drops/KC
+// have -- recency is the only meaningful order for a log).
+interface CollectionLogLedgerEntry {
+  rsn: string;
+  itemName: string;
+  createdAt: string;
+}
+
 interface Row {
   key: string;
   label: string;
@@ -163,10 +173,11 @@ interface Row {
   // against a pool of one); populated for Coop's single pooled row and
   // each Team row.
   contributions: ContribEntry[];
-  // BACKLOG.md #29 -- populated for every row shape (solo/pooled/team)
+  // BACKLOG.md #29/#31 -- populated for every row shape (solo/pooled/team)
   // whenever this tile's condition is the relevant type, empty otherwise.
   bossLedger: BossLedgerEntry[];
   dropLedger: DropLedgerEntry[];
+  collectionLogLedger: CollectionLogLedgerEntry[];
 }
 
 export default function TileDetailModal({
@@ -225,7 +236,7 @@ export default function TileDetailModal({
           .select('participant_id, source, items, total_value, created_at, is_misc, max_single_value')
           .in('participant_id', ids),
         supabase.from('deaths').select('participant_id, created_at').in('participant_id', ids),
-        supabase.from('collection_log_entries').select('participant_id, created_at').in('participant_id', ids),
+        supabase.from('collection_log_entries').select('participant_id, item_name, created_at').in('participant_id', ids),
         supabase.from('pet_obtains').select('participant_id, updated_at').in('participant_id', ids),
         supabase
           .from('participant_snapshots')
@@ -373,6 +384,20 @@ export default function TileDetailModal({
         return entries.sort((a, b) => b.value - a.value);
       }
 
+      function collectionLogLedgerFor(memberIds: string[]): CollectionLogLedgerEntry[] {
+        if (tile.condition.type !== 'collectionLogGained') return [];
+        const entries = memberIds.flatMap((id) => {
+          const participant = participants.find((p) => p.id === id)!;
+          const w = windowById[id] ?? window;
+          return collectionLogEntriesInWindow(clogByP.get(id) ?? [], w).map((e) => ({
+            rsn: participant.rsn,
+            itemName: e.item_name ?? 'Unknown item',
+            createdAt: e.created_at,
+          }));
+        });
+        return entries.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      }
+
       let result: Row[];
       if (gameMode === 'coop') {
         const status = checkTile(tile.condition, poolStats(Object.values(statsById)));
@@ -391,6 +416,7 @@ export default function TileDetailModal({
             contributions: contributionsFor(ids),
             bossLedger: bossLedgerFor(ids),
             dropLedger: dropLedgerFor(ids),
+            collectionLogLedger: collectionLogLedgerFor(ids),
           },
         ];
       } else if (gameMode === 'team') {
@@ -415,6 +441,7 @@ export default function TileDetailModal({
               contributions: contributionsFor(memberIds),
               bossLedger: bossLedgerFor(memberIds),
               dropLedger: dropLedgerFor(memberIds),
+              collectionLogLedger: collectionLogLedgerFor(memberIds),
             };
           })
           .filter((r): r is Row => r != null);
@@ -432,6 +459,7 @@ export default function TileDetailModal({
           contributions: [],
           bossLedger: bossLedgerFor([p.id]),
           dropLedger: dropLedgerFor([p.id]),
+          collectionLogLedger: collectionLogLedgerFor([p.id]),
         }));
         for (const row of result) {
           row.isFirst = row.completedAt != null && tile.condition.type !== 'freeSpace' && firstCompleters[tile.id] === row.key;
@@ -567,6 +595,22 @@ export default function TileDetailModal({
                               {d.source} -- {d.items}
                             </span>
                             <span className="shrink-0">{formatContributionValue(tile.condition, d.value)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {row.collectionLogLedger.length > 0 && (
+                    <div className="mt-2 space-y-1 border-t border-stone-900 pt-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-600">Items added</p>
+                      <div className="max-h-28 space-y-1 overflow-y-auto">
+                        {row.collectionLogLedger.map((e, i) => (
+                          <div key={i} className="flex items-center gap-2 text-xs text-stone-400">
+                            <img src={itemIcon(e.itemName)} alt="" className="h-4 w-4 shrink-0 object-contain" />
+                            <span className="truncate">
+                              {e.itemName}
+                              {row.participantId === null && <span className="text-stone-600"> -- {e.rsn}</span>}
+                            </span>
                           </div>
                         ))}
                       </div>
