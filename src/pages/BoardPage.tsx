@@ -26,6 +26,7 @@ import TileDetailModal from '../components/TileDetailModal';
 import AdventureColumnModal from '../components/AdventureColumnModal';
 import AdventureConnector from '../components/AdventureConnector';
 import PlayerChip from '../components/PlayerChip';
+import HostBadge from '../components/HostBadge';
 import {
   ADVENTURE_SMALL_COLUMNS,
   ADVENTURE_SMALL_FINAL_BOSS_COLUMN,
@@ -943,7 +944,7 @@ export default function BoardPage() {
                   <li key={p.id} className="flex items-center gap-1.5" style={{ color: colorFor(p) }}>
                     <PlayerChip iconUrl={p.icon_url} color={p.color} participantId={p.id} rsn={p.rsn} />
                     {p.rsn}
-                    {hostBadge(p) && <span title={hostBadge(p)!}>👑</span>}
+                    {hostBadge(p) && <HostBadge role={hostBadge(p)!} />}
                   </li>
                 ))}
                 {participants.length === 0 && <li className="text-stone-500">No one's joined yet.</li>}
@@ -970,7 +971,7 @@ export default function BoardPage() {
                       {!isTeam && <PlayerChip iconUrl={p.icon_url} color={p.color} participantId={p.id} rsn={p.rsn} />}
                       <span>{`#${i + 1}${medal ? ` ${medal}` : ''} ${label} — ${entry.points} pts (${entry.tilesCompleted}/${tilesInPlay} tiles)`}</span>
                     </button>
-                    {!isTeam && hostBadge(p) && <span title={hostBadge(p)!}>👑</span>}
+                    {!isTeam && hostBadge(p) && <HostBadge role={hostBadge(p)!} />}
                     {isYou && <span className="shrink-0 text-xs text-stone-500">(you)</span>}
                     {hasCompletedBoard(p.id) && <span className="shrink-0 text-yellow-400">🏆 Complete!</span>}
                   </li>

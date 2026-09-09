@@ -7,6 +7,7 @@ import type { Challenge, GridLayout, Team, Tile, TileLayout } from '../db/types'
 import TileEditorForm from '../components/TileEditorForm';
 import AdventureConnector from '../components/AdventureConnector';
 import PlayerChip from '../components/PlayerChip';
+import HostBadge from '../components/HostBadge';
 import { formatTileGoal, type TileCondition } from '../lib/tileConditions';
 import { daysBetween, displayStatus, formatLocalRange, MAX_DUNGEON_LENGTH_DAYS } from '../lib/dungeonStatus';
 import { formatBytes } from '../lib/format';
@@ -625,11 +626,7 @@ export default function EditChallengePage() {
                 <span className="flex items-center gap-2">
                   <PlayerChip iconUrl={p.profiles?.icon_url ?? null} color={p.profiles?.color ?? null} participantId={p.id} rsn={p.rsn} />
                   {p.rsn}
-                  {(isPrimaryHostRow || isCoHostRow) && (
-                    <span title={isPrimaryHostRow ? 'Host' : 'Co-host'} aria-label={isPrimaryHostRow ? 'Host' : 'Co-host'}>
-                      👑
-                    </span>
-                  )}
+                  {(isPrimaryHostRow || isCoHostRow) && <HostBadge role={isPrimaryHostRow ? 'Host' : 'Co-host'} />}
                   {p.screenshot_count > 0 && (
                     <span
                       title={`${p.screenshot_count} Dink screenshots sent (${formatBytes(p.screenshot_bytes)}) -- their "Send screenshot" setting is still on. Ask them to turn it off in Dink's settings.`}

@@ -1652,3 +1652,23 @@ instead of renumbering the existing list.
     passed; live-verified in the browser at both desktop and 375px-wide
     mobile viewports, no console errors, footer link and the
     `SetupGuidePage.tsx` cross-link both confirmed working.
+
+37. **Replace the host/co-host 👑 emoji with a proper icon.** **Shipped
+    2026-09-09.** The emoji (`BoardPage.tsx`'s leaderboard, both the
+    Coop and ranked-list branches, plus `EditChallengePage.tsx`'s
+    Players list) read as an out-of-place platform sticker against this
+    site's dark stone/amber theme and its otherwise-consistent OSRS-wiki
+    icon language (skills, bosses, pets, gear all render real in-game
+    icons, never emoji).
+
+    First pass was a text pill matching the existing screenshot-count
+    badge style; reconsidered mid-build in favor of a white partyhat --
+    an OSRS rare-item icon players already recognize as a status symbol,
+    which fits this site's game-icon vocabulary directly rather than
+    inventing a new visual language. New shared `HostBadge.tsx`
+    (`src/components/HostBadge.tsx`), same icon for both Host and
+    Co-host (only the tooltip/alt text differs, matching the emoji it
+    replaced), wired into all 3 call sites. Icon URL verified with a
+    HEAD request before adding, then confirmed actually loading
+    (`naturalWidth > 0`) next to the host's name on a real production
+    board (`adventure-test`).
