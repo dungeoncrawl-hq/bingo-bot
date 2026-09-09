@@ -1386,3 +1386,50 @@ instead of renumbering the existing list.
     first -- "Guthan's platebody -- 26 Limont", "Blue tricorn hat --
     otototo", "Huntsman's kit -- 26 Limont" -- matching `collection_log_entries`
     exactly.
+
+## Adventure correctness
+32. **Fixed: a boss tile showed live progress for a participant who
+    hadn't reached it yet.** **Shipped 2026-09-09**, reported live
+    against adventure-test's Final Boss "Big Drops" tile -- otototo
+    showed 1/3 despite still being early on their own path, nowhere near
+    the final room.
+
+    **Root cause**: `TileDetailModal.tsx` handles both Standard-board
+    tiles (every participant is simultaneously relevant -- no "reached"
+    concept at all) and Adventure boss tiles (`kicker` set) via the same
+    solo-mode branch, but never actually distinguished the two --
+    `AdventureColumnModal.tsx` (fork columns) already correctly gates
+    each participant through `resolveFrontier` before showing real
+    progress, but this modal's boss-tile path never did. For a
+    Dink-driven condition (`bigDropsCount` here, but the bug applied to
+    any non-hiscores condition -- see `conditionNeedsBaseline`),
+    `resolveAdventureTileWindow`'s window for a not-yet-reached tile
+    falls back to "since this participant's last completion, whatever
+    tile that was" -- it has no idea whether the boss room being checked
+    is even where their path currently is, so whatever they'd farmed en
+    route to an *earlier* tile counted toward a boss they hadn't
+    unlocked at all.
+
+    **Fix**: the solo branch now checks `resolveFrontier(tiles, p.adventure_path,
+    doneTileIds)` per participant (skipped, and always `reached`, for a
+    Standard-board tile -- `challenge.board_type !== 'adventure'`) before
+    trusting any of `statsById[p.id]`'s computed status. A
+    not-reached participant's row zeroes out status/contributions/every
+    ledger and shows "Not reached yet" (same wording, same `text-stone-600`
+    styling as `AdventureColumnModal.tsx` already uses for the identical
+    state on fork columns), sorted after every reached row regardless of
+    its zeroed status. Needed two new inputs this modal didn't have
+    before: the full board's `tiles` (new optional prop, both
+    `BoardPage.tsx` call sites now pass their own stable `tiles` state
+    explicitly -- defaulted internally to a module-level `EMPTY_TILES`
+    constant, never an inline `[]`, to avoid exactly the effect-restart-
+    forever trap this file's own `teams` prop already has a comment
+    warning about) and each participant's `adventure_path` (added to
+    `ParticipantLite`, already fetched by both call sites for other
+    reasons).
+
+    Live-verified against adventure-test's real Final Boss tile: 26
+    Limont (who has genuinely reached it, 8/9 tiles done) still shows
+    real "0 / 3" progress; WheresMyGear and otototo (neither has reached
+    it) both now correctly read "Not reached yet" instead of a live
+    number.

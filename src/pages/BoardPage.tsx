@@ -1139,6 +1139,7 @@ export default function BoardPage() {
       {selectedTile && (
         <TileDetailModal
           tile={selectedTile}
+          tiles={tiles}
           participants={participants}
           challenge={challenge}
           firstCompleters={firstCompleters}
@@ -1157,6 +1158,13 @@ export default function BoardPage() {
               <TileDetailModal
                 tile={bossTile}
                 kicker={bossLabelForColumn(selectedColumn)}
+                // BACKLOG.md #32 -- resolveFrontier needs the whole
+                // board's tiles (plus each participant's own
+                // adventure_path, already part of `participants`) to
+                // tell whether a participant has actually reached this
+                // boss tile yet, same reasoning as `teams` below about
+                // passing a stable reference explicitly.
+                tiles={tiles}
                 participants={participants}
                 challenge={challenge}
                 firstCompleters={firstCompleters}

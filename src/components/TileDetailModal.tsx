@@ -23,7 +23,7 @@ import {
 } from '../lib/participantStats';
 import { computeHiscoresRecap, type SnapshotRow } from '../lib/hiscoresRecap';
 import { progressColor } from '../lib/progressColor';
-import { resolveAdventureTileWindow } from '../lib/adventureProgress';
+import { resolveAdventureTileWindow, resolveFrontier } from '../lib/adventureProgress';
 import { itemIcon } from '../lib/itemSets';
 import PlayerChip from './PlayerChip';
 
@@ -41,6 +41,15 @@ interface ParticipantLite {
   // doneTileIdsFor distinguishes the two, same as AdventureColumnModal.
   adventure_baseline_at: string | null;
   adventure_baseline_snapshot: SnapshotRow | null;
+  // Which lane this participant picked at each fork -- needed alongside
+  // `tiles` below to walk their path with resolveFrontier and tell
+  // whether they've actually reached a given boss tile yet (BACKLOG.md
+  // #32 fix -- this modal was showing live progress toward a boss room
+  // for participants who hadn't reached it at all, using whatever
+  // Dink-driven stats they'd racked up since their last completion
+  // elsewhere on the path). Only meaningful when challenge.board_type
+  // === 'adventure'.
+  adventure_path?: Record<string, 'top' | 'bottom'>;
   // BACKLOG.md #22 -- shown next to this row's label, solo mode only (a
   // team/pooled row has no single profile to represent).
   icon_url: string | null;
@@ -71,6 +80,13 @@ interface Props {
   // otherwise say this is a boss room at all. Absent for a Standard-board
   // tile, which this modal is also used for.
   kicker?: string;
+  // The full board's tiles, not just this one -- BACKLOG.md #32,
+  // needed alongside each participant's adventure_path to walk their
+  // whole path with resolveFrontier and tell whether they've actually
+  // reached this specific boss tile yet. Only consulted when
+  // challenge.board_type === 'adventure'; a Standard-board tile is
+  // simultaneously relevant to everyone, so this is never needed there.
+  tiles?: Tile[];
   participants: ParticipantLite[];
   challenge: Challenge;
   firstCompleters: Record<string, string>;
@@ -88,6 +104,10 @@ interface Props {
   teams?: TeamLite[];
   onClose: () => void;
 }
+
+// Stable across every render, unlike an inline `[]` default parameter
+// value -- see this file's own `tiles = EMPTY_TILES` comment below.
+const EMPTY_TILES: Tile[] = [];
 
 function groupByParticipant<T extends { participant_id: string }>(rows: T[]): Map<string, T[]> {
   const map = new Map<string, T[]>();
@@ -169,6 +189,12 @@ interface Row {
   // (computed against a zeroed-out/empty stats object) and must not be
   // shown as if it were real.
   awaitingBaselineReset: boolean;
+  // BACKLOG.md #32 -- Adventure only: this participant's path hasn't
+  // reached this boss tile at all yet (not even blocked-awaiting-a-
+  // logout -- genuinely not there). `status`/the ledgers are all zeroed
+  // out/empty rather than reflecting real (but not-yet-relevant) stats.
+  // Always false for a Standard-board tile or a Coop/Team row.
+  notReached: boolean;
   // BACKLOG.md #29 -- always empty for a solo row (nothing to rank
   // against a pool of one); populated for Coop's single pooled row and
   // each Team row.
@@ -183,6 +209,12 @@ interface Row {
 export default function TileDetailModal({
   tile,
   kicker,
+  // Not defaulted to a `[]` literal here -- same trap this file's own
+  // BoardPage.tsx call site already documents for `teams`: a fresh array
+  // reference on every render would sit in the data-fetch effect's
+  // dependency array and restart it forever. EMPTY_TILES (module scope,
+  // stable) is the same value every render instead.
+  tiles = EMPTY_TILES,
   participants,
   challenge,
   firstCompleters,
@@ -413,6 +445,7 @@ export default function TileDetailModal({
             iconColor: null,
             participantId: null,
             awaitingBaselineReset: false,
+            notReached: false,
             contributions: contributionsFor(ids),
             bossLedger: bossLedgerFor(ids),
             dropLedger: dropLedgerFor(ids),
@@ -438,6 +471,7 @@ export default function TileDetailModal({
               iconColor: null,
               participantId: null,
               awaitingBaselineReset: false,
+            notReached: false,
               contributions: contributionsFor(memberIds),
               bossLedger: bossLedgerFor(memberIds),
               dropLedger: dropLedgerFor(memberIds),
@@ -446,21 +480,44 @@ export default function TileDetailModal({
           })
           .filter((r): r is Row => r != null);
       } else {
-        result = participants.map((p) => ({
-          key: p.id,
-          awaitingBaselineReset: awaitingBaselineResetById[p.id] ?? false,
-          label: p.rsn,
-          iconUrl: p.icon_url,
-          iconColor: p.color,
-          participantId: p.id,
-          status: checkTile(tile.condition, statsById[p.id]),
-          completedAt: completedAtFor([p.id]),
-          isFirst: false, // set below, once per row, for solo (needs completedAt first)
-          contributions: [],
-          bossLedger: bossLedgerFor([p.id]),
-          dropLedger: dropLedgerFor([p.id]),
-          collectionLogLedger: collectionLogLedgerFor([p.id]),
-        }));
+        // BACKLOG.md #32 -- this modal (unlike AdventureColumnModal.tsx,
+        // which already gates its own fork columns via resolveFrontier)
+        // was showing live progress toward a boss tile for a participant
+        // who hadn't actually reached it yet: statsById[p.id]'s window for
+        // a Dink-driven condition falls back to "since their last
+        // completion, whatever tile that was" regardless of whether this
+        // specific boss room is where their path currently is, so
+        // whatever they'd farmed en route to an *earlier* tile counted
+        // toward a boss they hadn't unlocked. Standard boards have no
+        // frontier concept at all -- every tile is simultaneously live
+        // for everyone -- so this only ever applies to an Adventure boss
+        // tile (challenge.board_type === 'adventure', this modal's other
+        // use case besides Standard boards, per the `kicker` prop).
+        result = participants.map((p) => {
+          const completedAt = completedAtFor([p.id]);
+          let reached = true;
+          if (challenge.board_type === 'adventure' && completedAt == null) {
+            const doneIds = doneTileIdsFor(p.id);
+            const frontier = resolveFrontier(tiles, p.adventure_path ?? {}, doneIds);
+            reached = frontier.kind === 'tile' && frontier.tile.id === tile.id;
+          }
+          return {
+            key: p.id,
+            awaitingBaselineReset: reached ? (awaitingBaselineResetById[p.id] ?? false) : false,
+            notReached: !reached,
+            label: p.rsn,
+            iconUrl: p.icon_url,
+            iconColor: p.color,
+            participantId: p.id,
+            status: reached ? checkTile(tile.condition, statsById[p.id]) : { done: false, progress: 0, goal: 0 },
+            completedAt,
+            isFirst: false, // set below, once per row, for solo (needs completedAt first)
+            contributions: [],
+            bossLedger: reached ? bossLedgerFor([p.id]) : [],
+            dropLedger: reached ? dropLedgerFor([p.id]) : [],
+            collectionLogLedger: reached ? collectionLogLedgerFor([p.id]) : [],
+          };
+        });
         for (const row of result) {
           row.isFirst = row.completedAt != null && tile.condition.type !== 'freeSpace' && firstCompleters[tile.id] === row.key;
         }
@@ -475,16 +532,19 @@ export default function TileDetailModal({
     return () => {
       cancelled = true;
     };
-  }, [tile, participants, challenge, gameMode, teams, firstCompleters, completions]);
+  }, [tile, tiles, participants, challenge, gameMode, teams, firstCompleters, completions]);
 
   // Done rows (by completedAt, the authoritative tile_completions signal)
   // sort earliest-first -- first to finish at the top, same as the
   // leaderboard's own first-completer bonus rewards. Not-yet-done rows
   // follow, ranked by live progress. A live-recomputed status.done is
-  // never trusted here -- see Row's completedAt comment.
+  // never trusted here -- see Row's completedAt comment. BACKLOG.md #32:
+  // a not-reached-yet row has no real progress to rank by at all, so it
+  // sorts after every reached row regardless of its (zeroed-out) status.
   const ranked = [...rows].sort((a, b) => {
     if (a.completedAt != null && b.completedAt != null) return a.completedAt.localeCompare(b.completedAt);
     if ((a.completedAt != null) !== (b.completedAt != null)) return a.completedAt != null ? -1 : 1;
+    if (a.notReached !== b.notReached) return a.notReached ? 1 : -1;
     return rankValue(b.status, progressPercent(tile.condition, b.status)) - rankValue(a.status, progressPercent(tile.condition, a.status));
   });
 
@@ -514,7 +574,7 @@ export default function TileDetailModal({
             {ranked.map((row) => {
               const status = row.status;
               const done = row.completedAt != null;
-              const percent = done ? 100 : row.awaitingBaselineReset ? null : progressPercent(tile.condition, status);
+              const percent = done ? 100 : row.notReached || row.awaitingBaselineReset ? null : progressPercent(tile.condition, status);
               // Once done, never trust the live-recomputed status for the
               // caption -- same reasoning as percent/done trusting
               // completedAt instead: an Adventure participant can move
@@ -527,13 +587,15 @@ export default function TileDetailModal({
               const baseCaption = done ? formatTileGoal(tile.condition) : formatTileProgress(tile.condition, status) ?? formatTileGoal(tile.condition);
               const caption = done
                 ? baseCaption
-                : row.awaitingBaselineReset
-                  ? 'Log out to start'
-                  : status.resolvedSkill
-                    ? `${baseCaption} (${status.resolvedSkill})`
-                    : status.needsSkillChoice
-                      ? 'tied -- pick a skill'
-                      : baseCaption;
+                : row.notReached
+                  ? 'Not reached yet'
+                  : row.awaitingBaselineReset
+                    ? 'Log out to start'
+                    : status.resolvedSkill
+                      ? `${baseCaption} (${status.resolvedSkill})`
+                      : status.needsSkillChoice
+                        ? 'tied -- pick a skill'
+                        : baseCaption;
               return (
                 <li key={row.key}>
                   <div className="flex items-center justify-between text-sm">
@@ -543,7 +605,9 @@ export default function TileDetailModal({
                       )}
                       {row.label}
                     </span>
-                    <span className={`flex items-center gap-1 ${row.awaitingBaselineReset ? 'text-sky-400' : 'text-stone-400'}`}>
+                    <span
+                      className={`flex items-center gap-1 ${row.notReached ? 'text-stone-600' : row.awaitingBaselineReset ? 'text-sky-400' : 'text-stone-400'}`}
+                    >
                       {caption}
                       {row.isFirst ? (
                         <span className="text-amber-400">⭐</span>
