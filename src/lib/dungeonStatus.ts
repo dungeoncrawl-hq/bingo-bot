@@ -33,6 +33,14 @@ export function daysBetween(fromIso: string, toIso: string): number {
   return Math.round((to - from) / (1000 * 60 * 60 * 24));
 }
 
+// BACKLOG.md #11 -- the longest span a host can set between a dungeon's
+// start_date and end_date, checked as daysBetween(start, end) (so a
+// 180-day dungeon can, e.g., run Jan 1 -> Jun 29, a 181-calendar-day
+// inclusive span). Client-side only, same as the existing "end date
+// can't precede start date" check right next to every caller of this --
+// no DB constraint, matching that precedent.
+export const MAX_DUNGEON_LENGTH_DAYS = 180;
+
 function plural(n: number): string {
   return n === 1 ? '' : 's';
 }

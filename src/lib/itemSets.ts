@@ -357,6 +357,65 @@ export const PRESET_ITEM_SETS: PresetItemSet[] = [
       'Fire ruby',
     ],
   },
+  // BACKLOG.md #16, 2026-09-09 -- item names verified against each
+  // boss's own OSRS Wiki drop-table page (not summarized/typed from
+  // memory), then every wiki image URL live-checked with a HEAD request
+  // before adding. Pets excluded throughout, matching the catalog's
+  // dominant convention -- petsObtained already exists as its own tile
+  // condition, so a pet doesn't need double representation here.
+  {
+    name: 'Vorkath uniques',
+    items: ['Draconic visage', 'Skeletal visage', "Vorkath's head", 'Dragonbone necklace', 'Jar of Decay'],
+  },
+  {
+    name: 'Zulrah uniques',
+    items: ['Tanzanite fang', 'Magic fang', 'Serpentine visage', 'Tanzanite mutagen', 'Magma mutagen', 'Uncut onyx'],
+  },
+  // The four Desert Treasure II bosses below share the "awakened"-tier
+  // Virtus armour set and Chromium ingot on their unique table, alongside
+  // one boss-specific vestige/weapon piece each -- a real shared table,
+  // not a copy/paste mistake (same reasoning as Callisto/Artio and the
+  // other reskinned-boss pairs already in this file sharing items).
+  {
+    name: 'Duke Sucellus uniques',
+    items: ['Magus vestige', 'Chromium ingot', 'Eye of the Duke', 'Virtus mask', 'Virtus robe top', 'Virtus robe bottom'],
+  },
+  {
+    name: 'The Leviathan uniques',
+    items: ['Venator vestige', 'Chromium ingot', "Leviathan's lure", 'Virtus mask', 'Virtus robe top', 'Virtus robe bottom'],
+  },
+  {
+    name: 'The Whisperer uniques',
+    items: ['Bellator vestige', 'Chromium ingot', "Siren's staff", 'Virtus mask', 'Virtus robe top', 'Virtus robe bottom'],
+  },
+  {
+    name: 'Vardorvis uniques',
+    items: ['Ultor vestige', 'Chromium ingot', "Executioner's axe head", 'Virtus mask', 'Virtus robe top', 'Virtus robe bottom'],
+  },
+  {
+    name: 'The Gauntlet uniques',
+    items: ['Crystal weapon seed', 'Crystal armour seed', 'Enhanced crystal weapon seed'],
+  },
+  {
+    name: 'The Corrupted Gauntlet uniques',
+    items: ['Gauntlet cape', 'Crystal weapon seed', 'Crystal armour seed', 'Enhanced crystal weapon seed'],
+  },
+  {
+    name: 'Yama uniques',
+    items: ['Soulflame horn', 'Oathplate helm', 'Oathplate chest', 'Oathplate legs'],
+  },
+  {
+    name: 'Araxxor uniques',
+    items: ['Noxious pommel', 'Noxious point', 'Noxious blade', 'Araxyte fang'],
+  },
+  {
+    name: 'Doom of Mokhaiotl uniques',
+    items: ['Mokhaiotl cloth', 'Eye of Ayak (uncharged)', 'Avernic treads'],
+  },
+  {
+    name: 'Grotesque Guardians uniques',
+    items: ['Granite maul', 'Granite gloves', 'Granite ring', 'Granite hammer', 'Black tourmaline core'],
+  },
 ];
 
 const NOTABLE_LOOT_ITEMS_LOWER = new Set(

@@ -3,7 +3,7 @@ import type { FormEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { getSupabase } from '../db/supabaseClient';
-import { formatLocalRange } from '../lib/dungeonStatus';
+import { daysBetween, formatLocalRange, MAX_DUNGEON_LENGTH_DAYS } from '../lib/dungeonStatus';
 
 // Every date in this app is a UTC calendar date (BACKLOG.md #14) -- shown
 // once both dates are picked, so a host setting an evening start date
@@ -36,6 +36,15 @@ export default function NewChallengePage() {
 
   // Also used as both date inputs' `min` below.
   const today = new Date().toISOString().slice(0, 10);
+  // BACKLOG.md #11 -- steers the end-date picker away from an invalid
+  // range before submit ever runs, rather than only catching it there.
+  // undefined (no `max` at all) until a start date is actually picked --
+  // "180 days from nothing" isn't a bound worth showing yet.
+  const maxEndDate = startDate
+    ? new Date(new Date(`${startDate}T00:00:00Z`).getTime() + MAX_DUNGEON_LENGTH_DAYS * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 10)
+    : undefined;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -45,6 +54,16 @@ export default function NewChallengePage() {
     // able to slip a past date through.
     if (startDate < today || endDate < today) {
       setError('Start and end dates cannot be in the past.');
+      return;
+    }
+    if (endDate < startDate) {
+      setError('End date must be on or after the start date.');
+      return;
+    }
+    // BACKLOG.md #11 -- no upper bound existed before this; a host could
+    // set an arbitrarily long dungeon.
+    if (daysBetween(startDate, endDate) > MAX_DUNGEON_LENGTH_DAYS) {
+      setError(`A dungeon can run for at most ${MAX_DUNGEON_LENGTH_DAYS} days.`);
       return;
     }
     setSubmitting(true);
@@ -183,7 +202,8 @@ export default function NewChallengePage() {
             <input
               type="date"
               required
-              min={today}
+              min={startDate || today}
+              max={maxEndDate}
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
               className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
@@ -194,6 +214,9 @@ export default function NewChallengePage() {
           <p className="text-xs text-stone-500">
             Dates run on a fixed UTC clock -- in your timezone that's {formatLocalRange(startDate, endDate, VIEWER_TIMEZONE)}.
           </p>
+        )}
+        {startDate && !endDate && (
+          <p className="text-xs text-stone-600">A dungeon can run for at most {MAX_DUNGEON_LENGTH_DAYS} days.</p>
         )}
         {error && <p className="text-sm text-red-400">{error}</p>}
         <button

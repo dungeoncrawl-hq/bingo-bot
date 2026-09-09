@@ -77,6 +77,35 @@ describe('PRESET_ITEM_SETS', () => {
       expect(names.some((n) => n.startsWith(boss))).toBe(true);
     }
   });
+
+  it('includes all 12 BACKLOG.md #16 bosses/minigames', () => {
+    const names = PRESET_ITEM_SETS.map((s) => s.name);
+    for (const boss of [
+      'Vorkath',
+      'Zulrah',
+      'Duke Sucellus',
+      'The Leviathan',
+      'The Whisperer',
+      'Vardorvis',
+      'The Gauntlet',
+      'The Corrupted Gauntlet',
+      'Yama',
+      'Araxxor',
+      'Doom of Mokhaiotl',
+      'Grotesque Guardians',
+    ]) {
+      expect(names.some((n) => n.startsWith(boss))).toBe(true);
+    }
+  });
+
+  it("The Gauntlet and The Corrupted Gauntlet don't collide (distinct sets)", () => {
+    const gauntlet = PRESET_ITEM_SETS.find((s) => s.name === 'The Gauntlet uniques');
+    const corrupted = PRESET_ITEM_SETS.find((s) => s.name === 'The Corrupted Gauntlet uniques');
+    expect(gauntlet).toBeDefined();
+    expect(corrupted).toBeDefined();
+    expect(corrupted?.items).toContain('Gauntlet cape');
+    expect(gauntlet?.items).not.toContain('Gauntlet cape');
+  });
 });
 
 describe('itemIcon', () => {

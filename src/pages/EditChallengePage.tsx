@@ -8,7 +8,7 @@ import TileEditorForm from '../components/TileEditorForm';
 import AdventureConnector from '../components/AdventureConnector';
 import PlayerChip from '../components/PlayerChip';
 import { formatTileGoal, type TileCondition } from '../lib/tileConditions';
-import { displayStatus, formatLocalRange } from '../lib/dungeonStatus';
+import { daysBetween, displayStatus, formatLocalRange, MAX_DUNGEON_LENGTH_DAYS } from '../lib/dungeonStatus';
 import { formatBytes } from '../lib/format';
 import { ADVENTURE_SMALL_COLUMNS, ADVENTURE_SMALL_FINAL_BOSS_COLUMN, isBossColumn, laneCountForColumn } from '../lib/adventureProgress';
 import { randomizeBoard } from '../lib/randomizeBoard';
@@ -192,6 +192,11 @@ export default function EditChallengePage() {
       setDetailsError('End date must be on or after the start date.');
       return;
     }
+    // BACKLOG.md #11 -- no upper bound existed before this.
+    if (daysBetween(editStartDate, editEndDate) > MAX_DUNGEON_LENGTH_DAYS) {
+      setDetailsError(`A dungeon can run for at most ${MAX_DUNGEON_LENGTH_DAYS} days.`);
+      return;
+    }
     setSavingDetails(true);
     setDetailsError('');
     const { error } = await getSupabase()
@@ -337,6 +342,14 @@ export default function EditChallengePage() {
   const today = new Date().toISOString().slice(0, 10);
   const status = displayStatus(challenge, today);
   const tilesLocked = status === 'active' || status === 'past';
+  // BACKLOG.md #11 -- same reasoning as NewChallengePage.tsx's own copy:
+  // steers the end-date picker away from an invalid range before submit
+  // ever runs.
+  const maxEditEndDate = editStartDate
+    ? new Date(new Date(`${editStartDate}T00:00:00Z`).getTime() + MAX_DUNGEON_LENGTH_DAYS * 24 * 60 * 60 * 1000)
+        .toISOString()
+        .slice(0, 10)
+    : undefined;
 
   return (
     <div className="mx-auto max-w-2xl py-12">
@@ -397,7 +410,8 @@ export default function EditChallengePage() {
                 <input
                   type="date"
                   required
-                  min={today}
+                  min={editStartDate || today}
+                  max={maxEditEndDate}
                   value={editEndDate}
                   onChange={(e) => setEditEndDate(e.target.value)}
                   className="mt-1 w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
@@ -408,6 +422,9 @@ export default function EditChallengePage() {
               <p className="text-xs text-stone-500">
                 Dates run on a fixed UTC clock -- in your timezone that's {formatLocalRange(editStartDate, editEndDate, VIEWER_TIMEZONE)}.
               </p>
+            )}
+            {editStartDate && !editEndDate && (
+              <p className="text-xs text-stone-600">A dungeon can run for at most {MAX_DUNGEON_LENGTH_DAYS} days.</p>
             )}
             {detailsError && <p className="text-xs text-red-400">{detailsError}</p>}
             <button

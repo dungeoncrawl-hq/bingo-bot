@@ -316,9 +316,40 @@ Appended here rather than inserted into an earlier section -- several
 across the repo, so new items get appended (next number, new section)
 instead of renumbering the existing list.
 
-11. Define a maximum length a dungeon is allowed to run for (start_date
-    to end_date span) -- today a host can set an arbitrarily long
-    challenge with no upper bound. Exact cap TBD.
+11. ~~Define a maximum length a dungeon is allowed to run for~~ --
+    **Shipped 2026-09-09.** Cap set to 180 days
+    (`daysBetween(start_date, end_date) <= 180` -- a 180-day dungeon can
+    run e.g. Jan 1 -> Jun 29, a 181-calendar-day inclusive span). New
+    `MAX_DUNGEON_LENGTH_DAYS` (`dungeonStatus.ts`), reusing the existing
+    `daysBetween` helper rather than adding a second date-math function.
+
+    Checked in both `NewChallengePage.tsx` (creation) and
+    `EditChallengePage.tsx`'s "Dungeon details" section (draft-only date
+    editing, #26) -- client-side only, no migration, matching the
+    existing "end date can't precede start date" check right next to it
+    in both files (which itself had no DB constraint either). Found and
+    fixed the same gap while here: `NewChallengePage.tsx` never actually
+    checked end >= start at all (only that neither date was in the
+    past) -- a host could already have set a backwards range on
+    creation, which would also have broken the new day-span math (a
+    negative span trivially clears "<= 180").
+
+    **UX, not just validation**: the end-date `<input type="date">`'s
+    `min`/`max` are now wired to the chosen start date (`min` was
+    already `today`, unconditionally, even after a later start date was
+    picked) -- the browser's own date picker won't offer an invalid or
+    over-limit date at all, so the error text is a fallback for
+    something that slipped past the picker (a pasted value, an older
+    browser), not the primary way most hosts ever discover the limit. A
+    small caption under the fields states the cap once a start date is
+    picked but no end date yet.
+
+    Live-verified: picking a start date correctly set the end-date
+    picker's `max` to exactly start + 180 days (checked against
+    independent date math); the native picker constraint blocked an
+    out-of-range value at the browser level; removing that constraint to
+    simulate a browser that doesn't enforce it confirmed the JS-level
+    check still catches it and shows the same message.
 
 ## Tile authoring UX
 12. Re-order the fields on the "Add Tile" modal (`TileEditorForm.tsx`).
@@ -488,11 +519,28 @@ instead of renumbering the existing list.
     applied correctly, it just had nothing solid to fill.
 
 ## Item catalog
-16. More curated sets to add to `itemSets.ts` (BACKLOG.md #2's
-    catalog), verified against the OSRS Wiki the same way as the sets
-    already there: Vorkath, Zulrah, the DT2 bosses (Duke Sucellus, The
-    Leviathan, The Whisperer, Vardorvis), The Gauntlet (and Corrupted
-    Gauntlet), Yama, Araxxor, Doom of Mokhaiotl, Grotesque Guardians.
+16. ~~More curated sets to add to `itemSets.ts` (BACKLOG.md #2's
+    catalog)~~ -- **Shipped 2026-09-09.** 12 new sets: Vorkath, Zulrah,
+    the 4 DT2 bosses (Duke Sucellus, The Leviathan, The Whisperer,
+    Vardorvis -- kept as 4 separate sets despite sharing the Virtus
+    armour/Chromium ingot items on their real drop table, same reasoning
+    as this file's existing reskinned-boss pairs), The Gauntlet and The
+    Corrupted Gauntlet (also kept separate -- Corrupted's set includes
+    the Gauntlet cape, regular's doesn't), Yama, Araxxor, Doom of
+    Mokhaiotl, Grotesque Guardians.
+
+    Every item name pulled from each boss's own OSRS Wiki drop-table page
+    (not typed from memory), then all 42 candidate wiki image URLs
+    live-verified with a HEAD request before adding, same process the
+    original catalog used. Pets excluded from every new set (Vorki,
+    Snakeling, Youngllef, Yami, Dom) -- matching this catalog's dominant
+    convention, since `petsObtained` already exists as its own tile
+    condition and doesn't need double representation here.
+
+    New tests: all 12 names present, plus a dedicated check that The
+    Gauntlet and The Corrupted Gauntlet stay distinct sets (the
+    `startsWith` check the earlier 12-boss test uses would otherwise
+    pass even if they'd been accidentally merged).
 
 17. **"Obtain specific uniques" (itemCount) needs an ANY/ALL goal mode,
     plus showing the actual selected items on the player-facing tile
