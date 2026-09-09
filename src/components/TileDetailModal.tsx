@@ -3,14 +3,23 @@ import { getSupabase } from '../db/supabaseClient';
 import type { Challenge, Tile } from '../db/types';
 import {
   checkTile,
+  formatContributionValue,
   formatTileGoal,
   formatTileProgress,
   itemCountModalDescription,
   progressPercent,
+  supportsContributionBreakdown,
   type ParticipantStats,
   type TileStatus,
 } from '../lib/tileConditions';
-import { computeParticipantStats, poolStats, type RawParticipantData } from '../lib/participantStats';
+import {
+  computeParticipantStats,
+  mergeCounts,
+  poolStats,
+  qualifyingBigDrops,
+  type DateWindow,
+  type RawParticipantData,
+} from '../lib/participantStats';
 import { computeHiscoresRecap, type SnapshotRow } from '../lib/hiscoresRecap';
 import { progressColor } from '../lib/progressColor';
 import { resolveAdventureTileWindow } from '../lib/adventureProgress';
@@ -97,6 +106,33 @@ function rankValue(status: TileStatus, percent: number | null): number {
   return percent ?? (status.done ? 100 : 0);
 }
 
+// BACKLOG.md #29 -- one pool member's own share of a Coop/Team tile's
+// progress (checkTile's own progress number against just their stats),
+// shown ranked most-to-least under the pooled/team total above it.
+interface ContribEntry {
+  key: string;
+  rsn: string;
+  iconUrl: string | null;
+  iconColor: string | null;
+  value: number;
+}
+
+// bossKcGained only -- which bosses actually made up a "Total Boss KC"
+// tile's progress, ranked most kills to least.
+interface BossLedgerEntry {
+  boss: string;
+  kc: number;
+}
+
+// singleDropValue only -- every individual drop that itself cleared the
+// tile's threshold, ranked biggest to smallest.
+interface DropLedgerEntry {
+  rsn: string;
+  source: string;
+  items: string;
+  value: number;
+}
+
 interface Row {
   key: string;
   label: string;
@@ -123,6 +159,14 @@ interface Row {
   // (computed against a zeroed-out/empty stats object) and must not be
   // shown as if it were real.
   awaitingBaselineReset: boolean;
+  // BACKLOG.md #29 -- always empty for a solo row (nothing to rank
+  // against a pool of one); populated for Coop's single pooled row and
+  // each Team row.
+  contributions: ContribEntry[];
+  // BACKLOG.md #29 -- populated for every row shape (solo/pooled/team)
+  // whenever this tile's condition is the relevant type, empty otherwise.
+  bossLedger: BossLedgerEntry[];
+  dropLedger: DropLedgerEntry[];
 }
 
 export default function TileDetailModal({
@@ -178,7 +222,7 @@ export default function TileDetailModal({
         supabase.from('slayer_tasks').select('participant_id, created_at').in('participant_id', ids),
         supabase
           .from('loot_drops')
-          .select('participant_id, items, total_value, created_at, is_misc, max_single_value')
+          .select('participant_id, source, items, total_value, created_at, is_misc, max_single_value')
           .in('participant_id', ids),
         supabase.from('deaths').select('participant_id, created_at').in('participant_id', ids),
         supabase.from('collection_log_entries').select('participant_id, created_at').in('participant_id', ids),
@@ -215,6 +259,11 @@ export default function TileDetailModal({
       // below, unchanged.
       const statsById: Record<string, ParticipantStats> = {};
       const awaitingBaselineResetById: Record<string, boolean> = {};
+      // BACKLOG.md #29's Big Drop ledger needs each participant's own
+      // actual stats window (not just the shared challenge-wide one) to
+      // filter their raw loot rows correctly on an Adventure board, where
+      // every participant's window can differ.
+      const windowById: Record<string, DateWindow> = {};
       for (const id of ids) {
         const raw: RawParticipantData = {
           bossKills: bossKillsByP.get(id) ?? [],
@@ -247,6 +296,7 @@ export default function TileDetailModal({
           );
           if (resolved.kind === 'ready') {
             statsById[id] = computeParticipantStats(raw, resolved.window, resolved.recap, chosenLowestSkill);
+            windowById[id] = resolved.window;
           } else {
             // 'awaiting-baseline' -- a hiscores-backed tile with no
             // baseline yet, so there's no valid window to measure from
@@ -265,11 +315,62 @@ export default function TileDetailModal({
               petObtains: [],
             };
             statsById[id] = computeParticipantStats(empty, window, null, chosenLowestSkill);
+            windowById[id] = window;
           }
         } else {
           const hiscoresRecap = computeHiscoresRecap(participantSnapshots, window);
           statsById[id] = computeParticipantStats(raw, window, hiscoresRecap, chosenLowestSkill);
+          windowById[id] = window;
         }
+      }
+
+      // BACKLOG.md #29 -- a Coop/Team pool's per-member breakdown (ranked
+      // most-to-least contribution) plus, for the two condition types
+      // where a flat number alone doesn't say what actually happened, a
+      // ledger of the underlying events beneath it. Shared across all
+      // three gameMode branches below -- memberIds is a single
+      // participant's own id for a solo row, so contributionsFor always
+      // returns empty there (nothing to rank against), while the ledgers
+      // still populate per-participant, same as a pooled row's.
+      function contributionsFor(memberIds: string[]): ContribEntry[] {
+        if (!supportsContributionBreakdown(tile.condition) || memberIds.length <= 1) return [];
+        return memberIds
+          .map((id) => {
+            const participant = participants.find((p) => p.id === id)!;
+            return {
+              key: id,
+              rsn: participant.rsn,
+              iconUrl: participant.icon_url,
+              iconColor: participant.color,
+              value: checkTile(tile.condition, statsById[id]).progress,
+            };
+          })
+          .filter((c) => c.value > 0)
+          .sort((a, b) => b.value - a.value);
+      }
+
+      function bossLedgerFor(memberIds: string[]): BossLedgerEntry[] {
+        if (tile.condition.type !== 'bossKcGained') return [];
+        const merged = mergeCounts(memberIds.map((id) => statsById[id].kcGainedByActivity));
+        return Object.entries(merged)
+          .map(([boss, kc]) => ({ boss, kc }))
+          .sort((a, b) => b.kc - a.kc);
+      }
+
+      function dropLedgerFor(memberIds: string[]): DropLedgerEntry[] {
+        if (tile.condition.type !== 'singleDropValue') return [];
+        const threshold = tile.condition.threshold;
+        const entries = memberIds.flatMap((id) => {
+          const participant = participants.find((p) => p.id === id)!;
+          const w = windowById[id] ?? window;
+          return qualifyingBigDrops(lootByP.get(id) ?? [], w, threshold).map((d) => ({
+            rsn: participant.rsn,
+            source: d.source ?? 'Unknown',
+            items: d.items.map((it) => it.name).join(', '),
+            value: d.total_value,
+          }));
+        });
+        return entries.sort((a, b) => b.value - a.value);
       }
 
       let result: Row[];
@@ -277,7 +378,20 @@ export default function TileDetailModal({
         const status = checkTile(tile.condition, poolStats(Object.values(statsById)));
         const completedAt = completedAtFor(ids);
         result = [
-          { key: 'pooled', label: 'Everyone', status, completedAt, isFirst: false, iconUrl: null, iconColor: null, participantId: null, awaitingBaselineReset: false },
+          {
+            key: 'pooled',
+            label: 'Everyone',
+            status,
+            completedAt,
+            isFirst: false,
+            iconUrl: null,
+            iconColor: null,
+            participantId: null,
+            awaitingBaselineReset: false,
+            contributions: contributionsFor(ids),
+            bossLedger: bossLedgerFor(ids),
+            dropLedger: dropLedgerFor(ids),
+          },
         ];
       } else if (gameMode === 'team') {
         result = teams
@@ -288,7 +402,20 @@ export default function TileDetailModal({
             const completedAt = completedAtFor(memberIds);
             const winnerId = firstCompleters[tile.id];
             const isFirst = completedAt != null && tile.condition.type !== 'freeSpace' && memberIds.includes(winnerId);
-            return { key: t.id, label: t.name, status, completedAt, isFirst, iconUrl: null, iconColor: null, participantId: null, awaitingBaselineReset: false };
+            return {
+              key: t.id,
+              label: t.name,
+              status,
+              completedAt,
+              isFirst,
+              iconUrl: null,
+              iconColor: null,
+              participantId: null,
+              awaitingBaselineReset: false,
+              contributions: contributionsFor(memberIds),
+              bossLedger: bossLedgerFor(memberIds),
+              dropLedger: dropLedgerFor(memberIds),
+            };
           })
           .filter((r): r is Row => r != null);
       } else {
@@ -302,6 +429,9 @@ export default function TileDetailModal({
           status: checkTile(tile.condition, statsById[p.id]),
           completedAt: completedAtFor([p.id]),
           isFirst: false, // set below, once per row, for solo (needs completedAt first)
+          contributions: [],
+          bossLedger: bossLedgerFor([p.id]),
+          dropLedger: dropLedgerFor([p.id]),
         }));
         for (const row of result) {
           row.isFirst = row.completedAt != null && tile.condition.type !== 'freeSpace' && firstCompleters[tile.id] === row.key;
@@ -397,6 +527,49 @@ export default function TileDetailModal({
                   {percent !== null && (
                     <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-stone-900">
                       <div className="h-full" style={{ width: `${percent}%`, backgroundColor: progressColor(percent) }} />
+                    </div>
+                  )}
+                  {row.contributions.length > 0 && (
+                    <div className="mt-2 space-y-1 border-t border-stone-900 pt-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-600">Contributions</p>
+                      {row.contributions.map((c) => (
+                        <div key={c.key} className="flex items-center justify-between text-xs text-stone-400">
+                          <span className="flex items-center gap-1.5">
+                            <PlayerChip iconUrl={c.iconUrl} color={c.iconColor} participantId={c.key} rsn={c.rsn} size={12} />
+                            {c.rsn}
+                          </span>
+                          <span>{formatContributionValue(tile.condition, c.value)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {row.bossLedger.length > 0 && (
+                    <div className="mt-2 space-y-1 border-t border-stone-900 pt-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-600">Bosses killed</p>
+                      <div className="max-h-28 space-y-1 overflow-y-auto">
+                        {row.bossLedger.map((b) => (
+                          <div key={b.boss} className="flex items-center justify-between text-xs text-stone-400">
+                            <span>{b.boss}</span>
+                            <span>{b.kc.toLocaleString()} KC</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {row.dropLedger.length > 0 && (
+                    <div className="mt-2 space-y-1 border-t border-stone-900 pt-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-600">Qualifying drops</p>
+                      <div className="max-h-28 space-y-1 overflow-y-auto">
+                        {row.dropLedger.map((d, i) => (
+                          <div key={i} className="flex items-center justify-between gap-2 text-xs text-stone-400">
+                            <span className="truncate">
+                              {row.participantId === null ? `${d.rsn} -- ` : ''}
+                              {d.source} -- {d.items}
+                            </span>
+                            <span className="shrink-0">{formatContributionValue(tile.condition, d.value)}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </li>

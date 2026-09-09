@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeParticipantStats, poolStats, type RawParticipantData } from './participantStats';
+import { computeParticipantStats, mergeCounts, poolStats, qualifyingBigDrops, type RawParticipantData } from './participantStats';
 import type { HiscoresRecap } from './hiscoresRecap';
 import type { ParticipantStats } from './tileConditions';
 
@@ -282,5 +282,49 @@ describe('poolStats', () => {
     ]);
     expect(pooled.lowestSkillCandidates).toEqual([]);
     expect(pooled.chosenLowestSkill).toBeNull();
+  });
+});
+
+describe('mergeCounts', () => {
+  it('sums overlapping keys and keeps disjoint ones, across any number of maps', () => {
+    expect(mergeCounts([{ Vorkath: 5, Zulrah: 2 }, { Vorkath: 3 }, { Barrows: 1 }])).toEqual({
+      Vorkath: 8,
+      Zulrah: 2,
+      Barrows: 1,
+    });
+  });
+
+  it('returns an empty object for no maps', () => {
+    expect(mergeCounts([])).toEqual({});
+  });
+});
+
+describe('qualifyingBigDrops (BACKLOG.md #29)', () => {
+  it('keeps a non-misc in-window drop at/above the threshold', () => {
+    const drops: RawParticipantData['lootDrops'] = [
+      { source: 'Zulrah', items: [{ name: 'Tanzanite fang', quantity: 1 }], total_value: 15_000_000, created_at: '2026-09-01T00:00:00Z' },
+    ];
+    expect(qualifyingBigDrops(drops, WINDOW, 10_000_000)).toEqual(drops);
+  });
+
+  it('excludes a drop below the threshold', () => {
+    const drops: RawParticipantData['lootDrops'] = [
+      { source: 'Zulrah', items: [], total_value: 9_999_999, created_at: '2026-09-01T00:00:00Z' },
+    ];
+    expect(qualifyingBigDrops(drops, WINDOW, 10_000_000)).toEqual([]);
+  });
+
+  it('excludes a bucketed (is_misc) row even if its total_value clears the threshold -- source/items detail is lost for those', () => {
+    const drops: RawParticipantData['lootDrops'] = [
+      { source: 'Unknown', items: [], total_value: 20_000_000, is_misc: true, max_single_value: 12_000_000, created_at: '2026-09-01T00:00:00Z' },
+    ];
+    expect(qualifyingBigDrops(drops, WINDOW, 10_000_000)).toEqual([]);
+  });
+
+  it('excludes a qualifying drop outside the window', () => {
+    const drops: RawParticipantData['lootDrops'] = [
+      { source: 'Zulrah', items: [], total_value: 15_000_000, created_at: '2026-08-01T00:00:00Z' },
+    ];
+    expect(qualifyingBigDrops(drops, WINDOW, 10_000_000)).toEqual([]);
   });
 });

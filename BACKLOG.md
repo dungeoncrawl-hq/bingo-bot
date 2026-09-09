@@ -1100,3 +1100,79 @@ instead of renumbering the existing list.
     tracked-drop row), and food is common, mundane loot that shouldn't
     start getting individually logged just because it's now a pickable
     icon. Every wiki icon URL verified live before wiring up.
+
+## Pooled-tile transparency
+29. **Per-player contribution breakdown on a Coop/Team tile, plus a
+    ledger of the underlying events for Total Boss KC and Big Drop.**
+    **Shipped 2026-09-08**, prompted by the first real Coop board going
+    live (Ototo Dungeon).
+
+    **Contributions**: a pooled tile's own status line (e.g. "Everyone --
+    13 / 1000") already existed; this adds a ranked breakdown underneath
+    it -- each pool member's own share of that progress, most to least,
+    using the exact same number `checkTile` already computes for a solo
+    tile (just run against each member's own stats before pooling, not
+    after). No new stat-computation logic needed: `TileDetailModal.tsx`
+    already builds `statsById` (every participant's own `ParticipantStats`)
+    before reducing it into one pooled `poolStats` call for the Coop/Team
+    row -- `contributionsFor(memberIds)` just reads that same per-member
+    map instead of throwing it away. Scoped to Coop's one pooled row and
+    each Team row; a solo row is already one person, so there's nothing
+    to rank (`supportsContributionBreakdown` also excludes freeSpace/tbd,
+    and `xpGainedLowestSkill`/`levelsGainedLowestSkill`, where every
+    participant resolves a *different* skill so ranking them against each
+    other isn't apples-to-apples -- moot today since those two are
+    already excluded from a non-solo challenge's condition picker,
+    `TileEditorForm.tsx`). New `formatContributionValue(cond, value)`
+    formats one member's own number with the same per-type unit
+    convention `formatTileGoal` already uses for the tile's threshold.
+
+    **Ledgers**: two condition types get a second section below
+    Contributions, since a bare number doesn't say *what* actually
+    happened -- "Total Boss KC" (`bossKcGained`) lists every boss that
+    contributed, most kills to least, merging each relevant participant's
+    own `kcGainedByActivity` (already computed, never previously
+    surfaced). "Big Drop" (`singleDropValue`) lists every individual drop
+    that itself cleared the threshold -- player, source, item(s), value --
+    via new `qualifyingBigDrops()` (`participantStats.ts`), filtered
+    against each participant's own raw `loot_drops` rows and their own
+    stats window (not just the challenge-wide one, since an Adventure
+    participant's window can differ per room).
+
+    **Scope, per the request**: Contributions is Coop/Team only (no solo
+    row to rank). Both ledgers apply everywhere a row exists at all --
+    solo, Coop, Team, and Adventure's boss rooms (`AdventureColumnModal.tsx`,
+    nested per-participant there instead of pooled, since Adventure is
+    always solo -- `NewChallengePage.tsx` forces `game_mode` back to
+    `'solo'` the moment `board_type` is set to `'adventure'`). Adventure's
+    existing "once a tile is done, stop trusting a live recompute of it"
+    rule (BACKLOG.md #4's own baseline-reset caveat) applies here for
+    free, with no special-casing needed -- the ledger is computed in the
+    exact same branch as `statuses`, which already skips a done
+    participant entirely.
+
+    **Real bug found and fixed while building this**: `dinkWebhook.ts`'s
+    loot-bucketing decision (which drops get their own row vs. fold into
+    a running per-day total) only ever checked `bigDropsCount` tile
+    thresholds, never `singleDropValue`'s. A challenge with a Big Drop
+    tile but no `bigDropsCount` tile at all (or one with a *higher*
+    threshold) would silently bucket exactly the drops its own ledger
+    most needs to show -- a bucketed row only keeps a running
+    `max_single_value`, not the source/item detail a ledger entry needs.
+    Fixed by renaming `minBigDropsThreshold` to `minNotableDropThreshold`
+    and folding `singleDropValue` thresholds into the same min()
+    calculation. Ototo Dungeon's own board happened to already dodge this
+    (its "2M+ Drops" `bigDropsCount` tile's threshold is lower than its
+    "Big Drop" tile's), so this wasn't caught by that board's own data --
+    found by reading the bucketing logic directly, not by observing a
+    failure.
+
+    Live-verified against Ototo Dungeon's real data: "Total Boss KC"
+    correctly shows 26 Limont's 13 KC (all from Barrows) ranked above
+    otototo's 0 (filtered out entirely, not shown at 0), with a "Bosses
+    killed" ledger reading "Barrows -- 13 KC". "Big Drop" correctly ranks
+    26 Limont's 106K-gp best drop above otototo's 344 gp, with no ledger
+    section at all (nothing has cleared the 10M threshold yet -- the
+    empty-state guard hides the section rather than showing an empty
+    box). A plain "Total XP" tile confirmed Contributions renders alone,
+    with neither ledger, on a condition type neither applies to.

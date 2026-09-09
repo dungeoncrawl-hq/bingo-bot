@@ -3,10 +3,12 @@ import {
   checkTile,
   conditionNeedsBaseline,
   describeTileCondition,
+  formatContributionValue,
   formatTileProgress,
   gridLines,
   itemCountModalDescription,
   progressPercent,
+  supportsContributionBreakdown,
   tileTaskPhrase,
   type ParticipantStats,
   type TileCondition,
@@ -500,5 +502,52 @@ describe('conditionNeedsBaseline', () => {
       { type: 'tbd' },
     ];
     for (const cond of dinkDriven) expect(conditionNeedsBaseline(cond)).toBe(false);
+  });
+});
+
+describe('supportsContributionBreakdown (BACKLOG.md #29)', () => {
+  it('is false for freeSpace/tbd -- nothing to measure', () => {
+    expect(supportsContributionBreakdown({ type: 'freeSpace' })).toBe(false);
+    expect(supportsContributionBreakdown({ type: 'tbd' })).toBe(false);
+  });
+
+  it('is false for the two lowest-skill conditions -- each participant resolves a different skill', () => {
+    expect(supportsContributionBreakdown({ type: 'xpGainedLowestSkill', threshold: 1 })).toBe(false);
+    expect(supportsContributionBreakdown({ type: 'levelsGainedLowestSkill', threshold: 1 })).toBe(false);
+  });
+
+  it('is true for every other condition type', () => {
+    const rest: TileCondition[] = [
+      { type: 'xpGained', threshold: 1 },
+      { type: 'bossKcGained', threshold: 1 },
+      { type: 'kcGained', activity: 'Zulrah', threshold: 1 },
+      { type: 'singleDropValue', threshold: 1 },
+      { type: 'maxDeaths', threshold: 1 },
+      { type: 'itemCount', itemNames: ['a'], setName: 'Set', threshold: 1 },
+    ];
+    for (const cond of rest) expect(supportsContributionBreakdown(cond)).toBe(true);
+  });
+});
+
+describe('formatContributionValue (BACKLOG.md #29)', () => {
+  it('formats XP-scale values compactly', () => {
+    expect(formatContributionValue({ type: 'xpGained', threshold: 1 }, 1_500_000)).toBe('1.5M XP');
+    expect(formatContributionValue({ type: 'skillXpGained', skill: 'Mining', threshold: 1 }, 250_000)).toBe('250K XP');
+  });
+
+  it('formats KC as a plain count', () => {
+    expect(formatContributionValue({ type: 'bossKcGained', threshold: 1 }, 340)).toBe('340 KC');
+  });
+
+  it('formats gp-scale values compactly, for both lootValueGained and singleDropValue', () => {
+    expect(formatContributionValue({ type: 'lootValueGained', threshold: 1 }, 45_000_000)).toBe('45M gp');
+    expect(formatContributionValue({ type: 'singleDropValue', threshold: 1 }, 12_345_678)).toBe('12.34M gp');
+  });
+
+  it('pluralizes count-style units correctly at 1 vs. many', () => {
+    expect(formatContributionValue({ type: 'petsObtained', threshold: 1 }, 1)).toBe('1 pet');
+    expect(formatContributionValue({ type: 'petsObtained', threshold: 1 }, 3)).toBe('3 pets');
+    expect(formatContributionValue({ type: 'slayerTasksCompleted', threshold: 1 }, 1)).toBe('1 task');
+    expect(formatContributionValue({ type: 'slayerTasksCompleted', threshold: 1 }, 5)).toBe('5 tasks');
   });
 });

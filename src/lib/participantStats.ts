@@ -27,6 +27,12 @@ export interface RawParticipantData {
     // into it, used in its place (see biggestDropValue below).
     is_misc?: boolean;
     max_single_value?: number | null;
+    // The boss/monster/source name Dink reported (loot_drops.source) --
+    // optional so older callers/fixtures that never needed it keep
+    // compiling; not present on a bucketed row (increment_misc_loot never
+    // sets it). Only consumed by qualifyingBigDrops below, for the Big
+    // Drop ledger (BACKLOG.md #29).
+    source?: string;
   }[];
   deaths: { created_at: string }[];
   collectionLogEntries: { created_at: string }[];
@@ -153,7 +159,12 @@ export function computeParticipantStats(
   };
 }
 
-function mergeCounts(maps: Record<string, number>[]): Record<string, number> {
+// Exported for TileDetailModal.tsx/AdventureColumnModal.tsx's boss-KC
+// ledger (BACKLOG.md #29) -- merges several participants' own
+// kcGainedByActivity maps into one pool-wide per-boss total, same
+// reduction poolStats already does internally for the pooled tile status
+// itself.
+export function mergeCounts(maps: Record<string, number>[]): Record<string, number> {
   const merged: Record<string, number> = {};
   for (const map of maps) {
     for (const [key, value] of Object.entries(map)) {
@@ -161,6 +172,24 @@ function mergeCounts(maps: Record<string, number>[]): Record<string, number> {
     }
   }
   return merged;
+}
+
+// The Big Drop ledger (BACKLOG.md #29): every one of a participant's own
+// individual (non-bucketed) drops that itself cleared a singleDropValue
+// tile's threshold, within the window -- source/items intact, unlike a
+// bucketed is_misc row (see RawParticipantData.is_misc above), which only
+// preserves a running total plus max_single_value, not per-drop detail.
+// dinkWebhook.ts's handleLoot keeps a drop as its own row whenever its
+// value clears the challenge's lowest relevant threshold across BOTH
+// bigDropsCount and singleDropValue tiles (see minNotableDropThreshold),
+// so every drop that could ever qualify here is guaranteed to have
+// already landed as its own row, not folded into a bucket.
+export function qualifyingBigDrops(
+  lootDrops: RawParticipantData['lootDrops'],
+  window: DateWindow,
+  minValue: number,
+): RawParticipantData['lootDrops'] {
+  return lootDrops.filter((d) => !d.is_misc && d.total_value >= minValue && inWindow(d.created_at, window));
 }
 
 // Combines a Coop/Team pool's already-computed per-participant stats into

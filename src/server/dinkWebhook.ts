@@ -88,7 +88,17 @@ interface RawLootItem {
 const bigDropsThresholdCache = new Map<string, { value: number | null; expiresAt: number }>();
 const BIG_DROPS_CACHE_TTL_MS = 60_000;
 
-async function minBigDropsThreshold(challengeId: string): Promise<number | null> {
+// The lowest value threshold, across BOTH bigDropsCount's dropValueThreshold
+// and singleDropValue's threshold, that this challenge's own tiles actually
+// use -- a drop clearing either one needs its own row (source/items intact)
+// rather than folding into a bucket. Originally bigDropsCount-only; a
+// singleDropValue tile needs the exact same preservation for its own Big
+// Drop ledger (BACKLOG.md #29's player-facing "which drop actually
+// qualified" list) -- without this, a challenge with only a singleDropValue
+// tile (no bigDropsCount tile at all, or one with a higher threshold) would
+// bucket exactly the drops the ledger most needs to show, since bucketing
+// only preserves a running max_single_value, not the source/item detail.
+async function minNotableDropThreshold(challengeId: string): Promise<number | null> {
   const cached = bigDropsThresholdCache.get(challengeId);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
 
@@ -96,10 +106,11 @@ async function minBigDropsThreshold(challengeId: string): Promise<number | null>
     'tiles',
     `challenge_id=eq.${encodeURIComponent(challengeId)}&select=condition`,
   );
-  const thresholds = tiles
-    .map((t) => t.condition)
-    .filter((c): c is Extract<Tile['condition'], { type: 'bigDropsCount' }> => c.type === 'bigDropsCount')
-    .map((c) => c.dropValueThreshold);
+  const thresholds = tiles.map((t) => t.condition).flatMap((c) => {
+    if (c.type === 'bigDropsCount') return [c.dropValueThreshold];
+    if (c.type === 'singleDropValue') return [c.threshold];
+    return [];
+  });
   const value = thresholds.length > 0 ? Math.min(...thresholds) : null;
 
   bigDropsThresholdCache.set(challengeId, { value, expiresAt: Date.now() + BIG_DROPS_CACHE_TTL_MS });
@@ -124,13 +135,13 @@ async function handleLoot(challengeId: string, participantId: string, extra: Rec
   // (src/lib/itemSets.ts -- the only source of items an itemCount tile
   // can ever reference, so catalog membership is both necessary and
   // sufficient), or its value clears whatever threshold this challenge's
-  // own 'bigDropsCount' tile(s) actually use.
+  // own 'bigDropsCount'/'singleDropValue' tile(s) actually use.
   // A challenge with no such tile applies no value-based preservation at
   // all -- everything else folds into one running bucket row per
   // participant per day (increment_misc_loot).
   const hasNotableItem = items.some((it) => isNotableLootItem(it.name));
-  const bigDropsCutoff = await minBigDropsThreshold(challengeId);
-  const needsOwnRow = hasNotableItem || (bigDropsCutoff !== null && totalValue >= bigDropsCutoff);
+  const notableDropCutoff = await minNotableDropThreshold(challengeId);
+  const needsOwnRow = hasNotableItem || (notableDropCutoff !== null && totalValue >= notableDropCutoff);
 
   if (!needsOwnRow) {
     await callRpc('increment_misc_loot', {

@@ -4,13 +4,14 @@ import type { Challenge, Tile } from '../db/types';
 import {
   checkTile,
   conditionNeedsBaseline,
+  formatContributionValue,
   formatTileGoal,
   formatTileProgress,
   itemCountModalDescription,
   progressPercent,
   type TileStatus,
 } from '../lib/tileConditions';
-import { computeParticipantStats, type RawParticipantData } from '../lib/participantStats';
+import { computeParticipantStats, qualifyingBigDrops, type RawParticipantData } from '../lib/participantStats';
 import type { SnapshotRow } from '../lib/hiscoresRecap';
 import { progressColor } from '../lib/progressColor';
 import { resolveAdventureTileWindow, resolveFrontier } from '../lib/adventureProgress';
@@ -84,6 +85,24 @@ function rankValue(status: TileStatus, percent: number | null): number {
   return percent ?? (status.done ? 100 : 0);
 }
 
+// BACKLOG.md #29 -- same two condition-specific ledgers as
+// TileDetailModal.tsx, nested under each participant's own row here
+// instead of a pooled/team one: Adventure boards are always solo
+// (NewChallengePage.tsx forces game_mode back to 'solo' the moment
+// board_type is set to 'adventure'), so every row already represents one
+// person's own independent progress -- there's no "Contributions"
+// ranking to add, only "what actually counted" beneath the number
+// they've already got.
+interface BossLedgerEntry {
+  boss: string;
+  kc: number;
+}
+interface DropLedgerEntry {
+  source: string;
+  items: string;
+  value: number;
+}
+
 // A fork column shows every participant grouped by whichever lane THEY
 // picked (not one shared condition applied to everyone, unlike a regular
 // tile) -- self-contained raw-data fetch/compute, same established
@@ -102,6 +121,8 @@ export default function AdventureColumnModal({
 }: Props) {
   const [loading, setLoading] = useState(true);
   const [statuses, setStatuses] = useState<Record<string, TileStatus>>({});
+  const [bossLedgers, setBossLedgers] = useState<Record<string, BossLedgerEntry[]>>({});
+  const [dropLedgers, setDropLedgers] = useState<Record<string, DropLedgerEntry[]>>({});
 
   // useCallback with real dependencies, not a plain function -- these are
   // called from the data-fetch effect below, so a fresh reference on
@@ -143,7 +164,7 @@ export default function AdventureColumnModal({
         supabase.from('slayer_tasks').select('participant_id, created_at').in('participant_id', ids),
         supabase
           .from('loot_drops')
-          .select('participant_id, items, total_value, created_at, is_misc, max_single_value')
+          .select('participant_id, source, items, total_value, created_at, is_misc, max_single_value')
           .in('participant_id', ids),
         supabase.from('deaths').select('participant_id, created_at').in('participant_id', ids),
         supabase.from('collection_log_entries').select('participant_id, created_at').in('participant_id', ids),
@@ -163,6 +184,8 @@ export default function AdventureColumnModal({
       const snapshotsByP = groupByParticipant((snapshots.data as ({ participant_id: string } & SnapshotRow)[]) ?? []);
 
       const result: Record<string, TileStatus> = {};
+      const bossLedgerResult: Record<string, BossLedgerEntry[]> = {};
+      const dropLedgerResult: Record<string, DropLedgerEntry[]> = {};
       for (const p of participants) {
         const tile = tileFor(p);
         if (!tile) continue; // hasn't picked a lane for this fork yet, or the host hasn't authored that slot
@@ -198,6 +221,19 @@ export default function AdventureColumnModal({
         if (resolved.kind === 'ready') {
           const stats = computeParticipantStats(raw, resolved.window, resolved.recap, p.chosen_lowest_skill);
           result[p.id] = checkTile(tile.condition, stats);
+
+          // BACKLOG.md #29 -- same two condition-specific ledgers as
+          // TileDetailModal.tsx, scoped to just this one participant
+          // (Adventure has no pooling to rank across).
+          if (tile.condition.type === 'bossKcGained') {
+            bossLedgerResult[p.id] = Object.entries(stats.kcGainedByActivity)
+              .map(([boss, kc]) => ({ boss, kc }))
+              .sort((a, b) => b.kc - a.kc);
+          } else if (tile.condition.type === 'singleDropValue') {
+            dropLedgerResult[p.id] = qualifyingBigDrops(raw.lootDrops, resolved.window, tile.condition.threshold)
+              .map((d) => ({ source: d.source ?? 'Unknown', items: d.items.map((it) => it.name).join(', '), value: d.total_value }))
+              .sort((a, b) => b.value - a.value);
+          }
         }
         // else: 'awaiting-baseline' -- this IS their frontier, but a
         // hiscores-backed tile with no baseline yet, awaiting a
@@ -206,6 +242,8 @@ export default function AdventureColumnModal({
       }
       if (!cancelled) {
         setStatuses(result);
+        setBossLedgers(bossLedgerResult);
+        setDropLedgers(dropLedgerResult);
         setLoading(false);
       }
     })();
@@ -323,6 +361,34 @@ export default function AdventureColumnModal({
                   {percent !== null && (
                     <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-stone-900">
                       <div className="h-full" style={{ width: `${percent}%`, backgroundColor: progressColor(percent) }} />
+                    </div>
+                  )}
+                  {(bossLedgers[p.id]?.length ?? 0) > 0 && (
+                    <div className="mt-2 space-y-1 border-t border-stone-900 pt-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-600">Bosses killed</p>
+                      <div className="max-h-28 space-y-1 overflow-y-auto">
+                        {bossLedgers[p.id].map((b) => (
+                          <div key={b.boss} className="flex items-center justify-between text-xs text-stone-400">
+                            <span>{b.boss}</span>
+                            <span>{b.kc.toLocaleString()} KC</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {(dropLedgers[p.id]?.length ?? 0) > 0 && (
+                    <div className="mt-2 space-y-1 border-t border-stone-900 pt-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-600">Qualifying drops</p>
+                      <div className="max-h-28 space-y-1 overflow-y-auto">
+                        {dropLedgers[p.id].map((d, i) => (
+                          <div key={i} className="flex items-center justify-between gap-2 text-xs text-stone-400">
+                            <span className="truncate">
+                              {d.source} -- {d.items}
+                            </span>
+                            <span className="shrink-0">{formatContributionValue(tile.condition, d.value)}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </li>

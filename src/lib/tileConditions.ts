@@ -597,6 +597,80 @@ export function progressPercent(cond: TileCondition, status: TileStatus): number
   return Math.max(0, Math.min(100, (status.progress / status.goal) * 100));
 }
 
+// Whether a per-player contribution breakdown (BACKLOG.md #29 -- ranking
+// each pool member's own share of a Coop/Team tile's progress, most to
+// least) means anything for this condition. False for freeSpace/tbd
+// (nothing to measure) and the two lowest-skill conditions -- each
+// participant resolves a *different* skill for those (their own personal
+// lowest), so "rank everyone's contribution" doesn't compare like for
+// like the way it does for every other type. Moot in practice today
+// (TileEditorForm.tsx already excludes both from a non-solo challenge's
+// condition picker), kept as an explicit guard rather than relying on
+// that staying true forever.
+export function supportsContributionBreakdown(cond: TileCondition): boolean {
+  switch (cond.type) {
+    case 'freeSpace':
+    case 'tbd':
+    case 'xpGainedLowestSkill':
+    case 'levelsGainedLowestSkill':
+      return false;
+    default:
+      return true;
+  }
+}
+
+// One participant's own contribution number toward a tile, formatted with
+// the same per-type unit convention formatTileGoal uses for the tile's
+// overall threshold -- BACKLOG.md #29's per-player breakdown. Takes an
+// arbitrary value (a single pool member's own checkTile(...).progress
+// against their own stats), not cond.threshold. Compact XP/gp shorthand
+// throughout (roundDown, matching formatTileProgress's own live-number
+// convention) since this is a running figure, not a fixed goal.
+export function formatContributionValue(cond: TileCondition, value: number): string {
+  switch (cond.type) {
+    case 'tbd':
+    case 'freeSpace':
+    case 'xpGainedLowestSkill':
+    case 'levelsGainedLowestSkill':
+      // Unreachable via supportsContributionBreakdown's guard above --
+      // exhaustiveness only.
+      return '';
+    case 'maxDeaths':
+      return `${value.toLocaleString()} death${value === 1 ? '' : 's'}`;
+    case 'xpGained':
+    case 'skillXpGained':
+      return `${formatCompactNumber(value, { roundDown: true })} XP`;
+    case 'skillLevelGained':
+      return `${value.toLocaleString()} level${value === 1 ? '' : 's'}`;
+    case 'bossKcGained':
+    case 'kcGained':
+      return `${value.toLocaleString()} KC`;
+    case 'slayerTasksCompleted':
+      return `${value.toLocaleString()} task${value === 1 ? '' : 's'}`;
+    case 'lootValueGained':
+    case 'singleDropValue':
+      return `${formatCompactNumber(value, { roundDown: true })} gp`;
+    case 'itemCount':
+      return `${value.toLocaleString()} item${value === 1 ? '' : 's'}`;
+    case 'bigDropsCount':
+      return `${value.toLocaleString()} drop${value === 1 ? '' : 's'}`;
+    case 'cluesCompleted':
+    case 'beginnerCluesCompleted':
+    case 'easyCluesCompleted':
+    case 'mediumCluesCompleted':
+    case 'hardCluesCompleted':
+    case 'eliteCluesCompleted':
+    case 'masterCluesCompleted':
+      return `${value.toLocaleString()} clue${value === 1 ? '' : 's'}`;
+    case 'collectionLogGained':
+      return `${value.toLocaleString()} item${value === 1 ? '' : 's'}`;
+    case 'gotrCompleted':
+      return `${value.toLocaleString()} rift${value === 1 ? '' : 's'}`;
+    case 'petsObtained':
+      return `${value.toLocaleString()} pet${value === 1 ? '' : 's'}`;
+  }
+}
+
 // Every row, every column, and both diagonals of an NxN grid -- a completed
 // line is classic bingo scoring. Specific to board_type='grid5x5' (called
 // with size=5); a future irregular board_type brings its own scoring
