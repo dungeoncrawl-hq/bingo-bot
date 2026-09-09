@@ -1558,3 +1558,14 @@ instead of renumbering the existing list.
     correctly reading 23/100 (previously stuck at 0), exactly matching
     "Total Boss KC"'s own 23/1000 -- Barrows is the only boss this
     account has farmed so far.
+
+    **Same-day follow-up**: the fix above corrected `condition.activity`
+    (what actually gates progress) but not each tile's own `label` --
+    a separate, plain-text stored field, set once at tile-creation time
+    from `defaultLabelFor`'s `${activity} KC` and never recomputed
+    afterward, so both tiles still displayed "Barrows Chests KC" on the
+    board and in the tile-detail modal even once progress was correctly
+    updating underneath. Updated both tiles' stored `label` to "Barrows
+    KC" to match. Live-verified: the board tile and its modal (title,
+    description, and Contributions row) all now consistently read
+    "Barrows KC".
