@@ -1569,3 +1569,38 @@ instead of renumbering the existing list.
     KC" to match. Live-verified: the board tile and its modal (title,
     description, and Contributions row) all now consistently read
     "Barrows KC".
+
+35. **A Gear icon group added to the profile icon picker.** **Shipped
+    2026-09-09.** 20 weapon/armor/cosmetic items a player can pick as
+    their profile icon (#22), alongside the existing Skills/Bosses/
+    Items/Clue Scrolls/Pets/Food/Other groups: Dragon scimitar, Rune
+    scimitar, Dragon dagger(p++), Abyssal whip, Rune kiteshield (plain,
+    (t), and (g)), Gilded kiteshield, the 6 treasure-trail god
+    kiteshields (Guthix/Saradomin/Zamorak/Armadyl/Bandos/Ancient),
+    Slayer helmet (i), Barrows gloves, Fire cape, Robin hood hat, Ranger
+    boots, Cow slippers.
+
+    The requested "any other special Rune Kiteshields from treasure
+    trail drops" needed real research, not a guess -- the wiki's own
+    Rune kiteshield page mostly documents the 16 Construction/POH
+    heraldic reskins (Arrav, Asgarnia, Dragon, etc.), a *different*
+    category from treasure-trail rewards despite sharing some god names.
+    Confirmed via a second, targeted lookup that the actual treasure-
+    trail kiteshields are 6 standalone "god kiteshield" items (not named
+    "Rune kiteshield (God)") plus the (t)/(g) trim tiers and Gilded --
+    those are what's in the catalog, not the Construction reskins.
+    "Best Slayer Helmet" resolved to the standard `Slayer helmet (i)`
+    (imbued) rather than a boss-trophy cosmetic recolor like the Tzkal
+    variant -- same stats as any other recolor, but the one an average
+    player asking "what's best" almost certainly means.
+
+    Same pattern as Food (#31, BACKLOG.md's Wilderness/DT2 additions):
+    kept as its own small catalog (`src/lib/gearIcons.ts`), not added to
+    `itemSets.ts`'s `PRESET_ITEM_SETS`, for the same reason -- that list
+    also drives `isNotableLootItem` and tile authoring, neither of which
+    a purely-cosmetic icon pick should affect. Cow slippers needed the
+    same `_(1)` filename override `itemSets.ts` already has on file for
+    it (the naive name-to-filename convention doesn't resolve for this
+    one item). Every one of the 20 wiki icon URLs live-verified with a
+    HEAD request before adding, then confirmed actually loading
+    (`naturalWidth > 0`) in the live picker afterward.

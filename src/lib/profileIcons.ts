@@ -2,9 +2,10 @@
 // used from AccountPage.tsx) -- mostly icon sets this app already has
 // elsewhere for tile authoring, grouped the same way those already are
 // (skills, bosses, item catalog sets, pets) rather than curating a
-// separate image library just for this. Food (foodIcons.js) is the
-// exception -- purely cosmetic, so it's its own small catalog rather than
-// reusing itemSets.ts's tile-authoring/notable-loot list.
+// separate image library just for this. Food (foodIcons.js) and Gear
+// (gearIcons.js) are the exceptions -- purely cosmetic, so each is its
+// own small catalog rather than reusing itemSets.ts's tile-authoring/
+// notable-loot list.
 import {
   skillIconUrl,
   SKILL_ORDER,
@@ -26,6 +27,7 @@ import { BOSS_ACTIVITIES } from './bossActivities.js';
 import { PRESET_ITEM_SETS, itemIcon } from './itemSets.js';
 import { ALL_PETS, type PetCategory } from './petIcons.js';
 import { ALL_FOOD } from './foodIcons.js';
+import { ALL_GEAR } from './gearIcons.js';
 
 export interface IconOption {
   name: string;
@@ -98,6 +100,10 @@ export const PROFILE_ICON_GROUPS: IconGroup[] = [
   {
     group: 'Food',
     subgroups: [{ name: 'Food', options: ALL_FOOD.map((f) => ({ name: f.name, icon: f.icon })) }],
+  },
+  {
+    group: 'Gear',
+    subgroups: [{ name: 'Gear', options: ALL_GEAR.map((g) => ({ name: g.name, icon: g.icon })) }],
   },
   {
     group: 'Other',

@@ -22,7 +22,7 @@ describe('PROFILE_ICON_GROUPS', () => {
   });
 
   it('has the expected top-level groups', () => {
-    expect(PROFILE_ICON_GROUPS.map((g) => g.group)).toEqual(['Skills', 'Bosses', 'Items', 'Clue Scrolls', 'Pets', 'Food', 'Other']);
+    expect(PROFILE_ICON_GROUPS.map((g) => g.group)).toEqual(['Skills', 'Bosses', 'Items', 'Clue Scrolls', 'Pets', 'Food', 'Gear', 'Other']);
   });
 
   it('Items has one subgroup per item-catalog set, and Pets has its 3 categories', () => {
@@ -37,6 +37,13 @@ describe('PROFILE_ICON_GROUPS', () => {
     const names = food.subgroups[0].options.map((o) => o.name);
     expect(names).toHaveLength(15);
     expect(new Set(names).size).toBe(15);
+  });
+
+  it('Gear has 20 distinct items', () => {
+    const gear = PROFILE_ICON_GROUPS.find((g) => g.group === 'Gear')!;
+    const names = gear.subgroups[0].options.map((o) => o.name);
+    expect(names).toHaveLength(20);
+    expect(new Set(names).size).toBe(20);
   });
 });
 
