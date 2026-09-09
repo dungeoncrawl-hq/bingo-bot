@@ -1523,3 +1523,38 @@ instead of renumbering the existing list.
     equals `clientWidth` on both, and a screenshot of each confirms the
     tab bar/tier cards actually read as a clean single-column stack, not
     just an absence-of-scrollbar technicality).
+
+34. **Fixed: "Barrows Chests KC" tiles could never gain progress.**
+    **Shipped 2026-09-09**, reported live against Ototo Dungeon --
+    confirmed by checking real `boss_kills` rows directly: Dink's own
+    `KILL_COUNT` notifier reports this boss as plain `"Barrows"`, not
+    `"Barrows Chests"` -- the name `bossActivities.ts`'s catalog had
+    always used, sourced from the Hiscores API's own activity name
+    rather than verified against real Dink data. Since `kcGained`'s
+    progress lookup (`stats.kcGainedByActivity[cond.activity]`) is an
+    exact string match, every "Barrows Chests" tile had silently been
+    stuck at 0 forever, no matter how many chests were actually opened.
+
+    Renamed the catalog entry (and its `randomizeSettings.ts`
+    `bossToTier` counterpart) to `"Barrows"`, matching what Dink
+    actually sends rather than the Hiscores name, since agreeing with
+    Dink is this catalog's whole purpose. `bossActivities.ts`'s own
+    header comment (which claimed every entry is Dink-verified) now
+    flags this as a confirmed exception, and notes the other 78 entries
+    haven't specifically been checked against real Dink data the way
+    this one now has -- worth an eventual audit rather than assuming the
+    rest are fine.
+
+    **Data fix, not just code**: found and corrected 2 already-broken
+    tiles site-wide (not just Ototo's) with `condition.activity =
+    "Barrows Chests"` stored from before this fix, plus the site's one
+    saved `randomize_settings` row, whose `bossToTier` map still had the
+    old key (the randomizer picks a boss from the live `BOSS_ACTIVITIES`
+    catalog and looks up its tier by name, so a stale key there would
+    have silently dropped this boss to a different farm-rate tier than
+    intended).
+
+    Live-verified: reloading Ototo Dungeon shows "Barrows Chests KC"
+    correctly reading 23/100 (previously stuck at 0), exactly matching
+    "Total Boss KC"'s own 23/1000 -- Barrows is the only boss this
+    account has farmed so far.

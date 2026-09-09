@@ -81,7 +81,7 @@ export const DEFAULT_RANDOMIZE_SETTINGS: RandomizeSettings = {
       'Abyssal Sire': 'fast',
       Amoxliatl: 'fast',
       Artio: 'fast',
-      'Barrows Chests': 'fast',
+      Barrows: 'fast',
       Brutus: 'fast',
       Bryophyta: 'fast',
       Callisto: 'fast',

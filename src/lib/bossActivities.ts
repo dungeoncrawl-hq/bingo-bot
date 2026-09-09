@@ -10,6 +10,17 @@
 // match against it), so a name here that doesn't match Hiscores exactly
 // means that tile can simply never complete.
 //
+// Confirmed exception (2026-09-09): the Hiscores activity is named
+// "Barrows Chests", but Dink's own KILL_COUNT notifier reports this one
+// specifically as plain "Barrows" -- verified against real recorded
+// boss_kills rows, not assumed. Two tiles across two live challenges
+// had silently never been able to complete because of the mismatch.
+// Named "Barrows" here to match what Dink actually sends, not the
+// Hiscores name, since that's the value this catalog exists to agree
+// with. Worth an eventual audit of the other 78 entries against real
+// Dink data rather than trusting the Hiscores name matches everywhere --
+// this is the first confirmed case, may not be the only one.
+//
 // Deliberately excludes "Rifts closed" (Guardians of the Rift) even
 // though it's a real Hiscores activity name -- Dink's Kill Count
 // notifier can never actually report it (its regex requires the word
@@ -23,7 +34,7 @@
 // has one -- immediately recognizable, and consistent with how this catalog
 // itself was scoped (see the Scurrius example that kicked this off). The 9
 // entries with no pet get a hand-picked, individually wiki-verified unique
-// item icon instead (e.g. Barrows Chests -> Dharok's platebody).
+// item icon instead (e.g. Barrows -> Dharok's platebody).
 const WIKI = 'https://oldschool.runescape.wiki/images/';
 
 export interface BossActivity {
@@ -37,7 +48,7 @@ export const BOSS_ACTIVITIES: BossActivity[] = [
   { name: 'Amoxliatl', icon: `${WIKI}Moxi_(follower).png` },
   { name: 'Araxxor', icon: `${WIKI}Nid_(follower).png` },
   { name: 'Artio', icon: `${WIKI}Callisto_cub_(follower).png` },
-  { name: 'Barrows Chests', icon: `${WIKI}Dharok's_platebody.png` },
+  { name: 'Barrows', icon: `${WIKI}Dharok's_platebody.png` },
   { name: 'Brutus', icon: `${WIKI}Beef_(follower).png` },
   { name: 'Bryophyta', icon: `${WIKI}Bryophyta's_staff.png` },
   { name: 'Callisto', icon: `${WIKI}Callisto_cub_(follower).png` },

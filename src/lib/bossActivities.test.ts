@@ -20,11 +20,11 @@ describe('bossActivityIcon', () => {
   });
 
   it("resolves a pet-less boss to its hand-picked icon", () => {
-    expect(bossActivityIcon('Barrows Chests')).toBe("https://oldschool.runescape.wiki/images/Dharok's_platebody.png");
+    expect(bossActivityIcon('Barrows')).toBe("https://oldschool.runescape.wiki/images/Dharok's_platebody.png");
   });
 
   it('returns null for a name outside the catalog', () => {
-    expect(bossActivityIcon('Barrows')).toBeNull();
+    expect(bossActivityIcon('Not a real boss')).toBeNull();
     expect(bossActivityIcon('')).toBeNull();
   });
 });
