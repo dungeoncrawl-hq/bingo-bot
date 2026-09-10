@@ -32,20 +32,30 @@ export type TileCondition =
   // XP gained in one specific skill during the event -- unlike 'xpGained',
   // which sums every skill together.
   | { type: 'skillXpGained'; skill: string; threshold: number }
-  // itemNames matched case-insensitively against loot item names.
-  // setName is a human-readable name for the catalog set they were
-  // chosen from, used only by describeTileCondition below (the tile's
-  // own on-board label handles the item names themselves). mode picks
-  // how itemNames count toward threshold:
+  // itemNames matched case-insensitively against loot item names --
+  // TileEditorForm.tsx lets a host draw these from more than one
+  // PRESET_ITEM_SETS catalog at once (e.g. Ahrim's hood from Barrows
+  // uniques alongside Cow slippers from Brutus uniques in the same
+  // tile), so itemNames is the only real source of truth for what's
+  // targeted. setName is a leftover single-catalog label -- still
+  // populated (the source set's name if every item happens to come
+  // from one, else "Custom selection") for randomizeBoard.ts's
+  // single-set auto-fill and for informational/debugging value on the
+  // stored row, but no display code reads it anymore (describeTileCondition/
+  // tileTaskPhrase below use generic "selected items" wording instead,
+  // since a mixed-catalog selection has no one set name to say).
+  // mode picks how itemNames count toward threshold:
   // - 'any' (default -- optional so a tile saved before this field
-  //   existed keeps its original meaning): total quantity summed across
-  //   every selected item, duplicates of one freely substitute for
-  //   another (e.g. 5x the same item alone can clear a threshold-2 goal).
-  // - 'all': how many of the selected items have been obtained at LEAST
-  //   ONCE (each capped at 1 toward progress -- a duplicate of an
-  //   already-obtained item doesn't help). threshold is usually
-  //   itemNames.length ("get every selected item"), but a host can ask
-  //   for fewer ("any N of these M specific items").
+  //   existed keeps its original meaning; labeled "Allow Duplicates" in
+  //   TileEditorForm.tsx): total quantity summed across every selected
+  //   item, duplicates of one freely substitute for another (e.g. 5x
+  //   the same item alone can clear a threshold-2 goal).
+  // - 'all' (labeled "No Duplicates" in TileEditorForm.tsx): how many
+  //   of the selected items have been obtained at LEAST ONCE (each
+  //   capped at 1 toward progress -- a duplicate of an already-obtained
+  //   item doesn't help). threshold is usually itemNames.length ("get
+  //   every selected item"), but a host can ask for fewer ("any N of
+  //   these M specific items").
   | { type: 'itemCount'; itemNames: string[]; setName: string; mode?: 'any' | 'all'; threshold: number }
   // A drop counts if its own total_value clears dropValueThreshold (not a
   // running sum) -- e.g. "3 drops worth 1,000,000+ GP each". Distinct
@@ -344,17 +354,22 @@ export function describeTileCondition(cond: TileCondition): string {
     case 'skillXpGained':
       return `${cond.threshold.toLocaleString()} ${cond.skill} XP`;
     case 'itemCount':
-      if (cond.mode !== 'all') return `${cond.threshold.toLocaleString()} ${cond.setName}`;
+      // Deliberately not "${threshold} ${setName}" anymore -- a
+      // selection can now span multiple catalog sets at once
+      // (TileEditorForm.tsx), so there's no longer one set name to
+      // reference. Generic "selected items" reads correctly regardless
+      // of how many catalogs the selection actually draws from.
+      if (cond.mode !== 'all') return `${cond.threshold.toLocaleString()} selected item${cond.threshold === 1 ? '' : 's'}`;
       // A single targeted item has nothing left to enumerate -- "every
-      // one of these 1 X items" doesn't parse as English, and there's no
+      // one of these 1 items" doesn't parse as English, and there's no
       // "N of M" distinction possible with only one candidate either.
       // Naming the item directly reads naturally in every context this
       // gets dropped into ("completed the {phrase} task", a standalone
       // tooltip/description line).
       if (cond.itemNames.length === 1) return cond.itemNames[0];
       return cond.threshold >= cond.itemNames.length
-        ? `every one of these ${cond.itemNames.length} ${cond.setName} items`
-        : `${cond.threshold} of these ${cond.itemNames.length} ${cond.setName} items`;
+        ? `every one of these ${cond.itemNames.length} selected items`
+        : `${cond.threshold} of these ${cond.itemNames.length} selected items`;
     case 'bigDropsCount':
       return `${cond.threshold.toLocaleString()} drops worth ${cond.dropValueThreshold.toLocaleString()}+ GP each`;
     case 'maxDeaths':
@@ -439,14 +454,17 @@ export function tileTaskPhrase(cond: TileCondition): string {
     case 'skillXpGained':
       return `${cond.threshold.toLocaleString()} ${cond.skill} XP`;
     case 'itemCount':
-      if (cond.mode !== 'all') return `${cond.threshold.toLocaleString()} ${cond.setName}`;
+      // See describeTileCondition's identical case above -- a selection
+      // can span multiple catalog sets, so this is generic rather than
+      // naming any one of them.
+      if (cond.mode !== 'all') return `${cond.threshold.toLocaleString()} selected item${cond.threshold === 1 ? '' : 's'}`;
       // See describeTileCondition's identical case above for why a
       // single item is named directly rather than "every one of these 1
-      // X items".
+      // items".
       if (cond.itemNames.length === 1) return cond.itemNames[0];
       return cond.threshold >= cond.itemNames.length
-        ? `every one of these ${cond.itemNames.length} ${cond.setName} items`
-        : `${cond.threshold} of these ${cond.itemNames.length} ${cond.setName} items`;
+        ? `every one of these ${cond.itemNames.length} selected items`
+        : `${cond.threshold} of these ${cond.itemNames.length} selected items`;
     case 'maxDeaths':
       return `${cond.threshold.toLocaleString()} deaths or fewer`;
     case 'petsObtained':

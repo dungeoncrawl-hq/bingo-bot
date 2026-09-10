@@ -2133,3 +2133,79 @@ instead of renumbering the existing list.
     with zero gap and zero overlap, boss tiles included. No console
     errors; no 375px horizontal-overflow regression. Build/lint/295
     tests all passed.
+
+46. **"Obtain specific uniques" (itemCount) now lets a host pick items
+    across MULTIPLE catalog sets in one tile, moved Goal type above the
+    item picker, and lets "No Duplicates" ask for fewer than the whole
+    selection.** **Shipped 2026-09-10.**
+
+    **Cross-catalog selection.** Previously a host picked one catalog
+    (e.g. "Barrows uniques") and could only narrow within it -- there
+    was no way to build a tile like "Ahrim's hood AND Cow slippers"
+    (Barrows uniques + Brutus uniques). `selectedItemNames` is now the
+    real cross-catalog source of truth; the catalog dropdown
+    (relabeled "Browse a catalog to add items from") is purely a VIEW
+    FILTER for which checklist is showing, and no longer resets the
+    selection when switched (`selectItemSet` -> `browseItemSet`, now a
+    one-line state update). A new always-visible "Selected items (N)"
+    chip list -- each a removable pill, regardless of which catalog it
+    came from, plus a "Clear all" -- is what actually makes this
+    intuitive: a host can see and prune the whole cross-catalog
+    selection without needing to remember which catalogs they'd
+    visited. "Select all"/"Select none" now scope to just the browsed
+    catalog (add/remove that catalog's items from the global selection)
+    rather than replacing it outright.
+
+    Reopening an existing tile now picks the browse catalog by finding
+    the first PRESET_ITEM_SETS entry containing any of the tile's
+    actual saved items (falling back to its legacy single `setName`,
+    then the first catalog), instead of trusting a `setName` that can
+    no longer describe a mixed-catalog selection on its own.
+
+    **`setName`'s role shrank to informational-only.** It used to drive
+    the on-tile description text directly ("3 Barrows uniques"), which
+    doesn't parse once a selection spans catalogs. `describeTileCondition`/
+    `tileTaskPhrase` (`tileConditions.ts`) now use generic "selected
+    items" wording unconditionally, regardless of source. The field
+    itself stays (required by the type, and still meaningfully written
+    by `randomizeBoard.ts`'s own single-set auto-fill) -- TileEditorForm.tsx
+    now computes it at save time (`setNameForSelection`): the one
+    catalog's name if every selected item happens to come from it,
+    else `"Custom selection"`, kept for informational/debugging value
+    on the stored row even though no display code reads it anymore.
+
+    **Goal type moved above the item picker** (was below the catalog
+    dropdown) -- it changes how "Selected items" and the Goal field
+    both read, so a host should set it before narrowing the selection.
+
+    **Renamed without changing behavior**: "Any" -> "Allow Duplicates",
+    "All" -> "No Duplicates" -- UI labels only, the stored `mode` value
+    ('any'/'all') is unchanged, so no migration and no risk to any
+    already-saved tile.
+
+    **"No Duplicates" goal count is now host-editable**, not hard-locked
+    to "every selected item". checkTile's own logic already supported a
+    partial threshold ("any N of these M") since BACKLOG #17 --only the
+    UI forced it to the full selection size. Now a bounded number input
+    (min 1, max = selection size) replaces the old locked readonly
+    line; switching TO "No Duplicates" still defaults it to the full
+    selection (the common case), and a `useEffect` clamps it DOWN
+    (never up) if the selection later shrinks below it -- one-directional
+    on purpose, so a host's own "any 3 of these 5" choice survives them
+    experimenting with the checklist afterward, rather than silently
+    resetting to the new full count every time.
+
+    Live-verified end-to-end against a real draft dungeon: built the
+    host's own example tile (Ahrim's hood from Barrows uniques + Cow
+    slippers from Brutus uniques, "No Duplicates"), confirmed switching
+    catalogs preserved both chips, confirmed the goal input defaulted to
+    2/max 2, confirmed removing Cow slippers clamped the goal to 1/max 1
+    and re-adding it did NOT bounce the goal back up to 2, saved it, and
+    read the actual stored row back via the API --
+    `{"mode":"all","setName":"Custom selection","itemNames":["Ahrim's
+    hood","Cow slippers"],"threshold":1}` -- then reopened the tile in
+    the UI and confirmed it reloaded the exact same cross-catalog
+    selection with the browse catalog correctly defaulting to Barrows
+    uniques. No console errors. Build/lint/295 tests all passed (3
+    existing `tileTaskPhrase`/`describeTileCondition` assertions updated
+    for the new generic wording).

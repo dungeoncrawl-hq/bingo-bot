@@ -415,9 +415,9 @@ describe('tileTaskPhrase', () => {
 
   it('describes itemCount mode "all" distinctly from the default "any" quantity phrasing', () => {
     const any: TileCondition = { type: 'itemCount', itemNames: ['a', 'b'], setName: 'Barrows uniques', threshold: 2 };
-    expect(tileTaskPhrase(any)).toBe('2 Barrows uniques');
+    expect(tileTaskPhrase(any)).toBe('2 selected items');
     const allFull: TileCondition = { type: 'itemCount', itemNames: ['a', 'b'], setName: 'Barrows uniques', mode: 'all', threshold: 2 };
-    expect(tileTaskPhrase(allFull)).toBe('every one of these 2 Barrows uniques items');
+    expect(tileTaskPhrase(allFull)).toBe('every one of these 2 selected items');
     const allPartial: TileCondition = {
       type: 'itemCount',
       itemNames: ['a', 'b', 'c'],
@@ -425,7 +425,7 @@ describe('tileTaskPhrase', () => {
       mode: 'all',
       threshold: 2,
     };
-    expect(tileTaskPhrase(allPartial)).toBe('2 of these 3 Barrows uniques items');
+    expect(tileTaskPhrase(allPartial)).toBe('2 of these 3 selected items');
   });
 
   it('names a single targeted item directly in mode "all" instead of "every one of these 1 X items"', () => {
@@ -437,7 +437,7 @@ describe('tileTaskPhrase', () => {
 describe('describeTileCondition', () => {
   it('describes itemCount mode "all" the same way tileTaskPhrase does', () => {
     const allFull: TileCondition = { type: 'itemCount', itemNames: ['a', 'b'], setName: 'Barrows uniques', mode: 'all', threshold: 2 };
-    expect(describeTileCondition(allFull)).toBe('every one of these 2 Barrows uniques items');
+    expect(describeTileCondition(allFull)).toBe('every one of these 2 selected items');
   });
 
   it('names a single targeted item directly in mode "all" instead of "every one of these 1 X items"', () => {

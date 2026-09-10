@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import type { TileCondition } from '../lib/tileConditions';
 import type { Tile } from '../db/types';
 import { SKILL_ORDER, defaultIconFor, defaultLabelFor } from '../lib/tileIcons';
-import { PRESET_ITEM_SETS, type PresetItemSet } from '../lib/itemSets';
+import { PRESET_ITEM_SETS } from '../lib/itemSets';
 import { BOSS_ACTIVITIES } from '../lib/bossActivities';
 import { decomposeMoneyXp, recomposeMoneyXp, type MoneyXpUnit } from '../lib/format';
 
@@ -129,13 +129,29 @@ const CONDITION_GROUPS: { group: string; options: { value: TileCondition['type']
   },
 ];
 
+// itemCount's stored `setName` has no display use anymore (a selection
+// can span several catalogs at once -- see the TileCondition type's own
+// comment), but randomizeBoard.ts's single-set auto-fill still relies on
+// it meaning something, so this keeps it populated: the one catalog's
+// name if every currently-selected item happens to come from it, else a
+// generic label. O(items x catalogs), trivially fast at this scale (a
+// handful of selected items against ~30 small catalogs).
+function setNameForSelection(itemNames: string[]): string {
+  if (itemNames.length === 0) return PRESET_ITEM_SETS[0].name;
+  const sourceSetNames = new Set<string>();
+  for (const name of itemNames) {
+    const owner = PRESET_ITEM_SETS.find((s) => s.items.includes(name));
+    if (owner) sourceSetNames.add(owner.name);
+  }
+  return sourceSetNames.size === 1 ? [...sourceSetNames][0] : 'Custom selection';
+}
+
 function conditionFromForm(
   type: TileCondition['type'],
   threshold: number,
   activity: string,
   skill: string,
-  itemSet: PresetItemSet,
-  // itemCount's own host-narrowed subset of itemSet.items.
+  // itemCount's own host-narrowed, possibly cross-catalog selection.
   selectedItemNames: string[],
   itemMode: 'any' | 'all',
   dropValueThreshold: number,
@@ -147,7 +163,7 @@ function conditionFromForm(
     case 'skillXpGained':
       return { type, skill, threshold };
     case 'itemCount':
-      return { type, itemNames: selectedItemNames, setName: itemSet.name, mode: itemMode, threshold };
+      return { type, itemNames: selectedItemNames, setName: setNameForSelection(selectedItemNames), mode: itemMode, threshold };
     case 'bigDropsCount':
       return { type, dropValueThreshold: Math.max(MIN_DROP_VALUE_THRESHOLD, dropValueThreshold), threshold };
     case 'freeSpace':
@@ -234,23 +250,36 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
     BOSS_ACTIVITIES.find((b) => b.name === initial.activity)?.name ?? BOSS_ACTIVITIES[0].name,
   );
   const [skill, setSkill] = useState(initial.skill || SKILL_ORDER[0]);
-  // A tile can only reference items from the curated catalog -- no
-  // freeform typing (see PRESET_ITEM_SETS' own comment). Falls back to
-  // the first catalog entry if the stored setName doesn't match anything
-  // (e.g. a tile saved before this restriction existed).
-  const [selectedItemSet, setSelectedItemSet] = useState(
-    PRESET_ITEM_SETS.find((p) => p.name === initial.itemSetName)?.name ?? PRESET_ITEM_SETS[0].name,
-  );
-  // Which of the chosen catalog set's items this tile actually targets
-  // (a host-narrowable subset; "everything" by default).
-  const initialItemSet = PRESET_ITEM_SETS.find((p) => p.name === initial.itemSetName);
+  // A tile can target items across MORE THAN ONE catalog set now (e.g.
+  // Ahrim's hood from Barrows uniques alongside Cow slippers from
+  // Brutus uniques in the same tile) -- so there's no longer one true
+  // "the" catalog a saved tile belongs to. `selectedItemSet` is now
+  // purely which catalog is currently being BROWSED to add/remove items
+  // from `selectedItemNames` (the real cross-catalog selection, below),
+  // not the source of truth for what's targeted. Defaults to whichever
+  // catalog contains any of the tile's already-saved items, so
+  // reopening an existing tile starts the browser on a relevant set
+  // instead of always the alphabetically-first one; falls back to the
+  // legacy single `setName` a pre-this-feature tile was saved with, then
+  // to the first catalog for a brand-new tile.
+  const initialBrowseSet =
+    PRESET_ITEM_SETS.find((p) => initial.itemNames.some((n) => p.items.includes(n))) ??
+    PRESET_ITEM_SETS.find((p) => p.name === initial.itemSetName) ??
+    PRESET_ITEM_SETS[0];
+  const [selectedItemSet, setSelectedItemSet] = useState(initialBrowseSet.name);
+  // The real cross-catalog selection this tile targets. A brand-new
+  // tile (no saved itemNames yet) starts pre-filled with the initial
+  // browse catalog's full item list, same "starts non-empty" default
+  // the single-catalog picker always had; an existing tile keeps
+  // exactly its saved selection regardless of which catalogs it spans.
   const [selectedItemNames, setSelectedItemNames] = useState<string[]>(
-    initial.itemNames.length > 0 ? initial.itemNames : (initialItemSet ?? PRESET_ITEM_SETS[0]).items,
+    initial.itemNames.length > 0 ? initial.itemNames : initialBrowseSet.items,
   );
-  // 'any': total quantity across the selection, duplicates of one item
-  // freely substitute for another (today's original behavior). 'all':
-  // how many of the selected items have been obtained at least once,
-  // duplicates of an already-obtained item don't help.
+  // 'any' ("Allow Duplicates" in the UI): total quantity across the
+  // selection, duplicates of one item freely substitute for another
+  // (today's original behavior). 'all' ("No Duplicates"): how many of
+  // the selected items have been obtained at least once, duplicates of
+  // an already-obtained item don't help.
   const [itemMode, setItemMode] = useState<'any' | 'all'>(initial.itemMode);
   const [dropValueThreshold, setDropValueThreshold] = useState(initial.dropValueThreshold);
   const [points, setPoints] = useState(existing?.points ?? 1);
@@ -266,30 +295,52 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
   const label = defaultLabelFor(type, skill, activity, itemMode, dropValueThreshold, selectedItemNames);
   const icon = defaultIconFor(type, skill, activity, selectedItemNames);
 
-  function selectItemSet(name: string) {
+  // Purely a "which catalog's checklist am I looking at" change now --
+  // no longer touches the actual cross-catalog selection at all.
+  function browseItemSet(name: string) {
     setSelectedItemSet(name);
-    const set = PRESET_ITEM_SETS.find((p) => p.name === name);
-    if (!set) return;
-    // Switching source resets the selection to "everything from this
-    // source" -- the previous set's item names wouldn't mean anything
-    // against the new one anyway.
-    setSelectedItemNames(set.items);
   }
 
   function toggleItem(name: string) {
     setSelectedItemNames((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]));
   }
 
-  function selectMode(next: 'any' | 'all') {
-    setItemMode(next);
+  // Add/remove just the CURRENTLY BROWSED catalog's items, leaving
+  // anything selected from other catalogs untouched -- the global
+  // "Clear all" button below is the only thing that resets the whole
+  // cross-catalog selection at once.
+  function selectAllInBrowsedSet() {
+    setSelectedItemNames((prev) => [...new Set([...prev, ...selectedSet.items])]);
+  }
+  function selectNoneInBrowsedSet() {
+    const browsed = new Set(selectedSet.items);
+    setSelectedItemNames((prev) => prev.filter((n) => !browsed.has(n)));
   }
 
-  // "All" always means "every one of the selected items" -- there's no
-  // separate goal to set (the number input is hidden for this mode, see
-  // the Goal field below), so the real threshold is just the current
-  // selection size, computed live rather than tracked as its own piece
-  // of state that could drift out of sync with the checklist.
-  const effectiveThreshold = type === 'itemCount' && itemMode === 'all' ? selectedItemNames.length : threshold;
+  function selectMode(next: 'any' | 'all') {
+    setItemMode(next);
+    // Switching TO "No Duplicates" defaults the goal to "every selected
+    // item" -- the common case, and a sensible starting point a host can
+    // still lower. Switching to "Allow Duplicates" leaves whatever
+    // number was already there (it's just a quantity, not bounded by
+    // the selection size, so there's no equivalent "obviously right"
+    // default to jump to).
+    if (next === 'all') setThreshold(Math.max(1, selectedItemNames.length));
+  }
+
+  // "No Duplicates" can't ask for more than the selection actually has
+  // -- if the host shrinks the selection below whatever goal they'd
+  // set, clamp down rather than silently saving an impossible target.
+  // Deliberately one-directional: re-adding an item doesn't grow the
+  // goal back, so a host's own "any 3 of these 5" choice survives them
+  // experimenting with the checklist.
+  useEffect(() => {
+    if (type === 'itemCount' && itemMode === 'all' && threshold > selectedItemNames.length) {
+      setThreshold(Math.max(1, selectedItemNames.length));
+    }
+  }, [type, itemMode, selectedItemNames.length, threshold]);
+
+  const effectiveThreshold = type === 'itemCount' && itemMode === 'all' ? Math.min(Math.max(1, threshold), Math.max(1, selectedItemNames.length)) : threshold;
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -303,7 +354,7 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
       await onSave({
         label,
         icon,
-        condition: conditionFromForm(type, effectiveThreshold, activity, skill, selectedSet, selectedItemNames, itemMode, dropValueThreshold),
+        condition: conditionFromForm(type, effectiveThreshold, activity, skill, selectedItemNames, itemMode, dropValueThreshold),
         // A free space is always complete for everyone the instant it
         // exists -- there's no "first" to reward and no achievement to
         // weight, so it can never contribute points regardless of what's
@@ -398,23 +449,11 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
           </div>
         )}
         {type === 'itemCount' && (
-          <div>
-            <label className="block text-sm text-stone-400">Item catalog</label>
-            <select
-              value={selectedItemSet}
-              onChange={(e) => selectItemSet(e.target.value)}
-              disabled={fieldsLocked}
-              className={inputClass}
-            >
-              {[...PRESET_ITEM_SETS]
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map((p) => (
-                  <option key={p.name} value={p.name}>
-                    {p.name} ({p.items.length})
-                  </option>
-                ))}
-            </select>
-            <div className="mt-2">
+          <div className="space-y-3">
+            {/* Goal type first -- it changes how "Which items" and the
+                Goal field below both read, so a host should pick it
+                before narrowing the selection down. */}
+            <div>
               <label className="block text-sm text-stone-400">Goal type</label>
               <div className="mt-1 flex gap-2">
                 <button
@@ -425,7 +464,7 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
                     itemMode === 'any' ? 'border-amber-500 bg-amber-950/30 text-amber-400' : 'border-stone-700 text-stone-300'
                   }`}
                 >
-                  <span className="font-semibold">Any</span> -- quantity across the selection; duplicates of one item count
+                  <span className="font-semibold">Allow Duplicates</span> -- quantity across the selection; duplicates of one item count
                 </button>
                 <button
                   type="button"
@@ -435,46 +474,115 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
                     itemMode === 'all' ? 'border-amber-500 bg-amber-950/30 text-amber-400' : 'border-stone-700 text-stone-300'
                   }`}
                 >
-                  <span className="font-semibold">All</span> -- each selected item at least once; duplicates don't help
+                  <span className="font-semibold">No Duplicates</span> -- each selected item at least once; duplicates don't help
                 </button>
               </div>
             </div>
-            <div className="mt-2 flex items-center justify-between">
-              <label className="text-sm text-stone-400">
-                Which items ({selectedItemNames.length}/{selectedSet.items.length} selected)
-              </label>
-              <div className="flex gap-2 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setSelectedItemNames(selectedSet.items)}
-                  disabled={fieldsLocked}
-                  className="text-amber-500 hover:underline disabled:opacity-40"
-                >
-                  Select all
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedItemNames([])}
-                  disabled={fieldsLocked}
-                  className="text-amber-500 hover:underline disabled:opacity-40"
-                >
-                  Select none
-                </button>
-              </div>
-            </div>
-            <div className="mt-1 max-h-40 overflow-y-auto rounded-lg border border-stone-800 bg-stone-900 p-2">
-              {selectedSet.items.map((item) => (
-                <label key={item} className="flex items-center gap-2 py-0.5 text-xs text-stone-300">
-                  <input
-                    type="checkbox"
-                    checked={selectedItemNames.includes(item)}
-                    onChange={() => toggleItem(item)}
+
+            {/* Always-visible summary of the real (possibly cross-catalog)
+                selection -- the catalog browser below is just a way to
+                ADD to or REMOVE from this, not the selection itself, so
+                a host needs one place that shows the whole picture
+                regardless of which catalog they're currently looking at. */}
+            <div>
+              <div className="flex items-center justify-between">
+                <label className="text-sm text-stone-400">Selected items ({selectedItemNames.length})</label>
+                {selectedItemNames.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedItemNames([])}
                     disabled={fieldsLocked}
-                    className="shrink-0"
-                  />
-                  {item}
-                </label>
-              ))}
+                    className="text-xs text-amber-500 hover:underline disabled:opacity-40"
+                  >
+                    Clear all
+                  </button>
+                )}
+              </div>
+              {selectedItemNames.length === 0 ? (
+                <p className="mt-1 rounded-lg border border-dashed border-stone-800 p-2 text-xs text-stone-600">
+                  Nothing selected yet -- browse a catalog below and check off items to target. Items from different
+                  catalogs can be mixed in the same tile.
+                </p>
+              ) : (
+                <div className="mt-1 flex max-h-24 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-stone-800 bg-stone-900 p-2">
+                  {selectedItemNames.map((item) => (
+                    <span
+                      key={item}
+                      className="flex items-center gap-1 rounded-full border border-amber-800 bg-amber-950/40 py-0.5 pl-2 pr-1 text-xs text-amber-400"
+                    >
+                      {item}
+                      <button
+                        type="button"
+                        onClick={() => toggleItem(item)}
+                        disabled={fieldsLocked}
+                        title={`Remove ${item}`}
+                        className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full text-amber-400/70 hover:bg-amber-800/60 hover:text-amber-200 disabled:pointer-events-none"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* The catalog browser -- a view filter to add/remove items
+                by, not the selection's source of truth. Switching it no
+                longer clears anything selected from a different catalog. */}
+            <div>
+              <label className="block text-sm text-stone-400">Browse a catalog to add items from</label>
+              <select
+                value={selectedItemSet}
+                onChange={(e) => browseItemSet(e.target.value)}
+                disabled={fieldsLocked}
+                className={inputClass}
+              >
+                {[...PRESET_ITEM_SETS]
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((p) => (
+                    <option key={p.name} value={p.name}>
+                      {p.name} ({p.items.length})
+                    </option>
+                  ))}
+              </select>
+              <div className="mt-2 flex items-center justify-between">
+                <p className="text-xs text-stone-500">
+                  {selectedSet.items.filter((i) => selectedItemNames.includes(i)).length}/{selectedSet.items.length} of
+                  this catalog selected
+                </p>
+                <div className="flex gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={selectAllInBrowsedSet}
+                    disabled={fieldsLocked}
+                    className="text-amber-500 hover:underline disabled:opacity-40"
+                  >
+                    Select all
+                  </button>
+                  <button
+                    type="button"
+                    onClick={selectNoneInBrowsedSet}
+                    disabled={fieldsLocked}
+                    className="text-amber-500 hover:underline disabled:opacity-40"
+                  >
+                    Select none
+                  </button>
+                </div>
+              </div>
+              <div className="mt-1 max-h-40 overflow-y-auto rounded-lg border border-stone-800 bg-stone-900 p-2">
+                {selectedSet.items.map((item) => (
+                  <label key={item} className="flex items-center gap-2 py-0.5 text-xs text-stone-300">
+                    <input
+                      type="checkbox"
+                      checked={selectedItemNames.includes(item)}
+                      onChange={() => toggleItem(item)}
+                      disabled={fieldsLocked}
+                      className="shrink-0"
+                    />
+                    {item}
+                  </label>
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -484,12 +592,21 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
               {type === 'maxDeaths' ? 'Max deaths allowed' : type === 'bigDropsCount' ? 'How many such drops' : 'Goal'}
             </label>
             {type === 'itemCount' && itemMode === 'all' ? (
-              // "All" always means every one of the selected items -- no
-              // separate number to set, so there's nothing editable to
-              // show here (see effectiveThreshold above).
-              <p className="mt-1 text-sm text-stone-300">
-                All {selectedItemNames.length} selected item{selectedItemNames.length === 1 ? '' : 's'}
-              </p>
+              // Bounded to the current selection size -- "No Duplicates"
+              // can't ask for more distinct items than are actually
+              // targeted. effectiveThreshold (already clamped the same
+              // way) is what's shown, so this never displays a
+              // now-invalid number even for the one render before the
+              // clamp effect above catches up.
+              <input
+                type="number"
+                min={1}
+                max={Math.max(1, selectedItemNames.length)}
+                value={effectiveThreshold}
+                onChange={(e) => setThreshold(Number(e.target.value))}
+                disabled={fieldsLocked || selectedItemNames.length === 0}
+                className={inputClass}
+              />
             ) : MONEY_XP_THRESHOLD_TYPES.has(type) ? (
               <MoneyXpThresholdInput value={threshold} onChange={setThreshold} disabled={fieldsLocked} />
             ) : (
@@ -501,6 +618,13 @@ export default function TileEditorForm({ existing, locked, gameMode, poolSize, o
                 disabled={fieldsLocked}
                 className={inputClass}
               />
+            )}
+            {type === 'itemCount' && itemMode === 'all' && (
+              <p className="mt-1 text-xs text-stone-500">
+                How many of the {selectedItemNames.length} selected item{selectedItemNames.length === 1 ? '' : 's'} a
+                player needs, each without duplicates. Set it to {Math.max(1, selectedItemNames.length)} to require
+                every one of them.
+              </p>
             )}
             {type !== 'maxDeaths' && type !== 'bigDropsCount' && !(type === 'itemCount' && itemMode === 'all') && (
               <p className="mt-1 text-xs text-stone-500">The amount a player needs to reach to complete this tile.</p>
