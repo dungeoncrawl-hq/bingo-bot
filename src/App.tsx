@@ -10,7 +10,7 @@ import BoardPage from './pages/BoardPage';
 import SetupGuidePage from './pages/SetupGuidePage';
 import TrackingInfoPage from './pages/TrackingInfoPage';
 import AboutPage from './pages/AboutPage';
-import AccountPage from './pages/AccountPage';
+import ProfilePage from './pages/ProfilePage';
 import ChangelogPage from './pages/ChangelogPage';
 import UnsubscribedPage from './pages/UnsubscribedPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
@@ -35,10 +35,10 @@ function App() {
             <Route path="/new" element={<NewChallengePage />} />
             <Route path="/c/:slug" element={<BoardPage />} />
             <Route path="/c/:slug/edit" element={<EditChallengePage />} />
-            <Route path="/c/:slug/setup" element={<SetupGuidePage />} />
+            <Route path="/setup" element={<SetupGuidePage />} />
             <Route path="/tracking" element={<TrackingInfoPage />} />
             <Route path="/about" element={<AboutPage />} />
-            <Route path="/account" element={<AccountPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
             <Route path="/changelog" element={<ChangelogPage />} />
             <Route path="/unsubscribed" element={<UnsubscribedPage />} />
             <Route path="/dungeon-master-admin" element={<AdminDashboardPage />} />

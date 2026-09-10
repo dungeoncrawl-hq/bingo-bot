@@ -1114,7 +1114,7 @@ export default function BoardPage() {
                   Sign in
                 </Link>{' '}
                 to join this dungeon.{' '}
-                <Link to={`/c/${challenge.slug}/setup`} className="underline">
+                <Link to="/setup" className="underline">
                   See what's involved
                 </Link>
                 .
@@ -1158,7 +1158,7 @@ export default function BoardPage() {
                   Edit
                 </button>{' '}
                 ·{' '}
-                <Link to={`/c/${challenge.slug}/setup`} className="underline">
+                <Link to="/setup" className="underline">
                   Set up Dink &rarr;
                 </Link>
               </p>

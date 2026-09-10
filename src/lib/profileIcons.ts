@@ -1,5 +1,5 @@
 // Every icon a player can pick as their own profile icon (ProfileIconPicker.tsx,
-// used from AccountPage.tsx) -- mostly icon sets this app already has
+// used from ProfilePage.tsx) -- mostly icon sets this app already has
 // elsewhere for tile authoring, grouped the same way those already are
 // (skills, bosses, item catalog sets, pets) rather than curating a
 // separate image library just for this. Food (foodIcons.js) and Gear
@@ -124,7 +124,7 @@ export const PROFILE_ICON_GROUPS: IconGroup[] = [
 ];
 
 // Only allow an icon that's actually somewhere in the catalog above --
-// used both by AccountPage.tsx (so a stray/removed URL never gets
+// used both by ProfilePage.tsx (so a stray/removed URL never gets
 // re-saved) and available for any future server-side check. Kept as a
 // flat Set built once, not recomputed per call.
 const VALID_ICON_URLS = new Set(

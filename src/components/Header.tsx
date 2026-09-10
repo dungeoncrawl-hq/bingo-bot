@@ -2,6 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { getSupabase } from '../db/supabaseClient';
 import Logo from './Logo';
+import PlayerIcon from './PlayerIcon';
 
 export default function Header() {
   const { session, profile } = useAuth();
@@ -26,8 +27,18 @@ export default function Header() {
                 Admin
               </Link>
             )}
-            <Link to="/account" className="text-stone-500 hover:text-stone-300">
-              {profile?.display_name ?? session.user.email}
+            <Link to="/profile" className="flex items-center gap-1.5 text-stone-500 hover:text-stone-300">
+              My Profile
+              {profile?.icon_url ? (
+                <PlayerIcon iconUrl={profile.icon_url} color={profile.color ?? '#ffffff'} size={18} />
+              ) : (
+                <span
+                  className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded text-[10px] font-bold leading-none text-stone-950"
+                  style={{ backgroundColor: profile?.color ?? '#ffffff' }}
+                >
+                  {(profile?.display_name ?? session.user.email ?? '?').slice(0, 1).toUpperCase()}
+                </span>
+              )}
             </Link>
             <button
               onClick={async () => {

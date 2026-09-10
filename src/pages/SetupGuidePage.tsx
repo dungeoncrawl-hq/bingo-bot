@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { getSupabase } from '../db/supabaseClient';
-import type { Challenge } from '../db/types';
 
 function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
@@ -22,22 +21,19 @@ function Box({ children }: { children: React.ReactNode }) {
   return <span className="font-semibold text-stone-100">{children}</span>;
 }
 
+// One shared setup guide for every dungeon -- previously each challenge
+// had its own copy at /c/:slug/setup, differing only in the page's
+// heading and whether step 5 was framed as "required" (Adventure) or
+// "optional" (every other board type). The account-wide webhook URL
+// (BACKLOG.md #13) already made everything else on the page identical
+// regardless of which challenge sent someone here, so the per-challenge
+// version was duplication without a real reason to keep it -- step 5
+// below just says both things at once instead of picking one per page.
 export default function SetupGuidePage() {
-  const { slug } = useParams<{ slug: string }>();
   const { session } = useAuth();
-  const [challenge, setChallenge] = useState<Challenge | null | 'not-found'>(null);
+  const navigate = useNavigate();
   const [accountSecret, setAccountSecret] = useState<string | null>(null);
   const [accountCopied, setAccountCopied] = useState(false);
-
-  useEffect(() => {
-    if (!slug) return;
-    getSupabase()
-      .from('challenges')
-      .select('*')
-      .eq('slug', slug)
-      .maybeSingle()
-      .then(({ data }) => setChallenge((data as Challenge | null) ?? 'not-found'));
-  }, [slug]);
 
   // BACKLOG.md #13 -- every player's Dink setup goes through one stable
   // account-wide webhook URL, surfaced right here since this is the page
@@ -55,20 +51,19 @@ export default function SetupGuidePage() {
       .then(({ data }) => setAccountSecret((data as { dink_secret: string } | null)?.dink_secret ?? null));
   }, [session]);
 
-  if (challenge === null) return null;
-  if (challenge === 'not-found') {
-    return <p className="mx-auto max-w-lg py-24 text-center text-stone-400">Dungeon not found.</p>;
-  }
-
   const accountWebhookUrl = accountSecret ? `${window.location.origin}/api/dink/${accountSecret}` : null;
 
   return (
     <div className="mx-auto max-w-2xl py-12">
       <div className="flex items-baseline justify-between gap-4">
-        <h1 className="text-2xl font-semibold">Set up tracking for {challenge.name}</h1>
-        <Link to={`/c/${challenge.slug}`} className="shrink-0 text-sm text-stone-500 underline hover:text-stone-300">
-          &larr; back to board
-        </Link>
+        <h1 className="text-2xl font-semibold">Set up Dink tracking</h1>
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          className="shrink-0 text-sm text-stone-500 underline hover:text-stone-300"
+        >
+          &larr; back
+        </button>
       </div>
       <p className="mt-2 text-sm text-stone-400">
         Everything on your board fills in automatically from RuneLite's <Box>Dink</Box> plugin -- no manual updates.
@@ -113,8 +108,8 @@ export default function SetupGuidePage() {
             {session ? (
               <>
                 Grab your personal webhook URL from{' '}
-                <Link to="/account" className="text-amber-400 underline hover:text-amber-300">
-                  your Account page
+                <Link to="/profile" className="text-amber-400 underline hover:text-amber-300">
+                  your Profile page
                 </Link>{' '}
                 and use it in the steps below.
               </>
@@ -161,25 +156,19 @@ export default function SetupGuidePage() {
           just the big ones.
         </Step>
 
-        {challenge.board_type === 'adventure' ? (
-          <Step n={5} title="Required: sync when you log out">
-            Find the <Box>Advanced</Box> section (near the bottom). Paste the same link into the box labeled{' '}
-            <Box>Custom Metadata Handler</Box>. There's no checkbox to enable -- pasting the link there is enough.
-            <p className="mt-2 rounded-lg border border-amber-900/50 bg-amber-950/20 p-2 text-xs text-amber-500/90">
-              This one isn't optional for an Adventure board. Each room only starts counting progress once you've
-              logged out at least once after reaching it -- the once-daily automatic sync everyone else gets doesn't
-              unlock the next room, only a real logout does. Skip this step and you'll be stuck on the first room no
-              matter how much progress you make.
-            </p>
-          </Step>
-        ) : (
-          <Step n={5} title="Optional: instant sync when you log out">
-            Find the <Box>Advanced</Box> section (near the bottom). Paste the same link into the box labeled{' '}
-            <Box>Custom Metadata Handler</Box>. There's no checkbox to enable -- pasting the link there is enough. This
-            makes your XP/skill/clue stats refresh the instant you log out, instead of waiting for the once-daily
-            automatic sync everyone gets regardless.
-          </Step>
-        )}
+        <Step n={5} title="Sync when you log out (required for Adventure boards)">
+          Find the <Box>Advanced</Box> section (near the bottom). Paste the same link into the box labeled{' '}
+          <Box>Custom Metadata Handler</Box>. There's no checkbox to enable -- pasting the link there is enough. This
+          makes your XP/skill/clue stats refresh the instant you log out, instead of waiting for the once-daily
+          automatic sync everyone gets regardless.
+          <p className="mt-2 rounded-lg border border-amber-900/50 bg-amber-950/20 p-2 text-xs text-amber-500/90">
+            On an <Box>Adventure</Box> board specifically, this step isn't optional. Each room only starts counting
+            progress once you've logged out at least once after reaching it -- the once-daily automatic sync
+            everyone else gets doesn't unlock the next room, only a real logout does. Skip this step there and
+            you'll be stuck on the first room no matter how much progress you make. On every other board type it's a
+            nice-to-have, not a requirement.
+          </p>
+        </Step>
       </div>
     </div>
   );

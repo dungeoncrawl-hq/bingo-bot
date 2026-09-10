@@ -149,8 +149,8 @@ export default function DashboardPage() {
       </div>
       <p className="mt-2 text-xs text-stone-500">
         Tip: grab your one-time Dink webhook URL from{' '}
-        <Link to="/account" className="text-stone-400 underline hover:text-stone-200">
-          your Account page
+        <Link to="/profile" className="text-stone-400 underline hover:text-stone-200">
+          your Profile page
         </Link>{' '}
         -- it works for every dungeon you join, current and future.
       </p>

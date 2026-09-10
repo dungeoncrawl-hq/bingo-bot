@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { getSupabase } from '../db/supabaseClient';
 import { formatRelativeTime } from '../lib/format';
 import { PLAYER_COLORS } from '../lib/playerColors';
 import ProfileIconPicker from '../components/ProfileIconPicker';
 
-export default function AccountPage() {
+export default function ProfilePage() {
   const { session, profile, loading } = useAuth();
   const [email, setEmail] = useState('');
   const [emailSaving, setEmailSaving] = useState(false);
@@ -153,7 +153,7 @@ export default function AccountPage() {
 
   return (
     <div className="mx-auto max-w-lg py-12">
-      <h1 className="text-2xl font-semibold">Account</h1>
+      <h1 className="text-2xl font-semibold">My Profile</h1>
 
       <div className="mt-8 max-w-md">
         <h2 className="text-sm font-semibold text-stone-300">Profile icon</h2>
@@ -181,11 +181,7 @@ export default function AccountPage() {
       </div>
 
       <div className="mt-8 max-w-md">
-        <h2 className="text-sm font-semibold text-stone-300">Player color</h2>
-        <p className="mt-1 text-xs text-stone-500">
-          Your icon's background and your leaderboard text. Leave unset and a color is picked automatically for each
-          dungeon.
-        </p>
+        <h2 className="text-sm font-semibold text-stone-300">Background Color</h2>
         <div className="mt-2 flex items-center gap-2">
           {PLAYER_COLORS.map((c) => (
             <button
@@ -234,7 +230,6 @@ export default function AccountPage() {
 
       <div className="mt-8 max-w-md">
         <h2 className="text-sm font-semibold text-stone-300">Default RSN</h2>
-        <p className="mt-1 text-xs text-stone-500">Pre-fills the join form so you don't have to retype it for every new dungeon.</p>
         <form onSubmit={handleSaveDefaultRsn} className="mt-2 flex gap-2">
           <input
             value={defaultRsn}
@@ -255,9 +250,6 @@ export default function AccountPage() {
 
       <div className="mt-8 max-w-md">
         <h2 className="text-sm font-semibold text-stone-300">Email notifications</h2>
-        <p className="mt-1 text-xs text-stone-500">
-          Occasional emails when a new feature ships. Doesn't affect sign-in emails, which always send.
-        </p>
         <label className="mt-2 flex items-center gap-2 text-sm text-stone-300">
           <input
             type="checkbox"
@@ -273,9 +265,13 @@ export default function AccountPage() {
         <div className="mt-8 max-w-md">
           <h2 className="text-sm font-semibold text-stone-300">Your Dink webhook URL</h2>
           <p className="mt-1 text-xs text-stone-500">
-            Paste this into the same Dink fields any dungeon's setup guide lists (Slayer, Pets, Kill Count, Death,
-            Collection Log, Loot -- plus Advanced &gt; Custom Metadata Handler for instant logout sync). It works for
-            every dungeon you join, now and in the future -- no need to add a new link each time.
+            Paste this URL into the Dink Plugin Webhook Overrides (Slayer, Pets, Kill Count, Death, Collection Log,
+            Loot -- plus Advanced &gt; Custom Metadata Handler for syncing stats when logging out). More details can
+            be found on the{' '}
+            <Link to="/setup" className="text-amber-400 underline hover:text-amber-300">
+              setup page
+            </Link>
+            .
           </p>
           <div className="mt-2 flex gap-2">
             <input

@@ -51,7 +51,7 @@ export function formatBytes(bytes: number): string {
 }
 
 // "just now" / "5 minutes ago" / "3 hours ago" / "2 days ago" -- used for
-// the "last Dink event" indicator (AccountPage.tsx, BoardPage.tsx).
+// the "last Dink event" indicator (ProfilePage.tsx, BoardPage.tsx).
 // `nowMs` is a parameter rather than read internally (Date.now()) so this
 // stays pure/testable, same reasoning as every other time-dependent
 // helper this session (dungeonStatus.ts's preciseCountdownText). Caps out

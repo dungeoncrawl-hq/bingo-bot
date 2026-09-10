@@ -6,8 +6,8 @@ export default function UnsubscribedPage() {
       <h1 className="text-2xl font-semibold">Unsubscribed</h1>
       <p className="mt-4 text-stone-400">
         You won't get any more update emails from Dungeon Crawl. You can turn them back on anytime from your{' '}
-        <Link to="/account" className="text-amber-500 hover:underline">
-          account page
+        <Link to="/profile" className="text-amber-500 hover:underline">
+          profile page
         </Link>
         .
       </p>

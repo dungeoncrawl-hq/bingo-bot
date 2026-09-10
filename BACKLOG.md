@@ -1973,3 +1973,64 @@ instead of renumbering the existing list.
     bundle entirely. No consumer changes needed -- `Header.tsx` already
     just rendered `<Logo />`. Confirmed both files serve correctly
     (200, `image/svg+xml`, full byte count) from the dev server.
+
+43. **Renamed Account -> Profile everywhere, gave the nav link a real
+    badge, unified the setup guide into one page, and trimmed several
+    bits of subtext.** **Shipped 2026-09-10.**
+
+    **Nav link**: `Header.tsx`'s account link used to just show
+    `display_name ?? email` as plain text. Now reads "My Profile" with
+    the player's own badge next to it -- their real `PlayerIcon` when
+    they've set one, else a plain initial-letter chip, both backed by
+    `profile.color ?? '#ffffff'` (white, per the explicit ask, not
+    `colorForParticipant`'s per-dungeon random hash -- that fallback
+    exists for a *participant in a specific challenge*, which the header
+    isn't).
+
+    **`/account` -> `/profile`**: `AccountPage.tsx` renamed to
+    `ProfilePage.tsx` (h1 "Account" -> "My Profile" to match), every
+    internal `Link to="/account"` updated (`Header.tsx`,
+    `SetupGuidePage.tsx`, `DashboardPage.tsx`, `UnsubscribedPage.tsx`),
+    plus the stale `AccountPage.tsx` file-name references in 3 comments
+    (`format.ts`, `profileIcons.ts` x2) -- left `petIcons.ts`'s own
+    `AccountPage` comment alone, since that one's describing the
+    *sibling `rs` project's* page, not this one. No redirect kept from
+    the old URL -- not asked for, and this is a small clan tool, not a
+    site with an established bookmarked user base.
+
+    **One setup guide instead of one per challenge.** Investigated
+    whether `/c/:slug/setup` had a real reason to stay per-challenge
+    first, rather than assuming: the account-wide webhook URL
+    (BACKLOG.md #13) already made everything on the page identical
+    regardless of which challenge sent someone there, so the only actual
+    per-challenge content left was the heading ("Set up tracking for
+    {name}"), a "back to board" link, and step 5's Adventure-only
+    required-vs-optional wording. The first two are pure orientation
+    (replaced with a generic heading and a `navigate(-1)` "back" button
+    -- still useful without needing to know which board sent someone
+    here); the third is real information, folded into ONE step that
+    states both cases explicitly ("required for Adventure boards... a
+    nice-to-have, not a requirement" on every other type) rather than
+    picking one per page. Route moved from `/c/:slug/setup` to a bare
+    `/setup`; both call sites in `BoardPage.tsx` (the anonymous-visitor
+    "See what's involved" prompt and the joined-participant "Set up
+    Dink" link) updated to it, no more challenge lookup needed at all.
+
+    **Text trims on `ProfilePage.tsx`**: "Player Color" -> "Background
+    Color", its explanatory subtext removed; Default RSN's and Email
+    notifications' subtext both removed; the Dink webhook paragraph
+    rewritten to the host's exact requested copy, with "the setup page"
+    now a real `Link to="/setup"` instead of bracket-quoted placeholder
+    text pointing nowhere.
+
+    Live-verified signed in (session-injection technique -- a generated
+    Supabase magic link's tokens copied from the production origin's
+    `localStorage` into the local dev server's, same trick this project
+    has used before for host/admin-only UI): the header badge renders
+    the real `PlayerIcon` (a chosen icon on its chosen color) next to
+    "My Profile"; `/profile` shows every text change exactly as
+    specified, `Link to="/setup"` on "setup page" resolves correctly;
+    `/setup` itself renders the merged step 5 and the fallback
+    sign-in-first copy correctly for an anonymous visitor. No console
+    errors; no 375px horizontal-overflow regression on `/setup`.
+    Build/lint/295 tests all passed.
