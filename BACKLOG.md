@@ -1894,3 +1894,82 @@ instead of renumbering the existing list.
     green/green/amber-dashed sequence exactly. Build/lint/295 tests all
     passed; no console errors; no horizontal-overflow regression at
     375px on either surface.
+
+41. **The connector lines from #39/#40 didn't actually touch the tiles.**
+    **Shipped 2026-09-10.** Root cause: #40's elbow paths positioned
+    themselves at 25/50/75% of an SVG whose height came from the
+    surrounding flex row's *stretched* size -- an estimate, not a
+    measurement, and nothing tied those percentages to any tile's real
+    on-screen position. It happened to look plausible with every tile
+    the same size; it stopped being even approximately right once tile
+    sizes and label heights actually varied.
+
+    **Rebuilt around real CSS Grid instead of flex + assumed
+    coordinates** -- tiles and connectors now share one coordinate
+    system by construction, so a connector's endpoint IS a tile's real
+    center, not a guess at it. New `src/lib/adventureGrid.ts` (moved out
+    of `AdventureConnector.tsx` so that file stays component-only, no
+    react-refresh lint warnings): 2 fixed-height row tracks
+    (`LANE_ROW_HEIGHT` = 72px each) separated by a fixed `LANE_ROW_GAP`
+    (32px) -- a top-lane tile sits at `grid-row: 1 / 2`, bottom-lane at
+    `2 / 3`, a boss/single-lane tile (or a connector) at `1 / 3`
+    (spanning both). Centering a spanning item across two *equal-height*
+    rows always lands its center exactly on the boundary between them,
+    regardless of anything in the gap -- that equal-height property is
+    what makes this exact instead of another estimate. Tile columns and
+    the gap columns between them alternate along one
+    `grid-template-columns` (`tileColumnLine(i)` / `gapColumnLine(i)`),
+    so `AdventureConnector` just reads `column`/`fromLane`/`toLane` off
+    props and draws a fixed-pixel-geometry elbow (`M 0 {fromY} H {mid} V
+    {toY} H {width}`) -- no `preserveAspectRatio` scaling trick needed
+    anymore, since the height is now a real known constant
+    (`CONNECTOR_SPAN_HEIGHT` = 176px), not something to approximate.
+
+    **The other half of the fix: labels stopped being part of the grid
+    at all.** They're absolutely positioned off the *icon box's own*
+    bottom edge (`top: 100%`), not a grid row -- a label's height (one
+    line vs. two, a boss-tag-plus-name vs. a plain caption) has zero
+    effect on row height or connector alignment now. `LANE_ROW_GAP`
+    just has to stay tall enough to give a floating label room before
+    the next lane's icon begins (the scroll container's own
+    `padding-bottom` was bumped to give the bottom-most row's labels
+    room too, since forcing `overflow-x: auto` on one axis makes the
+    other axis compute to `auto` as well -- content past the padding
+    would otherwise clip or force an unwanted scrollbar). Also fixed
+    while rebuilding this: the icon box switched from `overflow-hidden`
+    to `overflow-visible` (with the stone-texture backdrop and the
+    progress-percent bar each keeping their own `rounded-lg`/
+    `rounded-l-lg` so nothing bleeds past the tile's rounded corners) --
+    the done badge had actually been getting clipped by the old
+    `overflow-hidden`, not just visually crowded like #40 assumed;
+    that's likely the real source of the "border overlapping the icon"
+    complaint that prompted #40's badge tweak in the first place.
+
+    `EditChallengePage.tsx`'s host-authoring grid (no participant, no
+    chosen path to color) was deliberately left on its own older
+    flex-based layout -- `AdventureShapeConnector` (same file) still
+    backs it, unchanged.
+
+    Live-verified with real measurements, not eyeballing: read every
+    connector SVG's and every tile box's actual `getBoundingClientRect()`
+    against the real `adventure-test` challenge (a fully completed
+    participant, 8/8 connectors; an in-progress one whose chosen lane
+    switches sides between forks) -- every connector's endpoint Y
+    matched its target tile's center Y exactly (e.g. 316/368/420px,
+    to the pixel) with zero exceptions across 8 connectors and 15
+    tiles. Repeated on the homepage hero (now 6 columns matching the
+    real topology's *shape*, not its exact 9-column count, since the
+    homepage only needs to show fork/boss/fork/boss/fork/boss, not
+    every individual room). Build/lint (now warning-free)/295 tests all
+    passed; no console errors; no new horizontal-overflow regression.
+
+42. **Replaced the hand-drawn placeholder logo with the host's own
+    design.** **Shipped 2026-09-10.** `public/logo.svg`/
+    `public/favicon.svg` now hold the host-supplied artwork (a few
+    thousand hand-authored path segments -- not something to
+    hand-maintain as inline JSX), both copies of the same file. Served
+    as a static asset rather than inlined: `Logo.tsx` is now a thin
+    `<img src="/logo.svg">` wrapper, keeping that weight out of the JS
+    bundle entirely. No consumer changes needed -- `Header.tsx` already
+    just rendered `<Logo />`. Confirmed both files serve correctly
+    (200, `image/svg+xml`, full byte count) from the dev server.

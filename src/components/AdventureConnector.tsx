@@ -1,28 +1,45 @@
-// The path line between two adjacent on-path Adventure rooms, for the
-// VIEWED PARTICIPANT specifically -- unlike a generic "this column has 1
-// or 2 lanes" hallway, this only ever draws the one line that's actually
-// part of their route (BoardPage.tsx never renders one at all when
-// either side's lane hasn't been chosen yet, so an unchosen lane never
-// gets a line pointing at it).
-//
-// Orthogonal, never diagonal: a horizontal run out of the source tile, a
-// vertical jog at the midpoint if the two lanes differ (top/bottom/
-// center), a horizontal run into the target tile -- collapses to a
-// single straight line when both lanes match. Lane position is a
-// percentage (top 25 / center 50 / bottom 75) of the connector's own
-// height, and the SVG stretches non-uniformly (preserveAspectRatio
-// "none") to fill whatever height the row actually is -- horizontal/
-// vertical segments stay exactly horizontal/vertical under that kind of
-// scale, so this still tracks real tile+label height with no pixel math.
-type Lane = 'top' | 'bottom' | 'center';
+import { LANE_ROW_HEIGHT, LANE_ROW_GAP, CONNECTOR_SPAN_HEIGHT, CONNECTOR_COLUMN_WIDTH, gapColumnLine, type Lane } from '../lib/adventureGrid';
 
-const LANE_Y: Record<Lane, number> = { top: 25, center: 50, bottom: 75 };
+// The path line between two adjacent on-path Adventure rooms, for the
+// VIEWED PARTICIPANT specifically. Positioned on a real CSS Grid shared
+// with the tiles themselves (BoardPage.tsx's Adventure section,
+// DungeonPathPreview.tsx's homepage hero) rather than assumed/estimated
+// coordinates -- every tile and every connector sits on the exact same
+// grid rows/columns (../lib/adventureGrid.ts), so a connector's
+// endpoints are geometrically guaranteed to land on a tile's real
+// center. (The previous version scaled an SVG viewBox against a flex
+// row's *stretched* height using assumed 25/50/75% lane positions --
+// looked right when every tile was the same size, broke the moment
+// tile/label heights actually varied, since nothing tied those
+// percentages to any tile's real position.)
+//
+// The grid contract every consumer follows:
+// - 2 fixed-height row TRACKS (LANE_ROW_HEIGHT each), separated by
+//   LANE_ROW_GAP. A top-lane tile occupies grid-row "1 / 2", a
+//   bottom-lane tile "2 / 3", a boss/single-lane tile (or a connector)
+//   "1 / 3" (spanning both). Centering a spanning item across two
+//   EQUAL-height rows always lands its own center exactly on the
+//   boundary between them, regardless of anything sitting in the gap --
+//   that equal-height property is what makes this exact rather than
+//   another estimate.
+// - Each tile "column" (0-8 for the real 9-column small layout) sits on
+//   its own grid-column track via tileColumnLine(i); the gap between
+//   column i and i+1 sits on the track at gapColumnLine(i).
+// - A tile's own label/caption is NOT part of this grid at all -- it's
+//   absolutely positioned below the tile's icon box (top: 100%), so its
+//   height can vary freely (one line vs. two, a plain label vs. a
+//   boss-tag-plus-name) with zero effect on row height or connector
+//   alignment. LANE_ROW_GAP just needs to stay tall enough to give that
+//   floating label room before the next lane's icon begins.
+const LANE_Y: Record<Lane, number> = {
+  top: LANE_ROW_HEIGHT / 2,
+  center: CONNECTOR_SPAN_HEIGHT / 2,
+  bottom: LANE_ROW_HEIGHT + LANE_ROW_GAP + LANE_ROW_HEIGHT / 2,
+};
 
 // 'done' -- both ends already cleared. 'toFrontier' -- the source is
 // cleared and the target is the current room. 'neutral' -- everything
-// else still ahead (locked -> locked, or locked -> frontier isn't
-// reachable since the frontier is always the first not-done tile after
-// the last done one).
+// else still ahead.
 export type ConnectorVariant = 'done' | 'toFrontier' | 'neutral';
 
 const VARIANT_STYLE: Record<ConnectorVariant, { stroke: string; dash?: string; width: number }> = {
@@ -32,51 +49,45 @@ const VARIANT_STYLE: Record<ConnectorVariant, { stroke: string; dash?: string; w
 };
 
 interface Props {
+  // The tile-column index immediately before this gap -- e.g. column=0
+  // draws the connector between tile columns 0 and 1.
+  column: number;
   fromLane: Lane;
   toLane: Lane;
   variant: ConnectorVariant;
 }
 
-export default function AdventureConnector({ fromLane, toLane, variant }: Props) {
+export default function AdventureConnector({ column, fromLane, toLane, variant }: Props) {
   const fromY = LANE_Y[fromLane];
   const toY = LANE_Y[toLane];
   const style = VARIANT_STYLE[variant];
   return (
     <svg
-      width={24}
-      height="100%"
-      viewBox="0 0 100 100"
-      preserveAspectRatio="none"
-      className="shrink-0 self-stretch"
-      style={{ width: 24 }}
+      width={CONNECTOR_COLUMN_WIDTH}
+      height={CONNECTOR_SPAN_HEIGHT}
+      viewBox={`0 0 ${CONNECTOR_COLUMN_WIDTH} ${CONNECTOR_SPAN_HEIGHT}`}
+      style={{ gridColumn: gapColumnLine(column), gridRow: '1 / 3' }}
       aria-hidden="true"
     >
       <path
-        d={`M 0 ${fromY} H 50 V ${toY} H 100`}
+        d={`M 0 ${fromY} H ${CONNECTOR_COLUMN_WIDTH / 2} V ${toY} H ${CONNECTOR_COLUMN_WIDTH}`}
         fill="none"
         stroke={style.stroke}
         strokeWidth={style.width}
         strokeDasharray={style.dash}
         strokeLinecap="round"
-        vectorEffect="non-scaling-stroke"
       />
     </svg>
   );
 }
 
-// A same-width placeholder for a gap with no resolved connector (one or
-// both sides haven't been reached/chosen yet) -- keeps column spacing
-// identical to a real connector's, just draws nothing.
-export function AdventureConnectorGap() {
-  return <div className="shrink-0" style={{ width: 24 }} aria-hidden="true" />;
-}
-
 // EditChallengePage.tsx's host-authoring grid has no participant/progress
 // to color or route a specific lane for -- it's just showing the
-// dungeon's overall static shape (which columns are 1 vs 2 lanes) while a
-// host places tiles. A plain neutral dash per lane, min(from, to) of them
-// so a 2<->1 (fork<->boss) gap draws one centered dash rather than
-// guessing which of the 2 lanes it belongs to.
+// dungeon's static shape (which columns are 1 vs 2 lanes) while a host
+// places tiles. Kept on its own older flex-based layout (not the grid
+// above), since a plain neutral dash per lane needs none of this
+// module's precision: a `min(from, to)`-lane neutral-dashed connector,
+// centered via flex stretch rather than fixed geometry.
 export function AdventureShapeConnector({ from, to }: { from: 1 | 2; to: 1 | 2 }) {
   const lanes = Math.min(from, to);
   return (

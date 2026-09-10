@@ -24,7 +24,8 @@ import { formatLocalRange, preciseCountdownText } from '../lib/dungeonStatus';
 import { formatRelativeTime } from '../lib/format';
 import TileDetailModal from '../components/TileDetailModal';
 import AdventureColumnModal from '../components/AdventureColumnModal';
-import AdventureConnector, { AdventureConnectorGap } from '../components/AdventureConnector';
+import AdventureConnector from '../components/AdventureConnector';
+import { adventureGridColumns, tileColumnLine, LANE_ROW_HEIGHT, LANE_ROW_GAP } from '../lib/adventureGrid';
 import PlayerChip from '../components/PlayerChip';
 import HostBadge from '../components/HostBadge';
 import {
@@ -697,8 +698,15 @@ export default function BoardPage() {
             </div>
           )}
           {challenge.board_type === 'adventure' ? (
-            <div className="overflow-x-auto pb-2">
-              <div className="flex gap-2" style={{ minWidth: `${ADVENTURE_SMALL_COLUMNS * 90}px` }}>
+            <div className="overflow-x-auto pb-16">
+              <div
+                className="relative grid"
+                style={{
+                  gridTemplateColumns: adventureGridColumns(ADVENTURE_SMALL_COLUMNS),
+                  gridTemplateRows: `${LANE_ROW_HEIGHT}px ${LANE_ROW_HEIGHT}px`,
+                  rowGap: LANE_ROW_GAP,
+                }}
+              >
                 {Array.from({ length: ADVENTURE_SMALL_COLUMNS }, (_, column) => {
                   const boss = isBossColumn(column);
                   const isFinalBoss = column === ADVENTURE_SMALL_FINAL_BOSS_COLUMN;
@@ -707,29 +715,9 @@ export default function BoardPage() {
                   const chosenLane = fork !== null ? viewedParticipant?.adventure_path?.[String(fork)] : undefined;
                   const columnHasAnyTile = lanes.some((lane) => adventureTileAt(column, lane) != null);
 
-                  const prevOnPath = column > 0 ? onPathInfoForColumn(column - 1) : null;
-                  const thisOnPath = onPathInfoForColumn(column);
-
                   return (
                     <Fragment key={column}>
-                      {column > 0 &&
-                        (prevOnPath && thisOnPath ? (
-                          <AdventureConnector
-                            fromLane={prevOnPath.lane}
-                            toLane={thisOnPath.lane}
-                            variant={prevOnPath.done && thisOnPath.done ? 'done' : prevOnPath.done && thisOnPath.isFrontier ? 'toFrontier' : 'neutral'}
-                          />
-                        ) : (
-                          <AdventureConnectorGap />
-                        ))}
-                      <div
-                        ref={(el) => {
-                          columnRefs.current[column] = el;
-                        }}
-                        onClick={columnHasAnyTile ? () => setSelectedColumn(column) : undefined}
-                        className={`flex w-20 shrink-0 flex-col justify-center gap-2 ${columnHasAnyTile ? 'cursor-pointer' : ''}`}
-                      >
-                      {lanes.map((lane) => {
+                      {lanes.map((lane, laneIndex) => {
                         const tile = adventureTileAt(column, lane);
                         const isOtherLane = !boss && chosenLane != null && chosenLane !== lane;
                         const isPendingChoice = !boss && chosenLane == null;
@@ -832,16 +820,32 @@ export default function BoardPage() {
                                       : 'bg-stone-900'
                                     : 'bg-stone-950/50';
                         const dimClass = isOtherLane || isPendingChoice ? 'opacity-40' : locked ? 'opacity-60' : '';
-                        // Bigger for a boss room (more visual weight), a
-                        // touch bigger still for the frontier -- same sizing
+                        // Bigger for a boss room (more visual weight, and
+                        // more of its full 2-row span to fill), a touch
+                        // bigger still for the frontier -- same sizing
                         // ladder as the homepage hero.
-                        const boxSize = boss ? 80 : isFrontier ? 60 : 56;
+                        const boxSize = boss ? 100 : isFrontier ? 60 : 56;
 
                         return (
-                          <div key={lane} className="flex flex-col items-center gap-1">
+                          <div
+                            key={lane}
+                            ref={
+                              laneIndex === 0
+                                ? (el) => {
+                                    columnRefs.current[column] = el;
+                                  }
+                                : undefined
+                            }
+                            onClick={columnHasAnyTile ? () => setSelectedColumn(column) : undefined}
+                            className={`flex items-center justify-center ${columnHasAnyTile ? 'cursor-pointer' : ''}`}
+                            style={{
+                              gridColumn: tileColumnLine(column),
+                              gridRow: lane === 'top' ? '1 / 2' : lane === 'bottom' ? '2 / 3' : '1 / 3',
+                            }}
+                          >
                             <div
                               title={tile ? describeTileCondition(tile.condition) : undefined}
-                              className={`relative shrink-0 overflow-hidden rounded-lg shadow-inner before:pointer-events-none before:absolute before:inset-0 before:bg-[url('/stone-texture.svg')] before:bg-cover before:bg-center before:opacity-30 before:content-[''] ${boss ? `border-2 ${done ? 'border-green-500' : 'border-amber-800'}` : `border ${stateBorder}`} ${stateBg} ${isFrontier ? 'animate-pulse' : ''} ${dimClass}`}
+                              className={`relative shrink-0 overflow-visible rounded-lg shadow-inner before:pointer-events-none before:absolute before:inset-0 before:overflow-hidden before:rounded-lg before:bg-[url('/stone-texture.svg')] before:bg-cover before:bg-center before:opacity-30 before:content-[''] ${boss ? `border-2 ${done ? 'border-green-500' : 'border-amber-800'}` : `border ${stateBorder}`} ${stateBg} ${isFrontier ? 'animate-pulse' : ''} ${dimClass}`}
                               style={{ width: boxSize, height: boxSize }}
                             >
                               <div className="relative flex h-full w-full items-center justify-center">
@@ -859,7 +863,7 @@ export default function BoardPage() {
                                 )}
                               </div>
                               {percent !== null && (
-                                <div className="absolute inset-y-0 left-0 w-1 bg-stone-900">
+                                <div className="absolute inset-y-0 left-0 w-1 overflow-hidden rounded-l-lg bg-stone-900">
                                   <div
                                     className="absolute inset-x-0 bottom-0"
                                     style={{ height: `${percent}%`, backgroundColor: progressColor(percent) }}
@@ -882,26 +886,48 @@ export default function BoardPage() {
                                   ))}
                                 </div>
                               )}
+                              {/* Positioned off the icon box's own bottom edge
+                                  (not the grid cell's), so its height is free
+                                  to vary (one line vs. two, a boss tag on top
+                                  of the name) with zero effect on row height
+                                  or connector alignment -- see
+                                  AdventureConnector.tsx's own header comment. */}
+                              {tile && (
+                                <div
+                                  className="absolute top-full flex flex-col items-center"
+                                  style={{ width: 80, left: '50%', transform: 'translateX(-50%)', marginTop: 4 }}
+                                >
+                                  {boss && (
+                                    <span className="text-[8px] font-bold uppercase tracking-wide text-amber-700">
+                                      {isFinalBoss ? 'Final Boss' : 'Boss Room'}
+                                    </span>
+                                  )}
+                                  <span className="line-clamp-2 w-full break-words text-center text-[11px]">{tile.label}</span>
+                                  {isOnPath && caption && (
+                                    <span className="w-full break-words text-center text-[9px] text-stone-500">{caption}</span>
+                                  )}
+                                  {isOtherLane && <span className="text-[9px] text-stone-600">not taken</span>}
+                                </div>
+                              )}
                             </div>
-                            {tile && (
-                              <div className="flex w-20 flex-col items-center">
-                                {boss && (
-                                  <span className="text-[8px] font-bold uppercase tracking-wide text-amber-700">
-                                    {isFinalBoss ? 'Final Boss' : 'Boss Room'}
-                                  </span>
-                                )}
-                                <span className="line-clamp-2 w-full break-words text-center text-[11px]">{tile.label}</span>
-                                {isOnPath && caption && (
-                                  <span className="w-full break-words text-center text-[9px] text-stone-500">{caption}</span>
-                                )}
-                                {isOtherLane && <span className="text-[9px] text-stone-600">not taken</span>}
-                              </div>
-                            )}
                           </div>
                         );
                       })}
-                      </div>
                     </Fragment>
+                  );
+                })}
+                {Array.from({ length: ADVENTURE_SMALL_COLUMNS - 1 }, (_, column) => {
+                  const fromInfo = onPathInfoForColumn(column);
+                  const toInfo = onPathInfoForColumn(column + 1);
+                  if (!fromInfo || !toInfo) return null;
+                  return (
+                    <AdventureConnector
+                      key={`conn-${column}`}
+                      column={column}
+                      fromLane={fromInfo.lane}
+                      toLane={toInfo.lane}
+                      variant={fromInfo.done && toInfo.done ? 'done' : fromInfo.done && toInfo.isFrontier ? 'toFrontier' : 'neutral'}
+                    />
                   );
                 })}
               </div>
