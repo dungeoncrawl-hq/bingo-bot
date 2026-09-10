@@ -36,7 +36,7 @@ export const COINS_ICON_URL = 'https://oldschool.runescape.wiki/images/Coins_100
 export const DEATH_ICON_URL = 'https://oldschool.runescape.wiki/images/Items_kept_on_death.png';
 // Baby Mole -- one of the most recognizable pets in OSRS, standing in for
 // "a pet" generically since the wiki has no single generic pet icon.
-const PETS_ICON_URL = 'https://oldschool.runescape.wiki/images/Baby_Mole.png';
+export const PETS_ICON_URL = 'https://oldschool.runescape.wiki/images/Baby_Mole.png';
 export const GOTR_ICON_URL = 'https://oldschool.runescape.wiki/images/Abyssal_lantern.png';
 
 // The label is entirely derived from the condition (and its skill/activity/

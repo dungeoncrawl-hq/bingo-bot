@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { getSupabase } from '../db/supabaseClient';
+import Logo from './Logo';
 
 export default function Header() {
   const { session, profile } = useAuth();
@@ -8,7 +9,8 @@ export default function Header() {
 
   return (
     <header className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-stone-800 px-6 py-4">
-      <Link to="/" className="font-display text-lg font-semibold tracking-wide text-amber-500">
+      <Link to="/" className="flex items-center gap-2 font-display text-lg font-semibold tracking-wide text-amber-500">
+        <Logo size={22} />
         Dungeon Crawl
       </Link>
       <nav className="flex flex-wrap items-center gap-4 text-sm">

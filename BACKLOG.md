@@ -1672,3 +1672,63 @@ instead of renumbering the existing list.
     HEAD request before adding, then confirmed actually loading
     (`naturalWidth > 0`) next to the host's name on a real production
     board (`adventure-test`).
+
+## Visual identity
+38. **A redesigned homepage that visually tells the product's story,
+    plus a real logo mark.** **Shipped 2026-09-09.** The homepage was
+    previously just a centered headline, one sentence, and a button --
+    scoped and mocked up first as a Claude Design canvas (hero visual,
+    logo mark options, how-it-works strip, leaderboard teaser,
+    changelog cards), then built for real minus the changelog section
+    (kept the existing live `announcements` block as-is instead of
+    reskinning it).
+
+    **Logo mark** (`src/components/Logo.tsx`): a dungeon archway with a
+    torch flame, picked from 3 sketched directions (the other two --a
+    "D" monogram shaped like a key, and a 3x3 grid glyph with one glowing
+    cell-- were dropped, not built). Pure inline SVG, no wiki-icon
+    dependency. Wired into `Header.tsx` next to the wordmark, and also
+    shipped as the site's first-ever favicon (`public/favicon.svg`,
+    linked from `index.html`) -- there was none before this.
+
+    **Hero** (`src/components/DungeonPathPreview.tsx`): replaced the
+    one-line pitch with an illustrated Adventure dungeon path -- done
+    rooms, a lane fork, a pulsing amber frontier room, locked rooms
+    ahead, a Corporeal Beast capstone boss room -- built from real wiki
+    icons (`bossActivityIcon`, `skillIconUrl`, and the existing
+    `tileIcons.ts` constants; `PETS_ICON_URL` exported from there for
+    this, matching every other misc icon constant already exported for
+    reuse) and the exact same stone-texture-overlay tile recipe
+    `BoardPage.tsx`'s real grid tiles use, so it reads as the actual
+    product rather than a mockup of it.
+
+    **How it works**: a 3-step strip (custom-drawn grid/people/bolt
+    icons, no emoji) replacing the old one-sentence pitch.
+
+    **Leaderboard teaser** (`src/components/LeaderboardPreview.tsx`):
+    built from the real `PlayerChip`/`HostBadge` components fed
+    illustrative example rows (clearly labeled "Example leaderboard,"
+    not a live fetch -- the homepage has no challenge context to pull
+    real data from), plus a decorative strip in the real
+    `progressColor.ts` red-yellow-green gradient.
+
+    **Found in passing**: a live, already-emailed `announcements` row
+    (2026-09-08's co-hosting announcement) still said "look for the
+    crown next to a host's name" -- stale since #37 replaced the crown
+    with a partyhat. Patched the on-site copy directly (can't recall
+    the email that already went out, same as every other "fix the
+    display, not the sent email" precedent this project has).
+
+    **Explicitly deferred**: reskinning the *real* Adventure board
+    (`BoardPage.tsx`) to match this hero's tile styling -- the host
+    liked the look and wants it ported over, but as its own follow-up
+    change, not bundled into the homepage work.
+
+    Live-verified: build/lint/295 tests all passed; checked in the
+    browser at desktop and a 375px mobile width -- caught and fixed a
+    real bug at mobile width (`min-w-[420px]`/`min-w-[320px]` on the
+    hero's flex children forced 436px of content into a 375px viewport,
+    a genuine horizontal-scroll bug; replaced with `min-w-0` +
+    `basis-[Npx]` so the columns can actually shrink below their
+    preferred width once wrapped to their own row). No console errors;
+    favicon confirmed served (200, `image/svg+xml`).
