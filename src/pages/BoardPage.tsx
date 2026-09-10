@@ -51,6 +51,29 @@ const ADVENTURE_SMALL_TILES_IN_PLAY = 9;
 // boundaries mean on their clock, never for gating/status logic itself.
 const VIEWER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+// The Adventure board's own "done" badge -- a rounded square (not a
+// circle) in the tile's corner, gold star for whoever was first to clear
+// that room, green check for everyone else. Drawn SVG rather than an
+// emoji glyph, matching DungeonPathPreview.tsx's homepage hero this was
+// ported from.
+function AdventureDoneBadge({ first }: { first: boolean }) {
+  return (
+    <div
+      className={`absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded ${first ? 'bg-amber-400' : 'bg-emerald-500'}`}
+    >
+      {first ? (
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
+          <path d="M12 3l2.2 6.8H21l-5.6 4.1 2.1 6.8L12 16.7 6.5 20.7l2.1-6.8L3 9.8h6.8z" fill="#422006" />
+        </svg>
+      ) : (
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none">
+          <path d="M5 13l4 4L19 7" stroke="#0c0a09" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+    </div>
+  );
+}
+
 interface ParticipantRow {
   id: string;
   profile_id: string;
@@ -632,7 +655,10 @@ export default function BoardPage() {
                     <span className="inline-block h-3 w-3 rounded-sm border border-stone-800 bg-stone-950/60 align-middle opacity-60" />{' '}
                     Not reached yet
                   </p>
-                  <p>Rooms with a red glow are boss rooms -- clearing one unlocks the next fork.</p>
+                  <p>
+                    <span className="inline-block h-3 w-3 rounded-sm border-2 border-amber-800 bg-stone-900 align-middle" /> Boss
+                    rooms -- clearing one unlocks the next fork.
+                  </p>
                   <p>
                     The hallways connecting rooms show the dungeon's overall shape (which columns branch into two paths
                     or converge into a boss) -- not your specific chosen route. Your own path is whichever lane you
@@ -654,15 +680,6 @@ export default function BoardPage() {
                 {Array.from({ length: ADVENTURE_SMALL_COLUMNS }, (_, column) => {
                   const boss = isBossColumn(column);
                   const isFinalBoss = column === ADVENTURE_SMALL_FINAL_BOSS_COLUMN;
-                  // Extra visual weight on top of (not instead of) each
-                  // tile's own state-driven border color below -- a boss
-                  // room still needs to read as done/frontier/locked just
-                  // like any other tile, this just makes it look heavier.
-                  const bossExtra = boss
-                    ? isFinalBoss
-                      ? 'border-2 shadow-[0_0_20px_rgba(239,68,68,0.5)]'
-                      : 'border-2 shadow-[0_0_14px_rgba(220,38,38,0.35)]'
-                    : '';
                   const lanes: ('top' | 'bottom' | 'center')[] = boss ? ['center'] : ['top', 'bottom'];
                   const fork = boss ? null : forkIndexForColumn(column);
                   const chosenLane = fork !== null ? viewedParticipant?.adventure_path?.[String(fork)] : undefined;
@@ -742,61 +759,107 @@ export default function BoardPage() {
                                 : baseCaption;
                         const isFirst =
                           tile != null && done && tile.condition.type !== 'freeSpace' && firstCompleters[tile.id] === viewedParticipantId;
+                        // A boss room's border is always this fixed color --
+                        // not state-driven like every other tile -- so "this
+                        // is a boss room" reads as a consistent identity
+                        // whether it's done, current, or not reached yet;
+                        // completion still shows via the badge below, and a
+                        // not-yet-reached boss still dims like any locked
+                        // tile. Ported from DungeonPathPreview.tsx's
+                        // homepage hero, which the host asked to match.
+                        const stateBorder =
+                          isOtherLane || isPendingChoice
+                            ? 'border-stone-800/40'
+                            : done
+                              ? 'border-green-500'
+                              : awaitingBaselineReset
+                                ? 'border-sky-600'
+                                : isFrontier
+                                  ? 'border-amber-500'
+                                  : tile
+                                    ? locked
+                                      ? 'border-stone-800'
+                                      : 'border-stone-700'
+                                    : 'border-stone-800/60';
+                        const stateBg =
+                          isOtherLane || isPendingChoice
+                            ? 'bg-stone-950/30'
+                            : done
+                              ? 'bg-green-950/40'
+                              : awaitingBaselineReset
+                                ? 'bg-sky-950/20'
+                                : isFrontier
+                                  ? 'bg-stone-900'
+                                  : tile
+                                    ? locked
+                                      ? 'bg-stone-950/60'
+                                      : 'bg-stone-900'
+                                    : 'bg-stone-950/50';
+                        const dimClass = isOtherLane || isPendingChoice ? 'opacity-40' : locked ? 'opacity-60' : '';
+                        // Bigger for a boss room (more visual weight), a
+                        // touch bigger still for the frontier -- same sizing
+                        // ladder as the homepage hero.
+                        const boxSize = boss ? 80 : isFrontier ? 60 : 56;
 
                         return (
-                          <div
-                            key={lane}
-                            title={tile ? describeTileCondition(tile.condition) : undefined}
-                            className={`relative flex aspect-square min-h-0 min-w-0 flex-col items-center justify-center overflow-hidden rounded-lg border p-2 text-center shadow-inner before:pointer-events-none before:absolute before:inset-0 before:bg-[url('/stone-texture.svg')] before:bg-cover before:bg-center before:opacity-30 before:content-[''] ${bossExtra} ${
-                              isOtherLane || isPendingChoice
-                                ? 'border-stone-800/40 bg-stone-950/30 opacity-40'
-                                : done
-                                  ? 'border-green-500 bg-green-950/40'
-                                  : awaitingBaselineReset
-                                    ? 'border-sky-600 bg-sky-950/20'
-                                    : isFrontier
-                                      ? 'border-amber-500 bg-stone-900'
-                                      : tile
-                                        ? locked
-                                          ? 'border-stone-800 bg-stone-950/60 opacity-60'
-                                          : 'border-stone-700 bg-stone-900'
-                                        : 'border-stone-800/60 bg-stone-950/50'
-                            }`}
-                          >
-                            {percent !== null && (
-                              <div className="absolute inset-y-0 left-0 w-1 bg-stone-900">
-                                <div
-                                  className="absolute inset-x-0 bottom-0"
-                                  style={{ height: `${percent}%`, backgroundColor: progressColor(percent) }}
-                                />
+                          <div key={lane} className="flex flex-col items-center gap-1">
+                            <div
+                              title={tile ? describeTileCondition(tile.condition) : undefined}
+                              className={`relative shrink-0 overflow-hidden rounded-lg shadow-inner before:pointer-events-none before:absolute before:inset-0 before:bg-[url('/stone-texture.svg')] before:bg-cover before:bg-center before:opacity-30 before:content-[''] ${boss ? 'border-2 border-amber-800' : `border ${stateBorder}`} ${stateBg} ${isFrontier ? 'animate-pulse' : ''} ${dimClass}`}
+                              style={{ width: boxSize, height: boxSize }}
+                            >
+                              <div className="relative flex h-full w-full items-center justify-center">
+                                {tile ? (
+                                  tile.icon && (
+                                    <img
+                                      src={tile.icon}
+                                      alt=""
+                                      className="object-contain"
+                                      style={{ width: boxSize * 0.45, height: boxSize * 0.45 }}
+                                    />
+                                  )
+                                ) : (
+                                  <span className="text-xs text-stone-700">—</span>
+                                )}
                               </div>
-                            )}
-                            {isFirst && <span className="absolute right-1 top-1 text-xs text-amber-400">⭐</span>}
-                            {!isFirst && done && <span className="absolute right-1 top-1 text-xs text-green-400">✓</span>}
-                            {tile && frontierParticipantsByTileId.get(tile.id) && (
-                              <div className="absolute bottom-1 left-1 flex gap-0.5">
-                                {frontierParticipantsByTileId.get(tile.id)!.map((p) => (
-                                  <PlayerChip
-                                    key={p.id}
-                                    iconUrl={p.icon_url}
-                                    color={p.color}
-                                    participantId={p.id}
-                                    rsn={p.rsn}
-                                    size={14}
-                                    title={`${p.rsn} is here`}
+                              {percent !== null && (
+                                <div className="absolute inset-y-0 left-0 w-1 bg-stone-900">
+                                  <div
+                                    className="absolute inset-x-0 bottom-0"
+                                    style={{ height: `${percent}%`, backgroundColor: progressColor(percent) }}
                                   />
-                                ))}
-                              </div>
-                            )}
-                            {tile ? (
-                              <>
-                                {tile.icon && <img src={tile.icon} alt="" className="h-6 w-6 shrink-0" />}
-                                <span className="mt-1 line-clamp-2 w-full break-words text-[11px]">{tile.label}</span>
-                                {isOnPath && caption && <span className="w-full break-words text-[9px] text-stone-500">{caption}</span>}
+                                </div>
+                              )}
+                              {done && <AdventureDoneBadge first={isFirst} />}
+                              {tile && frontierParticipantsByTileId.get(tile.id) && (
+                                <div className="absolute bottom-1 left-1 flex gap-0.5">
+                                  {frontierParticipantsByTileId.get(tile.id)!.map((p) => (
+                                    <PlayerChip
+                                      key={p.id}
+                                      iconUrl={p.icon_url}
+                                      color={p.color}
+                                      participantId={p.id}
+                                      rsn={p.rsn}
+                                      size={14}
+                                      title={`${p.rsn} is here`}
+                                    />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            {tile && (
+                              <div className="flex w-20 flex-col items-center">
+                                {boss && (
+                                  <span className="text-[8px] font-bold uppercase tracking-wide text-amber-700">
+                                    {isFinalBoss ? 'Final Boss' : 'Boss Room'}
+                                  </span>
+                                )}
+                                <span className="line-clamp-2 w-full break-words text-center text-[11px]">{tile.label}</span>
+                                {isOnPath && caption && (
+                                  <span className="w-full break-words text-center text-[9px] text-stone-500">{caption}</span>
+                                )}
                                 {isOtherLane && <span className="text-[9px] text-stone-600">not taken</span>}
-                              </>
-                            ) : (
-                              <span className="text-xs text-stone-700">—</span>
+                              </div>
                             )}
                           </div>
                         );

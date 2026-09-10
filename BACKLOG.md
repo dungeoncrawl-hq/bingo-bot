@@ -1732,3 +1732,76 @@ instead of renumbering the existing list.
     `basis-[Npx]` so the columns can actually shrink below their
     preferred width once wrapped to their own row). No console errors;
     favicon confirmed served (200, `image/svg+xml`).
+
+39. **Ported #38's homepage-hero styling onto the real Adventure board.**
+    **Shipped 2026-09-10.** Five specific asks, all on `BoardPage.tsx`'s
+    Adventure grid (the Standard/grid5x5 board and the fork/column
+    detail modals were untouched -- out of scope for this pass):
+
+    1. **Connector lines are now simple dashed lines, never diagonal.**
+       `AdventureConnector.tsx` was previously an SVG "hallway" whose
+       lines angled to bridge a fork's two lane heights into a boss
+       column's single centered one. Rewritten to draw `min(from, to)`
+       plain horizontal dashes via CSS grid (1 row when either side is
+       a single-lane boss column, 2 rows for a fork-to-fork gap) --
+       relies on the surrounding flex row already stretching every
+       column to the row's tallest sibling, not hardcoded pixel
+       geometry, so it still tracks real tile+label height even though
+       tiles got shorter and labels moved outside (#2 below).
+    2. **All 3 boss rooms get one consistent border, not a state-varying
+       one.** Previously a boss tile's border still came from its
+       done/frontier/locked state, with a red drop-shadow layered on
+       top. Now boss rooms always render `border-amber-800`
+       regardless of state -- completion still shows via the badge
+       (#5), and a not-yet-reached boss still dims via opacity, same
+       as any other locked tile; only the border color itself stopped
+       being state-driven. Labeled "Boss Room" / "Boss Room" / "Final
+       Boss" (computed inline from `isBossColumn`/the existing
+       `ADVENTURE_SMALL_FINAL_BOSS_COLUMN` check -- deliberately not
+       routed through `adventureProgress.ts`'s existing
+       `bossLabelForColumn`, which returns "First Boss"/"Second
+       Boss"/"Final Boss" for a different, already-tested consumer,
+       `TileDetailModal`'s kicker text).
+    3. **Labels moved outside the tile -- only the icon stays inside.**
+       Each lane's tile used to be one bordered/textured box holding
+       icon + label + caption together. Restructured into two
+       siblings: a smaller icon-only bordered box, then the label/
+       caption/boss-tag text below it, outside the box -- same split
+       DungeonPathPreview.tsx already uses.
+    4. **The frontier tile now pulses** (`animate-pulse`), including
+       when the frontier happens to be a boss room (the amber-800
+       border and the pulse both apply at once).
+    5. **The done badge is a rounded square, not a circle** -- `rounded`
+       (4px) instead of `rounded-full`, 16x16, drawn SVG instead of a
+       bare glyph. Green check for a normal completion; gold star
+       (`bg-amber-400`) for whoever was first to clear that room,
+       reusing the same `firstCompleters`/`isFirst` computation that
+       already existed, just re-skinned. New shared
+       `AdventureDoneBadge` component in `BoardPage.tsx` backs both.
+       `DungeonPathPreview.tsx`'s own done badge got the same
+       circle-to-square fix for consistency between the two surfaces.
+
+    **Homepage layout also restructured to match**, per a direct ask
+    once the host saw the real board rendering: `DungeonPathPreview.tsx`
+    previously showed 2 straight rooms into 1 fork into 1 final boss --
+    not what the real small-Adventure layout actually is. Rebuilt to
+    mirror `ADVENTURE_SMALL_BOSS_COLUMNS`' real shape exactly: fork,
+    boss room (Zulrah, done), fork, second boss room (Vorkath, frontier
+    -- pulsing, to show that state combined with a boss border), fork,
+    final boss (Corporeal Beast, locked). The boss tag ("Boss Room"/
+    "Final Boss") moved from an inside-the-tile banner to outside,
+    matching point 3 above.
+
+    The legend's old "Rooms with a red glow are boss rooms" line updated
+    to describe the new fixed-border look instead, with a matching swatch.
+
+    Live-verified against the real `adventure-test` challenge (not just
+    the homepage): switched between participants via `?p=` to confirm a
+    completed board (26 Limont, 9/9) shows a mix of gold-star and
+    green-check badges (both 4px-radius rounded squares, confirmed via
+    computed style, not just visually) on all 3 boss rooms, and that an
+    in-progress participant (WheresMyGear, 5/9) has their actual
+    frontier -- which happens to be a boss room -- rendering with both
+    `border-amber-800` and `animate-pulse` at once. Build/lint/295 tests
+    all passed; no console errors; no new horizontal-overflow regression
+    at a 375px viewport on either the real board or the homepage hero.
