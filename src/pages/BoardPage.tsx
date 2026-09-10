@@ -636,7 +636,6 @@ export default function BoardPage() {
       <h1 className="text-2xl font-semibold">{challenge.name}</h1>
       <p className="text-sm text-stone-500">{formatLocalRange(challenge.start_date, challenge.end_date, VIEWER_TIMEZONE)}</p>
       {countdown && <p className="mt-1 text-xs font-medium text-amber-500">{countdown}</p>}
-      {viewedParticipant && <p className="mt-2 text-sm font-medium text-stone-400">{viewedParticipant.rsn}'s board</p>}
 
       {myAwaitingBaselineReset && !baselineBannerDismissed && (
         <div className="mt-4 flex items-start justify-between gap-3 rounded-lg border border-sky-800 bg-sky-950/30 p-3">
@@ -697,6 +696,7 @@ export default function BoardPage() {
               )}
             </div>
           )}
+          {viewedParticipant && <p className="mb-3 text-lg font-semibold text-stone-200">{viewedParticipant.rsn}'s board</p>}
           {challenge.board_type === 'adventure' ? (
             <div className="overflow-x-auto pb-16">
               <div

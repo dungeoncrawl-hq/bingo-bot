@@ -2209,3 +2209,19 @@ instead of renumbering the existing list.
     uniques. No console errors. Build/lint/295 tests all passed (3
     existing `tileTaskPhrase`/`describeTileCondition` assertions updated
     for the new generic wording).
+
+47. **Moved the viewed player's board name (`"{rsn}'s board"`) to sit
+    immediately above the board grid, and made it more prominent.**
+    **Shipped 2026-09-10.** Previously rendered right under the
+    countdown, well above the "How this board works" toggle and legend
+    panel, at `text-sm font-medium text-stone-400`. Now renders inside
+    the board column, right after the legend panel and immediately
+    before the grid itself (`BoardPage.tsx`), at `text-lg font-semibold
+    text-stone-200` -- matching the weight of the page's other headings
+    (e.g. "Leaderboard"). Applies to both board types, since the
+    underlying element was already unconditional (not gated by
+    `board_type`) and there's no reason for Standard boards to look
+    different here. Live-verified against the real `adventure-test`
+    board (viewing "26 Limont's board" via the leaderboard's `?p=`
+    link) -- the heading now sits directly above the grid, clearly
+    bolder than before. Build/lint/295 tests all passed.
