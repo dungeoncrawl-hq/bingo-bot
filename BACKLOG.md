@@ -2034,3 +2034,54 @@ instead of renumbering the existing list.
     sign-in-first copy correctly for an anonymous visitor. No console
     errors; no 375px horizontal-overflow regression on `/setup`.
     Build/lint/295 tests all passed.
+
+44. **`ProfilePage.tsx`: dropped the Profile icon subtext, added a
+    "Recent activity" feed of the player's own last 5 raw Dink events.**
+    **Shipped 2026-09-10.**
+
+    **The 5 raw-event tables (`boss_kills`, `slayer_tasks`,
+    `loot_drops`, `deaths`, `collection_log_entries`, `pet_obtains` --
+    6 tables, 5 notifier types since loot covers both drops and Misc)
+    are all keyed by `participant_id`, never `profile_id` directly** --
+    a profile gets a separate `challenge_participants` row (and so a
+    separate `participant_id`) per dungeon it joins, unlike
+    `last_webhook_at`'s existing account-wide fetch just above this on
+    the same page (which only ever needed one column across those
+    rows, not a join to 6 more tables). Resolved every
+    `challenge_participants.id` this profile owns first (with each
+    row's `challenges(name)` embedded in the same query, for "any other
+    relevant detail" -- which dungeon an event came from, genuinely
+    ambiguous once a profile is in more than one), then fetched the
+    newest 5 rows from each of the 6 tables `.in('participant_id', ...)`
+    those ids -- 7 queries total, run as 1 sequential + 6 parallel
+    (`Promise.all`). Fetching only the top 5 *per table* rather than
+    everything is enough to guarantee the true top-5-overall survives
+    the client-side merge+sort+slice, since no single table needs to
+    contribute more than 5 of the final 5.
+
+    **Per-type display text**, reusing `formatCompactNumber` (already
+    used elsewhere on this same page for the webhook section) for every
+    gp figure: boss KC shows the boss name, running KC, and a "(personal
+    best!)" suffix when `is_personal_best`; Slayer shows the task number
+    and monster; Loot shows the item (or "N items" for a multi-item
+    drop) and source, *except* an `is_misc` bucketed row, whose `source`
+    is always the literal string `"Misc"` (`dinkWebhook.ts`'s
+    `increment_misc_loot`) -- "5 items from Lunar Chest" reads fine,
+    "Miscellaneous loot from Misc" is pure noise, so that row shape
+    drops the "from {source}" half of the sentence entirely rather than
+    reusing the normal template; Death shows the killer (when present)
+    and value lost; Collection Log and Pet just name what landed.
+    `pet_obtains` uniquely timestamps on `updated_at`, not `created_at`
+    like the other 5 -- both feed the same merge-sort, just read from
+    different source columns.
+
+    Live-verified signed in against real production data (same
+    session-injection technique as #43): the feed correctly pulled and
+    merged real events spanning 3 different dungeons this profile is
+    actually in (`adventure test`, `Ototo Dungeon`, `September 2026
+    Community Dungeon`), each row showing the right relative timestamp,
+    type badge, formatted detail, and source dungeon name; confirmed
+    the Misc-loot wording fix specifically (re-checked after the first
+    pass showed the "from Misc" redundancy live). No console errors; no
+    375px horizontal-overflow regression. Build/lint/295 tests all
+    passed.

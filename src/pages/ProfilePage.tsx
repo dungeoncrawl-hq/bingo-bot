@@ -3,9 +3,24 @@ import type { FormEvent } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { getSupabase } from '../db/supabaseClient';
-import { formatRelativeTime } from '../lib/format';
+import { formatCompactNumber, formatRelativeTime } from '../lib/format';
 import { PLAYER_COLORS } from '../lib/playerColors';
 import ProfileIconPicker from '../components/ProfileIconPicker';
+
+// One row from any of the 6 raw Dink-event tables, normalized to a
+// common shape for display -- each table has its own columns (and, for
+// pet_obtains, its own timestamp column name: updated_at, not
+// created_at), so this is built by mapping each table's rows rather
+// than a single SQL query. `challengeName` is "any other relevant
+// detail" the host asked for -- a profile can be in several dungeons at
+// once, so which one an event came from isn't otherwise obvious.
+interface RecentEvent {
+  id: string;
+  at: string;
+  typeLabel: string;
+  detail: string;
+  challengeName: string;
+}
 
 export default function ProfilePage() {
   const { session, profile, loading } = useAuth();
@@ -27,6 +42,7 @@ export default function ProfilePage() {
   // 'loading' distinct from null (no events yet) so the line doesn't
   // flash "no events" before the fetch has actually finished.
   const [lastDinkEventAt, setLastDinkEventAt] = useState<string | null | 'loading'>('loading');
+  const [recentEvents, setRecentEvents] = useState<RecentEvent[] | 'loading'>('loading');
 
   useEffect(() => {
     if (session?.user.email) setEmail(session.user.email);
@@ -83,6 +99,157 @@ export default function ProfilePage() {
         );
         setLastDinkEventAt(latest);
       });
+  }, [session]);
+
+  // The 5 most recent raw Dink events across every dungeon this profile
+  // is in, newest first. Each of the 6 raw-event tables is keyed by
+  // participant_id (challenge_participants.id), not profile_id directly
+  // -- a profile can hold a different participant row per dungeon -- so
+  // this first resolves every participant row this profile owns, then
+  // fetches the newest few rows from each event table for those
+  // participant ids and merges them client-side. Fetching only the true
+  // top 5 from each table (rather than everything) keeps this cheap
+  // while still guaranteeing the real top 5 overall survive the merge,
+  // since no single table needs to contribute more than 5 of the final
+  // 5.
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    (async () => {
+      const supabase = getSupabase();
+      const { data: participantRows } = await supabase
+        .from('challenge_participants')
+        .select('id, challenges(name)')
+        .eq('profile_id', session.user.id);
+      const participants = (participantRows as { id: string; challenges: { name: string } | null }[] | null) ?? [];
+      if (participants.length === 0) {
+        if (!cancelled) setRecentEvents([]);
+        return;
+      }
+      const challengeNameByParticipantId = new Map(participants.map((p) => [p.id, p.challenges?.name ?? 'a dungeon']));
+      const participantIds = participants.map((p) => p.id);
+
+      const [bossKills, slayerTasks, lootDrops, deaths, collectionLog, petObtains] = await Promise.all([
+        supabase
+          .from('boss_kills')
+          .select('id, participant_id, boss, kc, is_personal_best, created_at')
+          .in('participant_id', participantIds)
+          .order('created_at', { ascending: false })
+          .limit(5),
+        supabase
+          .from('slayer_tasks')
+          .select('id, participant_id, monster, tasks_completed, created_at')
+          .in('participant_id', participantIds)
+          .order('created_at', { ascending: false })
+          .limit(5),
+        supabase
+          .from('loot_drops')
+          .select('id, participant_id, source, items, total_value, is_misc, created_at')
+          .in('participant_id', participantIds)
+          .order('created_at', { ascending: false })
+          .limit(5),
+        supabase
+          .from('deaths')
+          .select('id, participant_id, value_lost, is_pvp, killer_name, created_at')
+          .in('participant_id', participantIds)
+          .order('created_at', { ascending: false })
+          .limit(5),
+        supabase
+          .from('collection_log_entries')
+          .select('id, participant_id, item_name, created_at')
+          .in('participant_id', participantIds)
+          .order('created_at', { ascending: false })
+          .limit(5),
+        supabase
+          .from('pet_obtains')
+          .select('id, participant_id, boss_name, updated_at')
+          .in('participant_id', participantIds)
+          .order('updated_at', { ascending: false })
+          .limit(5),
+      ]);
+
+      const events: RecentEvent[] = [];
+      for (const r of (bossKills.data as { id: string; participant_id: string; boss: string; kc: number; is_personal_best: boolean; created_at: string }[]) ?? []) {
+        events.push({
+          id: r.id,
+          at: r.created_at,
+          typeLabel: 'Boss KC',
+          detail: `${r.boss} -- ${r.kc.toLocaleString()} KC${r.is_personal_best ? ' (personal best!)' : ''}`,
+          challengeName: challengeNameByParticipantId.get(r.participant_id) ?? 'a dungeon',
+        });
+      }
+      for (const r of (slayerTasks.data as { id: string; participant_id: string; monster: string; tasks_completed: number; created_at: string }[]) ?? []) {
+        events.push({
+          id: r.id,
+          at: r.created_at,
+          typeLabel: 'Slayer',
+          detail: `Task ${r.tasks_completed.toLocaleString()} complete -- ${r.monster}`,
+          challengeName: challengeNameByParticipantId.get(r.participant_id) ?? 'a dungeon',
+        });
+      }
+      for (const r of (lootDrops.data as {
+        id: string;
+        participant_id: string;
+        source: string;
+        items: { name: string; quantity: number }[];
+        total_value: number;
+        is_misc: boolean;
+        created_at: string;
+      }[]) ?? []) {
+        // is_misc rows bucket many small drops together (dinkWebhook.ts's
+        // increment_misc_loot) with source hardcoded to the literal
+        // string "Misc" -- "from Misc" would be pure noise on top of
+        // "Miscellaneous loot", so that half of the sentence is dropped
+        // entirely for this case rather than reusing the normal template.
+        const itemSummary = r.is_misc
+          ? null
+          : r.items.length === 1
+            ? `${r.items[0].quantity > 1 ? `${r.items[0].quantity}x ` : ''}${r.items[0].name}`
+            : `${r.items.length} items`;
+        events.push({
+          id: r.id,
+          at: r.created_at,
+          typeLabel: 'Loot',
+          detail: itemSummary
+            ? `${itemSummary} from ${r.source} -- ${formatCompactNumber(r.total_value)} gp`
+            : `Miscellaneous loot -- ${formatCompactNumber(r.total_value)} gp`,
+          challengeName: challengeNameByParticipantId.get(r.participant_id) ?? 'a dungeon',
+        });
+      }
+      for (const r of (deaths.data as { id: string; participant_id: string; value_lost: number; is_pvp: boolean; killer_name: string | null; created_at: string }[]) ?? []) {
+        events.push({
+          id: r.id,
+          at: r.created_at,
+          typeLabel: 'Death',
+          detail: `Died${r.killer_name ? ` to ${r.killer_name}` : ''}${r.is_pvp ? ' (PvP)' : ''} -- ${formatCompactNumber(r.value_lost)} gp lost`,
+          challengeName: challengeNameByParticipantId.get(r.participant_id) ?? 'a dungeon',
+        });
+      }
+      for (const r of (collectionLog.data as { id: string; participant_id: string; item_name: string; created_at: string }[]) ?? []) {
+        events.push({
+          id: r.id,
+          at: r.created_at,
+          typeLabel: 'Collection Log',
+          detail: r.item_name,
+          challengeName: challengeNameByParticipantId.get(r.participant_id) ?? 'a dungeon',
+        });
+      }
+      for (const r of (petObtains.data as { id: string; participant_id: string; boss_name: string; updated_at: string }[]) ?? []) {
+        events.push({
+          id: r.id,
+          at: r.updated_at,
+          typeLabel: 'Pet',
+          detail: r.boss_name,
+          challengeName: challengeNameByParticipantId.get(r.participant_id) ?? 'a dungeon',
+        });
+      }
+
+      events.sort((a, b) => (a.at < b.at ? 1 : -1));
+      if (!cancelled) setRecentEvents(events.slice(0, 5));
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [session]);
 
   if (loading) return null;
@@ -157,7 +324,6 @@ export default function ProfilePage() {
 
       <div className="mt-8 max-w-md">
         <h2 className="text-sm font-semibold text-stone-300">Profile icon</h2>
-        <p className="mt-1 text-xs text-stone-500">Shown next to your name on leaderboards and participant lists.</p>
         <div className="mt-2 flex items-center gap-3">
           <div
             className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-stone-700 ${color ? '' : 'bg-stone-900'}`}
@@ -300,6 +466,30 @@ export default function ProfilePage() {
           )}
         </div>
       )}
+
+      <div className="mt-8 max-w-md">
+        <h2 className="text-sm font-semibold text-stone-300">Recent activity</h2>
+        {recentEvents === 'loading' ? (
+          <p className="mt-2 text-sm text-stone-500">Loading…</p>
+        ) : recentEvents.length === 0 ? (
+          <p className="mt-2 text-sm text-stone-500">No Dink events received yet.</p>
+        ) : (
+          <ul className="mt-2 space-y-2">
+            {recentEvents.map((e) => (
+              <li key={e.id} className="rounded-lg border border-stone-800 bg-stone-900/50 p-3 text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="shrink-0 rounded-full border border-amber-800 bg-amber-950/40 px-1.5 py-0.5 text-[10px] text-amber-400">
+                    {e.typeLabel}
+                  </span>
+                  <span className="text-xs text-stone-600">{formatRelativeTime(e.at, Date.now())}</span>
+                </div>
+                <p className="mt-1 text-stone-300">{e.detail}</p>
+                <p className="mt-0.5 text-xs text-stone-600">{e.challengeName}</p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
