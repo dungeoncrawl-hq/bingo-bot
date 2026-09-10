@@ -1,7 +1,7 @@
 import { skillIconUrl, TOTAL_LEVEL_ICON_URL, PETS_ICON_URL, COINS_ICON_URL, CLUE_ICON_URL, COLLECTION_LOG_ICON_URL } from '../lib/tileIcons';
 import { bossActivityIcon } from '../lib/bossActivities';
 import AdventureConnector from './AdventureConnector';
-import { adventureGridColumns, tileColumnLine, LANE_ROW_HEIGHT, LANE_ROW_GAP, type Lane } from '../lib/adventureGrid';
+import { adventureGridColumns, tileColumnLine, LANE_ROW_HEIGHT, LANE_ROW_GAP, TILE_SIZE, BOSS_SIZE, type Lane } from '../lib/adventureGrid';
 
 // A non-interactive illustration of an Adventure board's branching room
 // path, for HomePage.tsx's hero -- shows the mechanic (a lane fork, a
@@ -22,6 +22,7 @@ import { adventureGridColumns, tileColumnLine, LANE_ROW_HEIGHT, LANE_ROW_GAP, ty
 // beyond it, since the third fork hasn't been reached yet and there's
 // no chosen path to draw a line for.
 const COLUMN_COUNT = 6;
+const IS_BOSS_COLUMN = (column: number) => column === 1 || column === 3 || column === 5;
 
 type NodeState = 'done' | 'frontier' | 'locked';
 
@@ -62,7 +63,7 @@ function Node({
   state,
   boss = false,
   bossTag,
-  size = 54,
+  size = TILE_SIZE,
 }: {
   icon: string;
   label: string;
@@ -72,6 +73,9 @@ function Node({
   // outside the tile, above its own label -- the tile itself holds only
   // the icon.
   bossTag?: string;
+  // Always TILE_SIZE or BOSS_SIZE in practice -- see adventureGrid.ts's
+  // own comment on why a tile's box must exactly match its column's
+  // track width for a connector to actually meet its edge.
   size?: number;
 }) {
   const borderClass = boss ? (state === 'done' ? 'border-green-500' : 'border-amber-800') : STATE_BORDER[state];
@@ -113,10 +117,10 @@ function NotTakenNode({ icon }: { icon: string }) {
   return (
     <div
       className="relative overflow-visible rounded-lg border border-stone-800 opacity-40 shadow-inner before:pointer-events-none before:absolute before:inset-0 before:rounded-lg before:bg-[url('/stone-texture.svg')] before:bg-cover before:bg-center before:opacity-30 before:content-['']"
-      style={{ width: 40, height: 40 }}
+      style={{ width: TILE_SIZE, height: TILE_SIZE }}
     >
       <div className="relative flex h-full w-full items-center justify-center">
-        <img src={icon} alt="" className="object-contain" style={{ width: 18, height: 18 }} />
+        <img src={icon} alt="" className="object-contain" style={{ width: TILE_SIZE * 0.44, height: TILE_SIZE * 0.44 }} />
       </div>
       <span className="absolute top-full mt-1 text-[8px] text-stone-600" style={{ width: 72, left: '50%', transform: 'translateX(-50%)' }}>
         not taken
@@ -160,28 +164,28 @@ export default function DungeonPathPreview() {
           <div
             className="relative grid"
             style={{
-              gridTemplateColumns: adventureGridColumns(COLUMN_COUNT),
+              gridTemplateColumns: adventureGridColumns(COLUMN_COUNT, IS_BOSS_COLUMN),
               gridTemplateRows: `${LANE_ROW_HEIGHT}px ${LANE_ROW_HEIGHT}px`,
               rowGap: LANE_ROW_GAP,
             }}
           >
             <Cell lane="top" column={0}>
-              <Node icon={TOTAL_LEVEL_ICON_URL} label="Total XP" state="done" size={40} />
+              <Node icon={TOTAL_LEVEL_ICON_URL} label="Total XP" state="done" />
             </Cell>
             <Cell lane="bottom" column={0}>
               <NotTakenNode icon={skillIconUrl('Slayer')} />
             </Cell>
             <Cell lane="center" column={1}>
-              <Node icon={bossActivityIcon('Zulrah') ?? ''} label="Zulrah" state="done" boss bossTag="Boss Room" size={68} />
+              <Node icon={bossActivityIcon('Zulrah') ?? ''} label="Zulrah" state="done" boss bossTag="Boss Room" size={BOSS_SIZE} />
             </Cell>
             <Cell lane="top" column={2}>
-              <Node icon={CLUE_ICON_URL} label="Clue Scrolls" state="done" size={40} />
+              <Node icon={CLUE_ICON_URL} label="Clue Scrolls" state="done" />
             </Cell>
             <Cell lane="bottom" column={2}>
               <NotTakenNode icon={COLLECTION_LOG_ICON_URL} />
             </Cell>
             <Cell lane="center" column={3}>
-              <Node icon={bossActivityIcon('Vorkath') ?? ''} label="Vorkath" state="frontier" boss bossTag="Boss Room" size={68} />
+              <Node icon={bossActivityIcon('Vorkath') ?? ''} label="Vorkath" state="frontier" boss bossTag="Boss Room" size={BOSS_SIZE} />
             </Cell>
             <Cell lane="center" column={4}>
               <PendingFork topIcon={COINS_ICON_URL} bottomIcon={PETS_ICON_URL} />
@@ -193,7 +197,7 @@ export default function DungeonPathPreview() {
                 state="locked"
                 boss
                 bossTag="Final Boss"
-                size={68}
+                size={BOSS_SIZE}
               />
             </Cell>
 

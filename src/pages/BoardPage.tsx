@@ -25,7 +25,7 @@ import { formatRelativeTime } from '../lib/format';
 import TileDetailModal from '../components/TileDetailModal';
 import AdventureColumnModal from '../components/AdventureColumnModal';
 import AdventureConnector from '../components/AdventureConnector';
-import { adventureGridColumns, tileColumnLine, LANE_ROW_HEIGHT, LANE_ROW_GAP } from '../lib/adventureGrid';
+import { adventureGridColumns, tileColumnLine, LANE_ROW_HEIGHT, LANE_ROW_GAP, TILE_SIZE, BOSS_SIZE } from '../lib/adventureGrid';
 import PlayerChip from '../components/PlayerChip';
 import HostBadge from '../components/HostBadge';
 import {
@@ -702,7 +702,7 @@ export default function BoardPage() {
               <div
                 className="relative grid"
                 style={{
-                  gridTemplateColumns: adventureGridColumns(ADVENTURE_SMALL_COLUMNS),
+                  gridTemplateColumns: adventureGridColumns(ADVENTURE_SMALL_COLUMNS, isBossColumn),
                   gridTemplateRows: `${LANE_ROW_HEIGHT}px ${LANE_ROW_HEIGHT}px`,
                   rowGap: LANE_ROW_GAP,
                 }}
@@ -820,11 +820,12 @@ export default function BoardPage() {
                                       : 'bg-stone-900'
                                     : 'bg-stone-950/50';
                         const dimClass = isOtherLane || isPendingChoice ? 'opacity-40' : locked ? 'opacity-60' : '';
-                        // Bigger for a boss room (more visual weight, and
-                        // more of its full 2-row span to fill), a touch
-                        // bigger still for the frontier -- same sizing
-                        // ladder as the homepage hero.
-                        const boxSize = boss ? 100 : isFrontier ? 60 : 56;
+                        // Always exactly its column's own track width
+                        // (TILE_SIZE/BOSS_SIZE, never a done/frontier/
+                        // locked-specific size) -- see adventureGrid.ts's
+                        // own comment for why that's what actually makes
+                        // a connector's line meet a tile's real edge.
+                        const boxSize = boss ? BOSS_SIZE : TILE_SIZE;
 
                         return (
                           <div

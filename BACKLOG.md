@@ -2085,3 +2085,51 @@ instead of renumbering the existing list.
     pass showed the "from Misc" redundancy live). No console errors; no
     375px horizontal-overflow regression. Build/lint/295 tests all
     passed.
+
+45. **The #40 connector lines still didn't actually touch some tiles --
+    root-caused for real this time.** **Shipped 2026-09-10.** #40's
+    fix made the connector's *endpoint Y* land exactly on a tile's real
+    center (verified then with real `getBoundingClientRect()`
+    measurements) -- but never checked the *X* axis, where a real bug
+    remained: `AdventureConnector` always draws right up to its own
+    grid column's boundary, but tiles rendered at a DIFFERENT width
+    than their column (`TILE_COLUMN_WIDTH` was a flat 84px; actual tile
+    boxes ranged 56-100px depending on done/frontier/locked/boss).  A
+    tile smaller than 84px left a visible gap before the line ever
+    started; the 100px boss tile was *wider* than its own 84px column
+    and overflowed past it, drawing on top of the connector instead of
+    meeting it.
+
+    **The fix removes the mismatch instead of computing around it**:
+    a tile's box is now ALWAYS exactly `TILE_SIZE` (60px, fork/normal
+    columns) or `BOSS_SIZE` (96px, boss columns) -- the same two
+    constants `adventureGridColumns()` (`src/lib/adventureGrid.ts`)
+    now uses to size each column's own track, so a tile's real edge and
+    its column's boundary are the same line by construction. No new
+    props on `AdventureConnector`, no per-tile inset math, no z-index
+    layering trick -- the connector code is completely untouched;
+    it was already precise, it just had a moving target to aim at
+    before. The one real cost: the frontier tile no longer renders
+    slightly bigger than a done/locked one in the same column (that
+    was the actual source of the mismatch for non-boss tiles) --
+    it keeps its own visual emphasis entirely through its amber border
+    and the pulse animation, which were already doing most of that work
+    anyway.
+
+    Also bumped the site favicon to a versioned URL
+    (`index.html`'s `<link rel="icon">` now `/favicon.svg?v=2`) --
+    unrelated to the connector fix, but reported in the same pass: the
+    artwork itself was already correct in production (#42 shipped it
+    correctly), the browser tab was just showing a stale cached
+    favicon, which a plain unversioned URL has no way to force a
+    refetch for.
+
+    Live-verified with real measurements on both surfaces: read every
+    connector's and every tile's actual `getBoundingClientRect()`
+    against the real `adventure-test` board (8 connectors, 15 tiles,
+    mixing 60px and 96px tiles) and the homepage hero (3 connectors,
+    7 tiles) -- every single connector's left/right edge now matches
+    its adjacent tile's real right/left edge exactly, to the pixel,
+    with zero gap and zero overlap, boss tiles included. No console
+    errors; no 375px horizontal-overflow regression. Build/lint/295
+    tests all passed.
