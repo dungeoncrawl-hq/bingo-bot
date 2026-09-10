@@ -5,7 +5,7 @@ import { useAuth } from '../auth/useAuth';
 import { getSupabase } from '../db/supabaseClient';
 import type { Challenge, GridLayout, Team, Tile, TileLayout } from '../db/types';
 import TileEditorForm from '../components/TileEditorForm';
-import AdventureConnector from '../components/AdventureConnector';
+import { AdventureShapeConnector } from '../components/AdventureConnector';
 import PlayerChip from '../components/PlayerChip';
 import HostBadge from '../components/HostBadge';
 import { formatTileGoal, type TileCondition } from '../lib/tileConditions';
@@ -511,7 +511,7 @@ export default function EditChallengePage() {
               const isFinalBoss = column === ADVENTURE_SMALL_FINAL_BOSS_COLUMN;
               return (
                 <Fragment key={column}>
-                  {column > 0 && <AdventureConnector from={laneCountForColumn(column - 1)} to={laneCountForColumn(column)} />}
+                  {column > 0 && <AdventureShapeConnector from={laneCountForColumn(column - 1)} to={laneCountForColumn(column)} />}
                   <div className="flex w-20 shrink-0 flex-col justify-center gap-2">
                     {lanes.map((lane) => {
                       const tile = tileAt({ column, lane });

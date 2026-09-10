@@ -24,7 +24,7 @@ import { formatLocalRange, preciseCountdownText } from '../lib/dungeonStatus';
 import { formatRelativeTime } from '../lib/format';
 import TileDetailModal from '../components/TileDetailModal';
 import AdventureColumnModal from '../components/AdventureColumnModal';
-import AdventureConnector from '../components/AdventureConnector';
+import AdventureConnector, { AdventureConnectorGap } from '../components/AdventureConnector';
 import PlayerChip from '../components/PlayerChip';
 import HostBadge from '../components/HostBadge';
 import {
@@ -33,7 +33,6 @@ import {
   bossLabelForColumn,
   forkIndexForColumn,
   isBossColumn,
-  laneCountForColumn,
   resolveAdventureTileWindow,
   resolveFrontier,
   roomNumberForColumn,
@@ -59,7 +58,12 @@ const VIEWER_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 function AdventureDoneBadge({ first }: { first: boolean }) {
   return (
     <div
-      className={`absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded ${first ? 'bg-amber-400' : 'bg-emerald-500'}`}
+      // Pulled fully clear of the tile's own rounded border (-right-1.5/
+      // -top-1.5, not -1/-1) plus a ring in the page's own background
+      // color -- without that ring the badge's square corners sat right
+      // on top of the tile's rounded-lg corner, reading as the border
+      // clipping into the badge rather than a clean floating badge.
+      className={`absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded ring-2 ring-stone-950 ${first ? 'bg-amber-400' : 'bg-emerald-500'}`}
     >
       {first ? (
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
@@ -525,6 +529,24 @@ export default function BoardPage() {
     challenge.board_type === 'adventure' && viewedParticipant
       ? resolveFrontier(tiles, viewedParticipant.adventure_path ?? {}, viewedCompletedTileIds)
       : null;
+  // Which lane (or 'center' for a boss column) is actually on the viewed
+  // participant's own path at this column, and what state that column's
+  // on-path tile is in -- the one thing each AdventureConnector below
+  // needs to know whether/how to draw its line. null when there's no
+  // resolved lane at all (a fork the participant hasn't chosen yet) -- a
+  // gap touching a null side draws no connector, matching the tiles'
+  // own "the other lane just fades out" treatment.
+  function onPathInfoForColumn(column: number): { lane: 'top' | 'bottom' | 'center'; done: boolean; isFrontier: boolean } | null {
+    const lane: 'top' | 'bottom' | 'center' | null = isBossColumn(column)
+      ? 'center'
+      : (viewedParticipant?.adventure_path?.[String(forkIndexForColumn(column))] ?? null);
+    if (!lane) return null;
+    const tile = adventureTileAt(column, lane);
+    if (!tile) return null;
+    const done = viewedCompletedTileIds.has(tile.id);
+    const isFrontier = !done && viewedFrontier?.kind === 'tile' && viewedFrontier.tile.id === tile.id;
+    return { lane, done, isFrontier };
+  }
   const myFrontier =
     challenge.board_type === 'adventure' && myParticipant
       ? resolveFrontier(tiles, myParticipant.adventure_path ?? {}, doneTileIdsFor(myParticipant.id))
@@ -685,9 +707,21 @@ export default function BoardPage() {
                   const chosenLane = fork !== null ? viewedParticipant?.adventure_path?.[String(fork)] : undefined;
                   const columnHasAnyTile = lanes.some((lane) => adventureTileAt(column, lane) != null);
 
+                  const prevOnPath = column > 0 ? onPathInfoForColumn(column - 1) : null;
+                  const thisOnPath = onPathInfoForColumn(column);
+
                   return (
                     <Fragment key={column}>
-                      {column > 0 && <AdventureConnector from={laneCountForColumn(column - 1)} to={laneCountForColumn(column)} />}
+                      {column > 0 &&
+                        (prevOnPath && thisOnPath ? (
+                          <AdventureConnector
+                            fromLane={prevOnPath.lane}
+                            toLane={thisOnPath.lane}
+                            variant={prevOnPath.done && thisOnPath.done ? 'done' : prevOnPath.done && thisOnPath.isFrontier ? 'toFrontier' : 'neutral'}
+                          />
+                        ) : (
+                          <AdventureConnectorGap />
+                        ))}
                       <div
                         ref={(el) => {
                           columnRefs.current[column] = el;
@@ -759,14 +793,16 @@ export default function BoardPage() {
                                 : baseCaption;
                         const isFirst =
                           tile != null && done && tile.condition.type !== 'freeSpace' && firstCompleters[tile.id] === viewedParticipantId;
-                        // A boss room's border is always this fixed color --
-                        // not state-driven like every other tile -- so "this
-                        // is a boss room" reads as a consistent identity
-                        // whether it's done, current, or not reached yet;
-                        // completion still shows via the badge below, and a
-                        // not-yet-reached boss still dims like any locked
-                        // tile. Ported from DungeonPathPreview.tsx's
-                        // homepage hero, which the host asked to match.
+                        // A boss room's border is this fixed "boss" color
+                        // (not state-driven like every other tile) whether
+                        // it's current or not reached yet -- "this is a boss
+                        // room" reads as a consistent identity in both those
+                        // states, and a not-yet-reached boss still dims like
+                        // any locked tile. Once actually done, though, it
+                        // turns the same green as any other completed tile
+                        // (handled directly in the className below, not
+                        // here) -- a cleared boss room should read as
+                        // cleared first, boss room second.
                         const stateBorder =
                           isOtherLane || isPendingChoice
                             ? 'border-stone-800/40'
@@ -805,7 +841,7 @@ export default function BoardPage() {
                           <div key={lane} className="flex flex-col items-center gap-1">
                             <div
                               title={tile ? describeTileCondition(tile.condition) : undefined}
-                              className={`relative shrink-0 overflow-hidden rounded-lg shadow-inner before:pointer-events-none before:absolute before:inset-0 before:bg-[url('/stone-texture.svg')] before:bg-cover before:bg-center before:opacity-30 before:content-[''] ${boss ? 'border-2 border-amber-800' : `border ${stateBorder}`} ${stateBg} ${isFrontier ? 'animate-pulse' : ''} ${dimClass}`}
+                              className={`relative shrink-0 overflow-hidden rounded-lg shadow-inner before:pointer-events-none before:absolute before:inset-0 before:bg-[url('/stone-texture.svg')] before:bg-cover before:bg-center before:opacity-30 before:content-[''] ${boss ? `border-2 ${done ? 'border-green-500' : 'border-amber-800'}` : `border ${stateBorder}`} ${stateBg} ${isFrontier ? 'animate-pulse' : ''} ${dimClass}`}
                               style={{ width: boxSize, height: boxSize }}
                             >
                               <div className="relative flex h-full w-full items-center justify-center">

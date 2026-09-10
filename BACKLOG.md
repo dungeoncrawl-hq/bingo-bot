@@ -1805,3 +1805,92 @@ instead of renumbering the existing list.
     `border-amber-800` and `animate-pulse` at once. Build/lint/295 tests
     all passed; no console errors; no new horizontal-overflow regression
     at a 375px viewport on either the real board or the homepage hero.
+
+40. **#39's connectors, boss borders, and done badges refined again**
+    off a hand-drawn mockup the host sent showing what "good" actually
+    looks like. **Shipped 2026-09-10.**
+
+    1. **Connector lines now route per the viewed participant's actual
+       chosen path, colored by state, and draw nothing at all for a lane
+       that wasn't chosen.** #39's connector already drew a plain dashed
+       line per column-gap regardless of which specific lane (if either)
+       was on-path -- correct shape, no state awareness. Replaced with a
+       connector that's computed per VIEWED PARTICIPANT: a new
+       `onPathInfoForColumn(column)` (`BoardPage.tsx`) resolves which
+       lane (or 'center' for a boss) is actually on their path at that
+       column, plus whether that column's on-path tile is done/
+       frontier/neither -- returning `null` when a fork touching this
+       gap hasn't been chosen yet. Two adjacent resolved columns get an
+       `AdventureConnector` (green solid when both are done, amber
+       dashed when the source is done and the target is the frontier,
+       neutral dashed otherwise); either side `null` gets a same-width
+       blank `AdventureConnectorGap` instead -- no line drawn at all,
+       satisfying "no lines for a path not chosen" by construction
+       (a connector endpoint is only ever computed from the CHOSEN lane,
+       never the unchosen one).
+    2. **Connectors are orthogonal (elbow-routed), not simple dashes.**
+       `AdventureConnector.tsx` rewritten around an SVG `<path>` with a
+       single 90-degree bend (`M 0 {fromY} H 50 V {toY} H 100`) -- still
+       never diagonal (#38's original ask), but now actually visualizes
+       a lane changing height between columns instead of a flat dash
+       that ignored it. Lane height is `top`/`center`/`bottom` ->
+       25/50/75% of the connector's own stretched height (the
+       surrounding flex row already stretches every child to the row's
+       tallest sibling; `preserveAspectRatio="none"` + `vector-effect:
+       non-scaling-stroke` keeps horizontal/vertical segments exactly
+       horizontal/vertical and the stroke width constant even though
+       the SVG scales non-uniformly) -- no pixel measurement needed.
+    3. **`EditChallengePage.tsx`'s host-authoring grid needed its own,
+       separate connector.** It shows the dungeon's static shape while a
+       host places tiles -- no participant, no chosen path, nothing to
+       color. Reusing the new per-participant `AdventureConnector` there
+       doesn't type-check (no lane/variant to give it) and wouldn't mean
+       anything if it did. Added `AdventureShapeConnector` (same file) --
+       the plain `min(from, to)`-lane neutral-dashed connector #38
+       originally built, kept alive under its own name for exactly this
+       one non-participant consumer instead of deleting it.
+    4. **A done boss room's border turns green**, same as any other done
+       tile -- `border-amber-800` (the fixed "this is a boss room" color
+       from #38) now only applies while a boss room is locked/frontier/
+       awaiting-baseline; `done` overrides it to `border-green-500`
+       directly in `BoardPage.tsx`'s className expression. A cleared
+       boss room reads as cleared first, boss room second.
+    5. **The done badge (star/check) no longer looks like the tile's own
+       border is clipping into it.** Pulled further off the tile corner
+       (`-right-1.5/-top-1.5`, was `-right-1/-top-1`) and given a 2px
+       `ring-stone-950` (the page's own background color) -- the ring is
+       what actually fixes the overlap: without it the badge's square
+       corners sat flush against the tile's rounded-lg corner with
+       nothing separating them; with it the badge reads as a distinct
+       floating chip. Same fix applied to both `AdventureDoneBadge`
+       (`BoardPage.tsx`) and `DungeonPathPreview.tsx`'s own done badge.
+
+    **Homepage hero rebuilt to actually demonstrate all of the above**,
+    per a direct ask to make its example accurate: `DungeonPathPreview.tsx`
+    now imports and reuses the real `AdventureConnector`/
+    `AdventureConnectorGap` components directly (not a local
+    reimplementation) and tells a fully sequential, honest story --
+    first room done (green check) -> green path -> first boss done
+    (green border + check) -> green path -> second room done -> amber
+    dashed path into the second boss, which is the current frontier
+    (pulsing amber-800 border, no badge yet) -> nothing beyond it, since
+    the third fork hasn't been reached and there's no chosen lane to
+    draw a line for. The previously-generic "chosen" fork lane now
+    renders as a real done tile (icon + green check) instead of a
+    neutral placeholder, and its unchosen sibling renders with the same
+    dim "not taken" treatment the real board gives one.
+
+    Live-verified against the real `adventure-test` challenge: read each
+    rendered connector's own SVG `d`/`stroke`/`stroke-dasharray`
+    attributes (not just eyeballed) for both a completed participant and
+    an in-progress one whose chosen lane actually switches sides between
+    forks (top lane at fork 1, bottom at fork 2) -- confirmed exactly 5
+    connectors render for 5 resolved on-path gaps, all green except one
+    correctly-orange-dashed segment into the true frontier, and the
+    remaining 3 gaps past the frontier render nothing. Confirmed the
+    done-boss-turns-green override and the badge ring fix via computed
+    style, not just visually. Same connector-path check repeated against
+    the homepage hero, confirming its 3 connectors match the intended
+    green/green/amber-dashed sequence exactly. Build/lint/295 tests all
+    passed; no console errors; no horizontal-overflow regression at
+    375px on either surface.
