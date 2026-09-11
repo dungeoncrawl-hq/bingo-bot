@@ -2225,3 +2225,40 @@ instead of renumbering the existing list.
     board (viewing "26 Limont's board" via the leaderboard's `?p=`
     link) -- the heading now sits directly above the grid, clearly
     bolder than before. Build/lint/295 tests all passed.
+
+48. **Adventure boards' leaderboard rebuilt as a compact table.**
+    **Shipped 2026-09-10.** Previously a bulleted list of
+    `#1 🥇 Name — 13 pts (9/9 tiles)`-style lines, matching Standard
+    boards' own list. Adventure now gets its own `<table>` (Standard/
+    Coop/Team leaderboards are unchanged) with columns Rank, Player
+    (icon + name + host badge, unchanged `PlayerChip`/`HostBadge`),
+    Score, and Current Room -- medal emojis dropped entirely. A row is
+    the whole click target (`role="button"`, Enter/Space works too),
+    still calling the same `setSearchParams({ p: p.id })` to switch
+    the viewed board.
+
+    **Rank is rooms-completed, not points.** The path is strictly
+    sequential so the two almost always agree, but a first-completer
+    bonus can rank someone with fewer rooms cleared above someone with
+    more -- wrong signal for a "how far into the dungeon" number. Added
+    a local re-sort (`adventureLeaderboard`, tilesCompleted desc, then
+    points desc, then participantId) purely for Adventure's row order/
+    rank display; `computeLeaderboard`'s own points-first order is
+    untouched and still what Score, Coop's summary, and Standard/Team
+    lists use.
+
+    **Current Room** shows the frontier tile's own `label` (e.g. "Boss
+    KC"), "Choosing path" for the rare mid-fork state, or a green ✓ once
+    `hasCompletedBoard` is true (the same signal the old 🏆 badge used).
+    Table uses `table-fixed` with an explicit `<colgroup>` (Rank/Score/
+    Current Room narrow, Player gets the rest) -- without it the auto
+    layout let "Barrows uniques"-length room names squeeze player names
+    down to 1-2 visible characters in the 288px sidebar.
+
+    Live-verified against the real `adventure-test` board: full names
+    render (`26 Limont`, `WheresMyGear`, `ototo`), the host partyhat
+    shows next to the host's name, rank-1 (9/9 tiles) shows a green
+    checkmark, clicking a row navigates to that player's board and
+    bold/underlines the now-viewed row, and a long Current Room value
+    truncates with an ellipsis rather than breaking the layout. Build/
+    lint/295 tests all passed.

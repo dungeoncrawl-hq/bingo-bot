@@ -627,6 +627,20 @@ export default function BoardPage() {
     challenge.game_mode === 'team' ? [...representativeIdByTeam.values()] : participants.map((p) => p.id);
   const leaderboard = computeLeaderboard(tiles, completions, leaderboardParticipantIds, firstCompleters);
 
+  // Adventure's own rank order: rooms cleared first, not points. The two
+  // almost always agree (the path is strictly sequential), but a first-
+  // completer bonus can put someone with fewer rooms ahead on points --
+  // for a dungeon board, "how far in" is the signal a rank number should
+  // reflect, with Score shown as its own column instead.
+  const adventureLeaderboard =
+    challenge.board_type === 'adventure'
+      ? [...leaderboard].sort((a, b) => {
+          if (b.tilesCompleted !== a.tilesCompleted) return b.tilesCompleted - a.tilesCompleted;
+          if (b.points !== a.points) return b.points - a.points;
+          return a.participantId.localeCompare(b.participantId);
+        })
+      : leaderboard;
+
   const tilesInPlay = challenge.board_type === 'adventure' ? ADVENTURE_SMALL_TILES_IN_PLAY : tiles.length;
   const teamGateBlocksJoining = challenge.game_mode === 'team' && teams.length === 0;
   const countdown = preciseCountdownText(challenge.start_date, challenge.end_date, Date.now());
@@ -1055,7 +1069,70 @@ export default function BoardPage() {
             (~20%, fixed-width so entries never wrap) on desktop. */}
         <div className="order-1 lg:order-2 lg:w-72 lg:shrink-0">
           <h2 className="text-lg font-semibold">Leaderboard</h2>
-          {challenge.game_mode === 'coop' ? (
+          {challenge.board_type === 'adventure' ? (
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-0 table-fixed text-sm">
+                <colgroup>
+                  <col className="w-6" />
+                  <col />
+                  <col className="w-9" />
+                  <col className="w-20" />
+                </colgroup>
+                <thead>
+                  <tr className="text-left text-xs text-stone-500">
+                    <th className="pb-1 pr-2 font-medium">Rank</th>
+                    <th className="pb-1 pr-2 font-medium">Player</th>
+                    <th className="pb-1 pr-2 font-medium">Score</th>
+                    <th className="pb-1 font-medium">Current Room</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {adventureLeaderboard.map((entry, i) => {
+                    const p = participants.find((pp) => pp.id === entry.participantId);
+                    if (!p) return null;
+                    const isViewed = entry.participantId === viewedParticipantId;
+                    const isYou = entry.participantId === myParticipant?.id;
+                    const complete = hasCompletedBoard(p.id);
+                    const frontier = complete ? null : resolveFrontier(tiles, p.adventure_path ?? {}, doneTileIdsFor(p.id));
+                    const roomLabel = frontier?.kind === 'tile' ? frontier.tile.label : frontier?.kind === 'needsLaneChoice' ? 'Choosing path' : '—';
+                    return (
+                      <tr
+                        key={p.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setSearchParams({ p: p.id })}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') setSearchParams({ p: p.id });
+                        }}
+                        className={`cursor-pointer border-t border-stone-800/60 hover:bg-stone-900/60 ${isViewed ? 'bg-stone-900/70' : ''}`}
+                      >
+                        <td className="py-1.5 pr-2 text-stone-400">{i + 1}</td>
+                        <td className="max-w-0 py-1.5 pr-2">
+                          <span className="flex items-center gap-1.5" style={{ color: colorFor(p) }}>
+                            <PlayerChip iconUrl={p.icon_url} color={p.color} participantId={p.id} rsn={p.rsn} />
+                            <span className={`truncate ${isViewed ? 'font-semibold underline' : ''}`}>{p.rsn}</span>
+                            {hostBadge(p) && <HostBadge role={hostBadge(p)!} />}
+                            {isYou && <span className="shrink-0 text-xs text-stone-500">(you)</span>}
+                          </span>
+                        </td>
+                        <td className="py-1.5 pr-2 tabular-nums text-stone-300">{entry.points}</td>
+                        <td className="max-w-0 overflow-hidden py-1.5 text-stone-300">
+                          {complete ? <span className="font-bold text-green-500">✓</span> : <span className="block truncate">{roomLabel}</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {adventureLeaderboard.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="py-2 text-stone-500">
+                        No one's joined yet.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          ) : challenge.game_mode === 'coop' ? (
             // No ranking -- everyone's progress is always identical in
             // Coop, so a shared readout replaces the ranked list
             // (BACKLOG.md #10).
