@@ -2262,3 +2262,54 @@ instead of renumbering the existing list.
     bold/underlines the now-viewed row, and a long Current Room value
     truncates with an ellipsis rather than breaking the layout. Build/
     lint/295 tests all passed.
+
+49. **Adventure leaderboard follow-up: dropped the Score column, added
+    the room number to Current Room, fixed the header row overlap; and
+    board-page actions consolidated into one header dropdown.** **Shipped
+    2026-09-10.**
+
+    **Leaderboard table.** Score column removed (#48 shipped it
+    alongside Rank/Player/Current Room the same day -- Rank already
+    reflects progress, Score was redundant on a compact table).
+    Current Room now leads with the room's own number, e.g. `otototo`
+    reads "1 - Boss KC" instead of just "Boss KC" -- non-boss frontier
+    tiles use the existing `roomNumberForColumn`, boss frontier tiles use
+    `bossLabelForColumn` ("First Boss"/"Second Boss"/"Final Boss")
+    instead of a number, matching the prefix each already gets in its own
+    tile modal (`AdventureColumnModal`'s "Room N" heading /
+    `TileDetailModal`'s kicker). The `<colgroup>` also had its Rank
+    column widened (24px -> 40px) -- "Rank" was clipping into "Player"'s
+    header cell at the narrower width.
+
+    **Header actions menu.** Every per-viewer action that used to live in
+    the sidebar (Set up Dink, RSN "Edit" link, Leave Dungeon, Edit
+    Dungeon) is now one dropdown in the page header (new
+    `BoardActionsMenu.tsx`, self-contained open state + click-outside-
+    to-close) -- exactly 4 items depending on what the viewer can do:
+    "Set up Dink Guide", "Change RSN" (still opens the same inline
+    rename form, now triggered from the menu instead of an inline link),
+    "Edit Dungeon" (host/co-host only), "Leave Dungeon" (red text, same
+    confirm() dialog as before). Applies to every board type -- the
+    header row itself (`challenge.name`/dates/countdown) is shared by
+    Standard, Coop, Team, and Adventure alike, so this wasn't an
+    Adventure-only change despite the leaderboard work above being one.
+    The "You're in as {rsn}." sentence that used to sit above those links
+    is gone entirely (not moved -- removed per request), leaving "Last
+    Dink event: ..." as the only text still in the old actions spot,
+    alongside the join form, RSN-rename form, and the lowest-skill/lane-
+    choice prompts (none of those are "actions" in the menu's sense, so
+    they stayed put).
+
+    **Adventure legend.** Removed the paragraph explaining that hallways
+    show the dungeon's overall shape rather than a player's own path --
+    judged no longer necessary once the per-lane fade-out (done in an
+    earlier pass) already communicates that visually.
+
+    Live-verified signed in as the real host against both `adventure-test`
+    (Adventure) and `Ototo Dungeon` (Coop/Standard): the header menu
+    icon and all 4 items appear on both, "Change RSN" correctly opens
+    the pre-filled inline rename form, the hallway paragraph is gone from
+    the Adventure legend, "You're in as" text is gone from both board
+    types, and the leaderboard reads "1 - Boss KC" / "Second Boss -
+    Barrows uniques" / a green checkmark for the three real
+    `adventure-test` participants. Build/lint/295 tests all passed.

@@ -28,6 +28,7 @@ import AdventureConnector from '../components/AdventureConnector';
 import { adventureGridColumns, tileColumnLine, LANE_ROW_HEIGHT, LANE_ROW_GAP, TILE_SIZE, BOSS_SIZE } from '../lib/adventureGrid';
 import PlayerChip from '../components/PlayerChip';
 import HostBadge from '../components/HostBadge';
+import BoardActionsMenu from '../components/BoardActionsMenu';
 import {
   ADVENTURE_SMALL_COLUMNS,
   ADVENTURE_SMALL_FINAL_BOSS_COLUMN,
@@ -93,8 +94,8 @@ interface ParticipantRow {
   adventure_baseline_snapshot: SnapshotRow | null;
   // Bumped on every successful Dink call regardless of event type
   // (dinkWebhook.ts's recordWebhookCall) -- this challenge's own most
-  // recent event, shown next to "You're in as X" so a player can tell
-  // at a glance whether their tracking is actually alive.
+  // recent event, shown as "Last Dink event" so a player can tell at a
+  // glance whether their tracking is actually alive.
   last_webhook_at: string | null;
   // BACKLOG.md #22 -- flattened out of the raw `profiles(icon_url, color)`
   // embed right after fetch (see load() below), so every consumer here
@@ -482,9 +483,9 @@ export default function BoardPage() {
   const adventureTileAt = (column: number, lane: 'top' | 'bottom' | 'center') =>
     tiles.find((t) => 'lane' in t.layout && t.layout.column === column && t.layout.lane === lane) ?? null;
   // BACKLOG.md #26 -- true for the primary host or any co-host, gates the
-  // "Edit Dungeon" link below. RLS enforces the real permission split
-  // (a co-host can't delete the dungeon) -- this boolean only decides
-  // whether the link is worth showing at all.
+  // header menu's "Edit Dungeon" item. RLS enforces the real permission
+  // split (a co-host can't delete the dungeon) -- this boolean only
+  // decides whether the item is worth showing at all.
   const isHost = session?.user.id === challenge.host_id || (session != null && coHostProfileIds.has(session.user.id));
   const viewedParticipant = participants.find((p) => p.id === viewedParticipantId);
   // Coop shows the one shared pooled progress regardless of who's
@@ -647,9 +648,28 @@ export default function BoardPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-12">
-      <h1 className="text-2xl font-semibold">{challenge.name}</h1>
-      <p className="text-sm text-stone-500">{formatLocalRange(challenge.start_date, challenge.end_date, VIEWER_TIMEZONE)}</p>
-      {countdown && <p className="mt-1 text-xs font-medium text-amber-500">{countdown}</p>}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">{challenge.name}</h1>
+          <p className="text-sm text-stone-500">{formatLocalRange(challenge.start_date, challenge.end_date, VIEWER_TIMEZONE)}</p>
+          {countdown && <p className="mt-1 text-xs font-medium text-amber-500">{countdown}</p>}
+        </div>
+        {session && (myParticipant || isHost) && (
+          <BoardActionsMenu
+            onChangeRsn={
+              myParticipant
+                ? () => {
+                    setRsnDraft(myParticipant.rsn);
+                    setEditingRsn(true);
+                    setRsnError('');
+                  }
+                : undefined
+            }
+            editHref={isHost ? `/c/${challenge.slug}/edit` : undefined}
+            onLeave={myParticipant ? handleLeave : undefined}
+          />
+        )}
+      </div>
 
       {myAwaitingBaselineReset && !baselineBannerDismissed && (
         <div className="mt-4 flex items-start justify-between gap-3 rounded-lg border border-sky-800 bg-sky-950/30 p-3">
@@ -694,11 +714,6 @@ export default function BoardPage() {
                   <p>
                     <span className="inline-block h-3 w-3 rounded-sm border-2 border-amber-800 bg-stone-900 align-middle" /> Boss
                     rooms -- clearing one unlocks the next fork.
-                  </p>
-                  <p>
-                    The hallways connecting rooms show the dungeon's overall shape (which columns branch into two paths
-                    or converge into a boss) -- not your specific chosen route. Your own path is whichever lane you
-                    picked at each fork; the other lane just fades out.
                   </p>
                 </>
               ) : (
@@ -1073,16 +1088,14 @@ export default function BoardPage() {
             <div className="mt-3 overflow-x-auto">
               <table className="w-full min-w-0 table-fixed text-sm">
                 <colgroup>
-                  <col className="w-6" />
+                  <col className="w-10" />
                   <col />
-                  <col className="w-9" />
-                  <col className="w-20" />
+                  <col className="w-28" />
                 </colgroup>
                 <thead>
                   <tr className="text-left text-xs text-stone-500">
                     <th className="pb-1 pr-2 font-medium">Rank</th>
                     <th className="pb-1 pr-2 font-medium">Player</th>
-                    <th className="pb-1 pr-2 font-medium">Score</th>
                     <th className="pb-1 font-medium">Current Room</th>
                   </tr>
                 </thead>
@@ -1094,7 +1107,16 @@ export default function BoardPage() {
                     const isYou = entry.participantId === myParticipant?.id;
                     const complete = hasCompletedBoard(p.id);
                     const frontier = complete ? null : resolveFrontier(tiles, p.adventure_path ?? {}, doneTileIdsFor(p.id));
-                    const roomLabel = frontier?.kind === 'tile' ? frontier.tile.label : frontier?.kind === 'needsLaneChoice' ? 'Choosing path' : '—';
+                    const frontierColumn =
+                      frontier?.kind === 'tile' ? (frontier.tile.layout as AdventureLayout).column : null;
+                    const roomPrefix =
+                      frontierColumn == null ? null : isBossColumn(frontierColumn) ? bossLabelForColumn(frontierColumn) : roomNumberForColumn(frontierColumn);
+                    const roomLabel =
+                      frontier?.kind === 'tile'
+                        ? `${roomPrefix} - ${frontier.tile.label}`
+                        : frontier?.kind === 'needsLaneChoice'
+                          ? 'Choosing path'
+                          : '—';
                     return (
                       <tr
                         key={p.id}
@@ -1115,7 +1137,6 @@ export default function BoardPage() {
                             {isYou && <span className="shrink-0 text-xs text-stone-500">(you)</span>}
                           </span>
                         </td>
-                        <td className="py-1.5 pr-2 tabular-nums text-stone-300">{entry.points}</td>
                         <td className="max-w-0 overflow-hidden py-1.5 text-stone-300">
                           {complete ? <span className="font-bold text-green-500">✓</span> : <span className="block truncate">{roomLabel}</span>}
                         </td>
@@ -1124,7 +1145,7 @@ export default function BoardPage() {
                   })}
                   {adventureLeaderboard.length === 0 && (
                     <tr>
-                      <td colSpan={4} className="py-2 text-stone-500">
+                      <td colSpan={3} className="py-2 text-stone-500">
                         No one's joined yet.
                       </td>
                     </tr>
@@ -1184,7 +1205,9 @@ export default function BoardPage() {
             </ul>
           )}
 
-          {/* Actions available to the current viewer for this challenge. */}
+          {/* Joining/RSN/lane-and-skill-choice prompts -- the rest of the
+              per-viewer actions (Set up Dink Guide, Change RSN, Edit
+              Dungeon, Leave Dungeon) live in the header's dropdown menu. */}
           <div className="mt-6 space-y-3">
             {!session && (
               <p className="text-sm text-stone-400">
@@ -1221,26 +1244,6 @@ export default function BoardPage() {
             )}
             {joinError && <p className="text-sm text-red-400">{joinError}</p>}
 
-            {session && myParticipant && !editingRsn && (
-              <p className="text-sm text-stone-400">
-                You're in as {myParticipant.rsn}.{' '}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setRsnDraft(myParticipant.rsn);
-                    setEditingRsn(true);
-                    setRsnError('');
-                  }}
-                  className="underline"
-                >
-                  Edit
-                </button>{' '}
-                ·{' '}
-                <Link to="/setup" className="underline">
-                  Set up Dink &rarr;
-                </Link>
-              </p>
-            )}
             {session && myParticipant && !editingRsn && (
               <p className="text-xs text-stone-600">
                 Last Dink event:{' '}
@@ -1317,24 +1320,6 @@ export default function BoardPage() {
                   </button>
                 </div>
               </div>
-            )}
-
-            {myParticipant && (
-              <button
-                type="button"
-                onClick={handleLeave}
-                className="w-full rounded-lg border border-red-900 px-4 py-2 text-sm text-red-400 hover:bg-red-950/40"
-              >
-                Leave Dungeon
-              </button>
-            )}
-            {isHost && (
-              <Link
-                to={`/c/${challenge.slug}/edit`}
-                className="block w-full rounded-lg border border-stone-700 px-4 py-2 text-center text-sm text-stone-300 hover:border-amber-500"
-              >
-                Edit Dungeon
-              </Link>
             )}
           </div>
         </div>
