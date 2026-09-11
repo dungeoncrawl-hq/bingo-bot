@@ -32,6 +32,7 @@ import BoardActionsMenu from '../components/BoardActionsMenu';
 import {
   ADVENTURE_SMALL_COLUMNS,
   ADVENTURE_SMALL_FINAL_BOSS_COLUMN,
+  ADVENTURE_SMALL_TILES_IN_PLAY,
   bossLabelForColumn,
   forkIndexForColumn,
   isBossColumn,
@@ -41,12 +42,6 @@ import {
 } from '../lib/adventureProgress';
 
 const GRID_SIZE = 5;
-// Every small-dungeon participant always has exactly 9 tiles in play (3
-// bosses + 2 from whichever lane they picked at each of 3 forks) --
-// regardless of how many total slots (15) exist or which lanes were
-// chosen, so the leaderboard denominator is this fixed constant, not
-// tiles.length.
-const ADVENTURE_SMALL_TILES_IN_PLAY = 9;
 // Every challenge date is a fixed UTC calendar date (BACKLOG.md #14) --
 // this is the viewer's own zone, used only to show what those UTC
 // boundaries mean on their clock, never for gating/status logic itself.

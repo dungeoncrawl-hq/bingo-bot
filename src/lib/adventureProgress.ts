@@ -13,6 +13,13 @@ import type { DateWindow } from './participantStats.js';
 export const ADVENTURE_SMALL_COLUMNS = 9;
 export const ADVENTURE_SMALL_BOSS_COLUMNS = [2, 5, 8];
 export const ADVENTURE_SMALL_FINAL_BOSS_COLUMN = 8;
+// Every small-dungeon participant always has exactly 9 tiles in play (3
+// bosses + 2 from whichever lane they picked at each of 3 forks) --
+// regardless of how many total slots (15) exist or which lanes were
+// chosen. Exported so any per-participant "X/Y tiles" readout (BoardPage's
+// leaderboard, DashboardPage's card progress) uses this fixed denominator
+// instead of a raw tiles.length that would overcount by the unchosen lanes.
+export const ADVENTURE_SMALL_TILES_IN_PLAY = 9;
 
 // Every slot in the canonical small-adventure board, in column order --
 // the single source of truth both the board renderer and host-authoring

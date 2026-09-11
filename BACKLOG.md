@@ -2313,3 +2313,68 @@ instead of renumbering the existing list.
     types, and the leaderboard reads "1 - Boss KC" / "Second Boss -
     Barrows uniques" / a green checkmark for the three real
     `adventure-test` participants. Build/lint/295 tests all passed.
+
+50. **"My Dungeons" rebuilt as cards, grouped by status, with real
+    participant/progress data instead of a flat list of thin rows.**
+    **Shipped 2026-09-11.** Prototyped first as a standalone mockup (an
+    Artifact, not app code) against this account's own real dungeons,
+    reviewed and tweaked with the host before landing in
+    `DashboardPage.tsx`.
+
+    **Grouped into Active / Draft / Upcoming / Past** (sorted soonest-
+    to-end / soonest-to-publish / soonest-to-start / newest-first)
+    instead of one "current" bucket mixing every non-past status
+    together indiscriminately. A stat strip up top (dungeon/active/
+    draft/past counts) gives an at-a-glance summary. Active or Upcoming
+    within a day of ending/starting gets an amber "urgent" border --
+    generalized from the mockup's one hardcoded example into a real
+    `daysBetween(...) <= 1` rule.
+
+    **Each card now shows board type (Standard/Adventure), game mode
+    (Solo/Coop/Team), participant count, and the viewer's own progress**
+    -- none of which the old row exposed at all. Two new queries added
+    to the page's existing challenge fetch (`challenge_participants` and
+    `tiles` counts, plus `tile_completions` filtered to `kind='tile'`,
+    all `.in(challenge_id, ...)` across every dungeon at once rather than
+    per-card) drive: participant counts, a progress bar (or a green
+    "complete" state once the viewer's own tile count reaches the
+    board's total), and -- solo dungeons only, when more than one
+    participant exists -- a "Ranked #N of M" readout. Coop/team skip
+    rank entirely: `challengeProgress.ts`'s pooled-completion fan-out
+    means every teammate (or every coop participant) already shares the
+    same completion count, so "rank" would only ever produce ties --
+    coop reads "Shared progress", team reads "Your team's progress",
+    neither ranked. `ADVENTURE_SMALL_TILES_IN_PLAY` (previously a private
+    constant duplicated nowhere, just local to `BoardPage.tsx`) moved to
+    `adventureProgress.ts` and is now exported, so this page's own
+    "X/9 rooms" denominator for Adventure boards can't drift from the
+    board page's.
+
+    **Countdown moved to each card's top-right corner**, stacked above
+    the role/status badges rather than appended inline after the date
+    range -- both requested tweaks after the first mockup pass. Draft
+    cards' host badge uses the same real `HostBadge` component (the
+    white partyhat image) as everywhere else on the site, not the
+    mockup's placeholder crown icon. The Draft section header dropped
+    its "not visible to players yet" subtitle, and the draft nudge
+    message was trimmed to just "N days until its start date" (the
+    mockup's own trailing "-- N tiles staged, nobody can join until you
+    publish" clause removed per request). Copy Invite/Edit are now real
+    icon buttons in their own row at the bottom of each card, not tiny
+    underlined text -- Copy Invite still withheld for `past` status,
+    matching the original row's own behavior; Edit stays host/co-host
+    only. Past dungeons keep the original thin-row treatment (lower
+    priority, doesn't need the full card), unchanged apart from reusing
+    the same status-pill styling.
+
+    Live-verified signed in as the real host: all 3 real dungeons render
+    in the correct sections with correct real numbers (`adventure test`
+    -- complete, 9/9, Ranked #1 of 3; `Ototo Dungeon` -- Shared progress
+    0/25; `September 2026 Community Dungeon` -- Draft, "4 days until its
+    start date", no trailing text); the white partyhat image loads
+    successfully on all 3 host cards; the countdown sits right of the
+    title and above the action row with zero overlap, confirmed via
+    actual `getBoundingClientRect()` measurements (this session's
+    screenshot tool was unreliable at the time -- DOM measurement stood
+    in as the verification method instead of a visual screenshot).
+    Build/lint/295 tests all passed.
