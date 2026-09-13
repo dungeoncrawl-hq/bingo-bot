@@ -56,6 +56,16 @@ export interface Team {
   challenge_id: string;
   name: string;
   created_at: string;
+  // Always one of PLAYER_COLORS (see schema.sql's CHECK) -- never null
+  // once the column exists (a chip needs *some* color to render), but
+  // reads back as `undefined`/missing before the migration has run, so
+  // callers should treat a falsy value the same as "not chosen yet".
+  color: string | null;
+  // One of PROFILE_ICON_GROUPS' URLs (same domain-prefix CHECK as
+  // profiles.icon_url), or null for "not chosen yet" -- falls back to
+  // the team name's first letter on its color, same idiom PlayerChip.tsx
+  // already uses for a player with no icon.
+  icon: string | null;
 }
 
 // BACKLOG.md #26 -- a co-host, who gets the same tile/team/participant

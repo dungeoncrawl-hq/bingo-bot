@@ -974,3 +974,23 @@ create policy "site admin writes" on discord_title_templates for all
   ) with check (
     exists (select 1 from profiles p where p.id = auth.uid() and p.is_site_admin)
   );
+
+-- Manage Dungeon page redesign, 2026-09-13 -- a team gets its own color
+-- and icon (Team mode's roster is now grouped by team, so each team
+-- needs to read as its own visual identity, not just a name in a
+-- dropdown). Same closed-palette/domain-prefix CHECK shapes as
+-- profiles.color/profiles.icon_url respectively -- `color` mirrors
+-- PLAYER_COLORS exactly (src/lib/playerColors.ts) so a team swatch and
+-- a player's own chip pull from the same set; `icon` accepts anything
+-- from the same oldschool.runescape.wiki catalog PROFILE_ICON_GROUPS
+-- already validates against (src/lib/profileIcons.ts), reusing
+-- ProfileIconPicker.tsx as-is rather than building a second picker.
+-- `color` is not null (a chip needs *some* color to render) with a
+-- default so an existing team row doesn't need a backfill; `icon` stays
+-- nullable -- no icon chosen yet falls back to the team name's first
+-- letter on its color, the same idiom PlayerChip.tsx already uses for a
+-- player with no icon.
+alter table teams add column if not exists color text not null default '#f59e0b'
+  check (color in ('#f59e0b', '#38bdf8', '#a78bfa', '#f472b6', '#34d399', '#22d3ee', '#ffffff'));
+alter table teams add column if not exists icon text
+  check (icon is null or icon like 'https://oldschool.runescape.wiki/images/%');

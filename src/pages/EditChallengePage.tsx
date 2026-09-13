@@ -8,10 +8,12 @@ import TileEditorForm from '../components/TileEditorForm';
 import { AdventureShapeConnector } from '../components/AdventureConnector';
 import PlayerChip from '../components/PlayerChip';
 import HostBadge from '../components/HostBadge';
+import ProfileIconPicker from '../components/ProfileIconPicker';
 import { CopyIcon, PublishIcon, BoardTypeIcon } from '../components/DungeonIcons';
 import { formatTileGoal, type TileCondition } from '../lib/tileConditions';
 import { daysBetween, displayStatus, formatLocalRange, MAX_DUNGEON_LENGTH_DAYS, STATUS_STYLE, GAME_MODE_LABEL } from '../lib/dungeonStatus';
 import { formatBytes } from '../lib/format';
+import { PLAYER_COLORS } from '../lib/playerColors';
 import {
   ADVENTURE_SMALL_COLUMNS,
   ADVENTURE_SMALL_FINAL_BOSS_COLUMN,
@@ -126,8 +128,12 @@ export default function EditChallengePage() {
   // BACKLOG.md #26 -- profile ids of this challenge's co-hosts (never
   // includes challenge.host_id itself, which is tracked separately).
   const [coHostProfileIds, setCoHostProfileIds] = useState<Set<string>>(new Set());
-  const [newTeamName, setNewTeamName] = useState('');
-  const [addingTeam, setAddingTeam] = useState(false);
+  // null means "the always-visible form is in its default add-a-new-team
+  // state" -- clicking an existing team chip fills this with that team's
+  // real id/name/color/icon (edit mode); Cancel resets it back to null.
+  const [teamForm, setTeamForm] = useState<{ id: string | 'new'; name: string; color: string; icon: string | null } | null>(null);
+  const [savingTeam, setSavingTeam] = useState(false);
+  const [showTeamIconPicker, setShowTeamIconPicker] = useState(false);
   const [editingCell, setEditingCell] = useState<TileLayout | null>(null);
   const [discordWebhookUrl, setDiscordWebhookUrl] = useState('');
   const [savingWebhook, setSavingWebhook] = useState(false);
@@ -379,14 +385,31 @@ export default function EditChallengePage() {
     await load();
   }
 
-  async function handleAddTeam(e: FormEvent) {
+  // `activeTeamForm` (the form's real displayed values, defaulting to a
+  // fresh "new team" shape) is computed later, after the early-return
+  // narrowing -- safe to reference here even though it's declared lower
+  // in this same function body, since this handler only runs on submit,
+  // well after that declaration has executed during render.
+  async function saveTeamForm(e: FormEvent) {
     e.preventDefault();
-    if (!challenge || challenge === 'not-found' || !newTeamName.trim()) return;
-    setAddingTeam(true);
-    await getSupabase().from('teams').insert({ challenge_id: challenge.id, name: newTeamName.trim() });
-    setAddingTeam(false);
-    setNewTeamName('');
+    if (!challenge || challenge === 'not-found') return;
+    const form = activeTeamForm;
+    if (!form.name.trim()) return;
+    setSavingTeam(true);
+    if (form.id === 'new') {
+      await getSupabase().from('teams').insert({ challenge_id: challenge.id, name: form.name.trim(), color: form.color, icon: form.icon });
+    } else {
+      await getSupabase().from('teams').update({ name: form.name.trim(), color: form.color, icon: form.icon }).eq('id', form.id);
+    }
+    setSavingTeam(false);
+    setTeamForm(null);
+    setShowTeamIconPicker(false);
     await load();
+  }
+
+  function openTeamForm(team: Team) {
+    setTeamForm({ id: team.id, name: team.name, color: team.color ?? PLAYER_COLORS[0], icon: team.icon ?? null });
+    setShowTeamIconPicker(false);
   }
 
   async function handleAssignTeam(participant: ParticipantRow, teamId: string | null) {
@@ -472,6 +495,11 @@ export default function EditChallengePage() {
         { team: null, members: participants.filter((p) => p.team_id === null) },
       ]
     : null;
+  // The team form's real displayed values -- `teamForm` state stays null
+  // for the default "add a new team" shape (a fresh color suggestion that
+  // stays live as teams.length changes) until a chip's click fills it
+  // with that team's real id/name/color/icon.
+  const activeTeamForm = teamForm ?? { id: 'new' as const, name: '', color: PLAYER_COLORS[teams.length % PLAYER_COLORS.length], icon: null };
 
   // Captured into a plain local rather than reading `challenge.host_id`
   // directly inside `ParticipantRowView` below -- a nested function
@@ -499,18 +527,24 @@ export default function EditChallengePage() {
         </span>
         <span className="flex shrink-0 items-center gap-1.5">
           {isTeamMode && (
-            <select
-              value={p.team_id ?? ''}
-              onChange={(e) => handleAssignTeam(p, e.target.value || null)}
-              className="rounded-lg border border-stone-700 bg-stone-900 px-2 py-1.5 text-xs text-stone-300"
-            >
-              <option value="">Unassigned</option>
-              {teams.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
+            <span className="flex items-center gap-1.5">
+              <span
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: teams.find((t) => t.id === p.team_id)?.color ?? '#57534e' }}
+              />
+              <select
+                value={p.team_id ?? ''}
+                onChange={(e) => handleAssignTeam(p, e.target.value || null)}
+                className="rounded-lg border border-stone-700 bg-stone-900 px-2 py-1.5 text-xs text-stone-300"
+              >
+                <option value="">Unassigned</option>
+                {teams.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </span>
           )}
           {/* Co-host promotion/demotion stays primary-host-only
               (BACKLOG.md #26) -- a co-host viewing this same list
@@ -698,31 +732,88 @@ export default function EditChallengePage() {
           {isTeamMode && (
             <div className="mb-6 border-b border-stone-800 pb-5">
               <h2 className="text-sm font-semibold text-stone-300">Teams</h2>
-              <p className="mt-1 text-xs text-stone-500">Joining is blocked until at least one team exists. Assign participants below.</p>
+              <p className="mt-1 text-xs text-stone-500">
+                Joining is blocked until at least one team exists. Click a team to rename it or change its color/icon.
+              </p>
               <ul className="mt-3 flex flex-wrap gap-2 text-sm text-stone-300">
-                {teams.map((t) => (
-                  <li key={t.id} className="rounded-lg border border-stone-800 bg-stone-900 px-3 py-1.5">
-                    {t.name}
-                  </li>
-                ))}
+                {teams.map((t) => {
+                  const memberCount = participants.filter((p) => p.team_id === t.id).length;
+                  return (
+                    <li key={t.id}>
+                      <button
+                        type="button"
+                        onClick={() => openTeamForm(t)}
+                        className="flex items-center gap-2 rounded-lg border border-stone-800 bg-stone-900 py-1 pl-1 pr-3 hover:border-stone-600"
+                      >
+                        <span
+                          className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-[11px] font-bold text-stone-950"
+                          style={{ backgroundColor: t.color ?? PLAYER_COLORS[0] }}
+                        >
+                          {t.icon ? <img src={t.icon} alt="" className="h-4 w-4 object-contain" /> : t.name.slice(0, 1).toUpperCase()}
+                        </span>
+                        {t.name}
+                        <span className="text-stone-500">
+                          &middot; {memberCount} player{memberCount === 1 ? '' : 's'}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
                 {teams.length === 0 && <li className="text-stone-500">No teams yet.</li>}
               </ul>
-              <form onSubmit={handleAddTeam} className="mt-3 flex gap-2">
+
+              <form onSubmit={saveTeamForm} className="mt-3 flex flex-wrap items-center gap-2">
+                <p className="w-full text-xs uppercase tracking-wide text-stone-500">{activeTeamForm.id === 'new' ? 'New team' : 'Edit team'}</p>
                 <input
                   required
-                  value={newTeamName}
-                  onChange={(e) => setNewTeamName(e.target.value)}
+                  value={activeTeamForm.name}
+                  onChange={(e) => setTeamForm({ ...activeTeamForm, name: e.target.value })}
                   placeholder="Team name"
-                  className="flex-1 rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+                  className="w-40 rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
                 />
+                <div className="flex gap-1.5">
+                  {PLAYER_COLORS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      title={c}
+                      onClick={() => setTeamForm({ ...activeTeamForm, color: c })}
+                      className={`h-7 w-7 rounded-full border-2 ${activeTeamForm.color === c ? 'border-amber-400' : 'border-transparent'}`}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
                 <button
-                  type="submit"
-                  disabled={addingTeam}
-                  className="rounded-lg border border-stone-700 px-4 py-2 text-sm text-stone-300 disabled:opacity-40"
+                  type="button"
+                  onClick={() => setShowTeamIconPicker(true)}
+                  title="Team icon"
+                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-stone-700 bg-stone-900 hover:border-amber-500"
                 >
-                  {addingTeam ? 'Adding…' : 'Add team'}
+                  {activeTeamForm.icon ? (
+                    <img src={activeTeamForm.icon} alt="" className="h-5 w-5 object-contain" />
+                  ) : (
+                    <span className="text-xs text-stone-600">+</span>
+                  )}
                 </button>
+                <button type="submit" disabled={savingTeam} className="rounded-lg border border-stone-700 px-4 py-2 text-sm text-stone-300 disabled:opacity-40">
+                  {savingTeam ? 'Saving…' : activeTeamForm.id === 'new' ? 'Add team' : 'Save changes'}
+                </button>
+                {teamForm && (
+                  <button type="button" onClick={() => setTeamForm(null)} className="rounded-lg border border-stone-700 px-4 py-2 text-sm text-stone-300">
+                    Cancel
+                  </button>
+                )}
               </form>
+              {showTeamIconPicker && (
+                <ProfileIconPicker
+                  currentIcon={activeTeamForm.icon}
+                  onSelect={(icon) => {
+                    setTeamForm({ ...activeTeamForm, icon });
+                    setShowTeamIconPicker(false);
+                  }}
+                  onClose={() => setShowTeamIconPicker(false)}
+                />
+              )}
             </div>
           )}
 

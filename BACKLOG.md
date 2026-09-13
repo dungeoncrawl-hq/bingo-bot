@@ -2418,3 +2418,83 @@ instead of renumbering the existing list.
     pages' actual job is (moderation/accounts vs. growth metrics vs.
     template editing) -- one shared shell (nav, stat strip, table style)
     is probably the right target, not identical page-by-page layouts.
+
+## Manage Dungeon redesign
+53. **`EditChallengePage.tsx` rebuilt as a tabbed Board/Players/Settings
+    shell**, replacing the one long scroll (header -> details form ->
+    invite box -> randomize -> the board -> teams -> players -> Discord
+    form). **Shipped 2026-09-13.** Same "Manage Dungeon" mockup pattern
+    as #50 -- prototyped as a standalone Artifact against this account's
+    real `Ototo Dungeon` (Standard/Coop) and `adventure test`
+    (Adventure/Solo) data across several iterations, reviewed with the
+    host, then ported into the real page. Every existing handler/
+    capability survived the move unchanged -- this is a layout redesign,
+    not a feature cut.
+
+    **Shared with #50's cards** rather than duplicated: `STATUS_STYLE`/
+    `GAME_MODE_LABEL` moved into `dungeonStatus.ts`, the small icon
+    components (`CopyIcon`/`EditIcon`/`CheckIcon`/`PersonIcon`/
+    `PublishIcon`/`BoardTypeIcon`) into a new `DungeonIcons.tsx` --
+    `DashboardPage.tsx` now imports both instead of defining its own
+    copy, so the two pages' status pill/icons can't drift apart.
+
+    **Header**: board-type + game-mode pills, a real status pill
+    (`displayStatus`-driven, not just the raw draft/active DB column),
+    Copy Invite and Publish/Unpublish as real buttons. Delete moved out
+    of the header entirely, into Settings' new Danger Zone -- shown only
+    while still a draft, replaced by an explanatory note once a dungeon
+    has real player progress riding on it (today's page just silently
+    omitted the button with no explanation).
+
+    **Board tab**: a "N/total tiles set" progress chip, and -- new --a
+    locked-tiles banner once a dungeon has started; previously a host
+    only discovered tile conditions were frozen by opening the tile
+    editor and reading its own inline warning. Adventure gets a static
+    note explaining forks/lanes/no-randomize where Standard's Randomize
+    toolbar would sit. Both board renderers (5x5 grid, 9-column Adventure
+    path) kept their exact existing `tileAt`/`onClick`/boss-styling
+    logic, just extracted into a shared `TileButton` (grid cell vs.
+    Adventure lane slot were rendering near-identical markup at two call
+    sites) -- Adventure boss tiles also gained a small "Boss"/"Final
+    Boss" text tag next to the existing red border treatment.
+
+    **Players tab**: the roster now groups by team when `game_mode`
+    is `'team'` (each team a header + its members, plus a trailing
+    "Unassigned" group) instead of one flat list with a bare `<select>`
+    per row -- flat list unchanged for Solo/Coop. Make-co-host/Remove
+    became real icon buttons instead of underlined text.
+
+    **New: a team gets its own color and icon**, not just a name.
+    `teams.color`/`teams.icon` added to `schema.sql` (mirrors
+    `profiles.color`/`profiles.icon_url`'s own exact CHECK shape --
+    `color` a closed 7-value palette identical to `PLAYER_COLORS`,
+    `icon` a domain-prefix check against the same
+    oldschool.runescape.wiki catalog `profiles.icon_url` already
+    allows). The existing `ProfileIconPicker.tsx` modal is reused as-is
+    for the icon -- no second picker built. A team chip is now a
+    click-to-edit control (name + `PLAYER_COLORS` swatch row + icon
+    picker button, "Add team"/"Save changes" depending on whether a
+    real team or the default blank form is active); each participant
+    row's team `<select>` gained a small color-dot prefix showing their
+    current assignment. **Needs the schema.sql migration run by hand in
+    Supabase before color/icon actually persist** (no direct DDL access,
+    per standing practice) -- confirmed live that inserting before the
+    migration fails cleanly (`PGRST204`, "Could not find the 'color'
+    column") with no crash, and that a team row with no color/icon at
+    all (the pre-migration shape) renders its chip with the correct
+    fallback (amber, first-letter-of-name) rather than breaking.
+
+    Live-verified signed in as the real host: `Ototo Dungeon` (progress
+    chip, locked banner, Discord Connected state, Delete correctly
+    replaced by the explanatory note, flat 2-participant roster),
+    `September 2026 Community Dungeon` (draft -- details form, Discord
+    Not-connected, Delete button present), `adventure test` (path
+    renderer with Boss/Final Boss tags, the Adventure note, all 3 real
+    participants). A scratch Team-mode draft (`team-mode-test`, deleted
+    after) confirmed the team form's name/color/icon controls, the
+    click-to-edit flow, and the grouped-roster headers all work
+    correctly client-side, and was used for the pre-migration failure/
+    fallback checks above. `TileEditorForm` still opens/saves/deletes
+    tiles correctly on both board types post-move. Build/lint/295 tests
+    all passed throughout (2 commits: the shell rebuild, then the team
+    color/icon feature).
