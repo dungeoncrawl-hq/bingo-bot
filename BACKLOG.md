@@ -2399,3 +2399,22 @@ instead of renumbering the existing list.
     3x3/4x4's own scoring feels like against a 5x5's (fewer tiles at the
     same 1-point default means a much lower ceiling -- may want a
     different default point value per size, or leave that to the host).
+
+## Admin UX (continued)
+52. **Overhaul the site-admin UI -- modernize it and organize it better**,
+    beyond #33's mobile-responsiveness pass (which fixed overflow/nav-in
+    but didn't touch the actual visual design or information layout).
+    Today's 8 pages (`AdminDashboardPage`, `AdminAccountsPage`,
+    `AdminParticipantsPage`, `AdminAnnouncementsPage`,
+    `AdminRandomizeSettingsPage`, `AdminGrowthPage`, `AdminFeedbackPage`,
+    `AdminDiscordTemplatesPage`, tabbed via `AdminLayout.tsx`) still read
+    as plain data-dump tables/forms with none of the card/status-pill/
+    stat-strip visual language the rest of the site picked up this
+    round (`DashboardPage.tsx`'s card redesign, the Adventure
+    leaderboard, `BoardPage.tsx`'s header menu). Worth a mockup pass
+    first (this session's established pattern: a standalone Artifact
+    against real admin data, reviewed before touching app code) rather
+    than jumping straight to code, given how different each of the 8
+    pages' actual job is (moderation/accounts vs. growth metrics vs.
+    template editing) -- one shared shell (nav, stat strip, table style)
+    is probably the right target, not identical page-by-page layouts.
