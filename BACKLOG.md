@@ -2378,3 +2378,24 @@ instead of renumbering the existing list.
     screenshot tool was unreliable at the time -- DOM measurement stood
     in as the verification method instead of a visual screenshot).
     Build/lint/295 tests all passed.
+
+## Board sizes
+51. **Smaller Standard board sizes -- a 3x3 and a 4x4 mode**, alongside
+    today's fixed 5x5, for a shorter or lower-stakes dungeon that doesn't
+    need 25 tiles. `challenges.board_size` already exists in the schema
+    and is already used for Adventure's own size variant ('small' today,
+    the only one built) -- a Standard dungeon leaves it null right now,
+    so the natural shape is to start writing '3x3'/'4x4'/'5x5' there
+    instead of leaving it null, defaulting to '5x5' for every existing
+    row. `GRID_SIZE` is hardcoded to `5` in four separate places today
+    (`boardImage.ts`, `BoardPage.tsx`, `EditChallengePage.tsx`,
+    `server/challengeProgress.ts`) that would all need to read the
+    challenge's own `board_size` instead of assuming 5. Needs design
+    thought on: whether Randomize/`randomizeBoard.ts` needs a size
+    parameter (today it just fills whatever empty slots it's handed, so
+    probably not), whether an existing 5x5 dungeon could ever change
+    size after tiles exist (leans no -- same "board_type never changes
+    post-creation" precedent adventure already sets), and what a
+    3x3/4x4's own scoring feels like against a 5x5's (fewer tiles at the
+    same 1-point default means a much lower ceiling -- may want a
+    different default point value per size, or leave that to the host).
