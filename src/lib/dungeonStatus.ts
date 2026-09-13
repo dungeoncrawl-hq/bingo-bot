@@ -2,6 +2,8 @@
 // alone -- kept out of DashboardPage.tsx so it's unit-testable without a
 // DB or React around it (matches this codebase's usual split between pure
 // lib logic and the page that renders it).
+import type { Challenge } from '../db/types';
+
 export interface DungeonDates {
   status: 'draft' | 'active' | 'ended';
   start_date: string; // "YYYY-MM-DD"
@@ -14,6 +16,18 @@ export interface DungeonDates {
 // the normal flow. So "upcoming" and "past" both have to come from
 // start_date/end_date vs. today, not the stored status alone.
 export type DisplayStatus = 'draft' | 'upcoming' | 'active' | 'past';
+
+// Shared status-pill styling -- one definition so `DashboardPage.tsx`'s
+// dungeon cards and `EditChallengePage.tsx`'s header pill can never drift
+// apart on what "Active" (or any other status) looks like.
+export const STATUS_STYLE: Record<DisplayStatus, { label: string; className: string }> = {
+  draft: { label: 'Draft', className: 'border-stone-700 bg-stone-900 text-stone-400' },
+  upcoming: { label: 'Upcoming', className: 'border-blue-800 bg-blue-950/40 text-blue-400' },
+  active: { label: 'Active', className: 'border-green-800 bg-green-950/40 text-green-400' },
+  past: { label: 'Past', className: 'border-stone-800 bg-stone-950 text-stone-600' },
+};
+
+export const GAME_MODE_LABEL: Record<Challenge['game_mode'], string> = { solo: 'Solo', coop: 'Coop', team: 'Team' };
 
 export function displayStatus(c: DungeonDates, today: string): DisplayStatus {
   if (c.status === 'draft') return 'draft';
