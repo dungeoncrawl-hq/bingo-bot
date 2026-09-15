@@ -994,3 +994,20 @@ alter table teams add column if not exists color text not null default '#f59e0b'
   check (color in ('#f59e0b', '#38bdf8', '#a78bfa', '#f472b6', '#34d399', '#22d3ee', '#ffffff'));
 alter table teams add column if not exists icon text
   check (icon is null or icon like 'https://oldschool.runescape.wiki/images/%');
+
+-- 2026-09-15 -- a per-host opt-out for the new daily Discord summary
+-- (src/server/discordDailySummary.ts), alongside the new "dungeon ended"
+-- embed (src/server/challengeLifecycle.ts, no setting -- always sent,
+-- same as every existing tile/line/board completion embed). Defaults to
+-- true (opt-out, not opt-in) so connecting a webhook keeps behaving the
+-- way every other notification already does -- on unless a host turns
+-- it off, not silent until they turn it on.
+alter table challenges add column if not exists discord_daily_summary_enabled boolean not null default true;
+
+-- Re-declared with the new column added, same table-vs-column-grant
+-- reasoning as this exact grant's own comment above (a blanket
+-- table-level UPDATE grant makes a column-only revoke a no-op, so the
+-- whole allowlist has to be re-granted together, not patched with a
+-- second narrower grant).
+revoke update on challenges from authenticated;
+grant update (name, start_date, end_date, status, discord_webhook_url, discord_daily_summary_enabled) on challenges to authenticated;

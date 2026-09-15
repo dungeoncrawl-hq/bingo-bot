@@ -4,6 +4,9 @@ import {
   buildTileCompletionEmbed,
   buildLineCompletionEmbed,
   buildBoardCompletionEmbed,
+  buildDungeonEndedEmbed,
+  buildDailySummaryEmbed,
+  resolveLeaderboardParticipants,
   type ParticipantLite,
   type ChallengeLite,
 } from './discordEmbeds';
@@ -306,5 +309,147 @@ describe('buildTileCompletionEmbed -- adventure boss tiles', () => {
       challenge: { ...CHALLENGE, board_type: 'adventure' },
     });
     expect(embed.image).toBeUndefined();
+  });
+});
+
+describe('resolveLeaderboardParticipants', () => {
+  const withTeams = [
+    { id: 'a', rsn: '26 Limont', team_id: 'team1' },
+    { id: 'b', rsn: 'otototo', team_id: 'team1' },
+    { id: 'c', rsn: 'Claude Test', team_id: 'team2' },
+  ];
+  const teamNameById = new Map([
+    ['team1', 'Ironmen'],
+    ['team2', 'Mainscapers'],
+  ]);
+
+  it('leaves solo participants untouched', () => {
+    const result = resolveLeaderboardParticipants('solo', withTeams, teamNameById);
+    expect(result.leaderboardParticipantIds).toEqual(['a', 'b', 'c']);
+    expect(result.embedParticipants).toEqual(withTeams);
+  });
+
+  it('leaves coop participants untouched -- no team collapsing', () => {
+    const result = resolveLeaderboardParticipants('coop', withTeams, teamNameById);
+    expect(result.leaderboardParticipantIds).toEqual(['a', 'b', 'c']);
+  });
+
+  it('collapses team mode to one representative per team, lexicographically smallest id', () => {
+    const result = resolveLeaderboardParticipants('team', withTeams, teamNameById);
+    expect(result.leaderboardParticipantIds.slice().sort()).toEqual(['a', 'c']);
+    expect(result.embedParticipants.find((p) => p.id === 'a')?.rsn).toBe('Team Ironmen');
+    expect(result.embedParticipants.find((p) => p.id === 'c')?.rsn).toBe('Team Mainscapers');
+  });
+
+  it('excludes an unassigned participant (team_id null) from team mode entirely', () => {
+    const withUnassigned = [...withTeams, { id: 'd', rsn: 'Loner', team_id: null }];
+    const result = resolveLeaderboardParticipants('team', withUnassigned, teamNameById);
+    expect(result.leaderboardParticipantIds).not.toContain('d');
+  });
+
+  it('falls back to "Unknown Team" for a team id missing from teamNameById', () => {
+    const result = resolveLeaderboardParticipants('team', withTeams, new Map());
+    expect(result.embedParticipants.find((p) => p.id === 'a')?.rsn).toBe('Team Unknown Team');
+  });
+});
+
+describe('buildDungeonEndedEmbed', () => {
+  it('titles it with the dungeon name and a wrap-up tone', () => {
+    const embed = buildDungeonEndedEmbed({ challenge: CHALLENGE, leaderboard: [], participants: PARTICIPANTS });
+    expect(embed.title).toBe('🏁 Bingo Time! has ended!');
+  });
+
+  it('includes the final leaderboard field', () => {
+    const embed = buildDungeonEndedEmbed({
+      challenge: CHALLENGE,
+      leaderboard: [entry('a', 10), entry('b', 5)],
+      participants: PARTICIPANTS,
+    });
+    expect(embed.fields?.find((f) => f.name === 'Final Leaderboard')?.value).toBe('🥇 26 Limont — 10 pts\n🥈 otototo — 5 pts');
+  });
+
+  it('falls back to a plain message when no one scored', () => {
+    const embed = buildDungeonEndedEmbed({ challenge: CHALLENGE, leaderboard: [], participants: PARTICIPANTS });
+    expect(embed.fields?.find((f) => f.name === 'Final Leaderboard')?.value).toBe('No one scored any points.');
+  });
+
+  it('ends with a field linking back to the board', () => {
+    const embed = buildDungeonEndedEmbed({ challenge: CHALLENGE, leaderboard: [], participants: PARTICIPANTS });
+    expect(embed.fields?.at(-1)?.value).toBe('[Bingo Time!](https://dungeoncrawl.lol/c/bingo-time)');
+  });
+
+  it('has no image/thumbnail -- not tied to any one participant\'s board state', () => {
+    const embed = buildDungeonEndedEmbed({ challenge: CHALLENGE, leaderboard: [], participants: PARTICIPANTS });
+    expect(embed.image).toBeUndefined();
+    expect(embed.thumbnail).toBeUndefined();
+  });
+});
+
+describe('buildDailySummaryEmbed', () => {
+  it('states the 24h tile count and days remaining in the description', () => {
+    const embed = buildDailySummaryEmbed({
+      challenge: CHALLENGE,
+      tilesCompletedToday: 3,
+      leaderboard: [],
+      participants: PARTICIPANTS,
+      daysRemaining: 5,
+    });
+    expect(embed.description).toBe('3 tiles completed in the last 24 hours. 5 days remaining.');
+  });
+
+  it('singularizes "tile"/"day" at exactly 1', () => {
+    const embed = buildDailySummaryEmbed({
+      challenge: CHALLENGE,
+      tilesCompletedToday: 1,
+      leaderboard: [],
+      participants: PARTICIPANTS,
+      daysRemaining: 1,
+    });
+    expect(embed.description).toBe('1 tile completed in the last 24 hours. 1 day remaining.');
+  });
+
+  it('reads sensibly on a quiet day with zero activity, rather than being suppressed entirely', () => {
+    const embed = buildDailySummaryEmbed({
+      challenge: CHALLENGE,
+      tilesCompletedToday: 0,
+      leaderboard: [],
+      participants: PARTICIPANTS,
+      daysRemaining: 12,
+    });
+    expect(embed.description).toBe('0 tiles completed in the last 24 hours. 12 days remaining.');
+  });
+
+  it('limits the leaderboard field to the top 3', () => {
+    const fourth: ParticipantLite = { id: 'd', rsn: 'Fourth' };
+    const embed = buildDailySummaryEmbed({
+      challenge: CHALLENGE,
+      tilesCompletedToday: 4,
+      leaderboard: [entry('a', 4), entry('b', 3), entry('c', 2), entry('d', 1)],
+      participants: [...PARTICIPANTS, fourth],
+      daysRemaining: 5,
+    });
+    expect(embed.fields?.find((f) => f.name === 'Leaderboard')?.value.split('\n')).toHaveLength(3);
+  });
+
+  it('falls back to a plain message when no one has scored yet', () => {
+    const embed = buildDailySummaryEmbed({
+      challenge: CHALLENGE,
+      tilesCompletedToday: 0,
+      leaderboard: [],
+      participants: PARTICIPANTS,
+      daysRemaining: 5,
+    });
+    expect(embed.fields?.find((f) => f.name === 'Leaderboard')?.value).toBe('No one has scored yet.');
+  });
+
+  it('ends with a field linking back to the board', () => {
+    const embed = buildDailySummaryEmbed({
+      challenge: CHALLENGE,
+      tilesCompletedToday: 0,
+      leaderboard: [],
+      participants: PARTICIPANTS,
+      daysRemaining: 5,
+    });
+    expect(embed.fields?.at(-1)?.value).toBe('[Bingo Time!](https://dungeoncrawl.lol/c/bingo-time)');
   });
 });

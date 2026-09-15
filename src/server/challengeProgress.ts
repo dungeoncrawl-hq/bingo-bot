@@ -7,7 +7,7 @@
 // insertRowReturning's comment in supabaseAdmin.ts).
 import { selectRows, insertRowReturning, callRpc, callRpcReturning } from './supabaseAdmin.js';
 import { relayToDiscord } from './discordRelay.js';
-import { buildTileCompletionEmbed, buildLineCompletionEmbed, buildBoardCompletionEmbed } from './discordEmbeds.js';
+import { buildTileCompletionEmbed, buildLineCompletionEmbed, buildBoardCompletionEmbed, resolveLeaderboardParticipants } from './discordEmbeds.js';
 import type { ParticipantLite } from './discordEmbeds.js';
 import { fetchBanterPools } from './discordBanterStore.js';
 import { fetchTitleTemplates } from './discordTitleStore.js';
@@ -397,21 +397,11 @@ export async function checkChallengeProgress(participantId: string, isLogout: bo
     subject = 'The group';
     noFirstConcept = true;
   } else if (challenge.game_mode === 'team' && participant.team_id) {
-    const teamName = teamNameById.get(participant.team_id) ?? 'Unknown Team';
-    subject = `Team ${teamName}`;
-    // One representative per team, lexicographically smallest id --
-    // matches computeLeaderboard's own tie-break convention.
-    const representativeByTeam = new Map<string, string>();
-    for (const p of allParticipants) {
-      if (!p.team_id) continue;
-      const current = representativeByTeam.get(p.team_id);
-      if (!current || p.id < current) representativeByTeam.set(p.team_id, p.id);
-    }
-    leaderboardParticipantIds = [...representativeByTeam.values()];
-    embedParticipants = leaderboardParticipantIds.map((id) => {
-      const rep = allParticipants.find((p) => p.id === id)!;
-      return { id: rep.id, rsn: `Team ${teamNameById.get(rep.team_id!) ?? 'Unknown Team'}` };
-    });
+    subject = `Team ${teamNameById.get(participant.team_id) ?? 'Unknown Team'}`;
+    // Shared with the dungeon-ended/daily-summary embeds -- see
+    // discordEmbeds.ts's own comment on the representative-per-team
+    // collapse this does.
+    ({ leaderboardParticipantIds, embedParticipants } = resolveLeaderboardParticipants('team', allParticipants, teamNameById));
   }
 
   const leaderboard = computeLeaderboard(tiles, challengeCompletions, leaderboardParticipantIds, firstCompleters);

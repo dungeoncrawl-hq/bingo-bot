@@ -2498,3 +2498,54 @@ instead of renumbering the existing list.
     tiles correctly on both board types post-move. Build/lint/295 tests
     all passed throughout (2 commits: the shell rebuild, then the team
     color/icon feature).
+
+54. **Discord now hears about a dungeon's own lifecycle, not just player
+    moments.** **Shipped 2026-09-15.** Two new embeds, both posted
+    through the existing `relayToDiscord`/`DiscordEmbed` mechanics
+    tile/line/board completions already use -- new content, not a new
+    delivery path.
+
+    **"Dungeon ended"**: `closeEndedChallenges()` (already running daily
+    off `api/sync-snapshots.ts`'s cron once an `end_date` passes) now
+    posts a `🏁 {name} has ended!` embed with the final leaderboard and
+    board link, for any closed challenge with a webhook connected. One
+    challenge's fetch/relay failure can't take down the others in the
+    same cron run -- caught and logged per challenge.
+
+    **Daily summary**: a new `discordDailySummary.ts`, run right after
+    `closeEndedChallenges()` in the same cron, posts a calmer
+    `📅 Daily update` embed per active dungeon -- last-24h tile count,
+    top-3 standings, days remaining -- once a day, every day, including
+    quiet days with 0 completions (confirmed with the host: never
+    suppressed on a zero-activity day). New host-facing toggle in
+    Settings, **on by default**, to opt out (`discord_daily_summary_enabled`
+    on `challenges`, mirrors `ProfilePage.tsx`'s existing optimistic-
+    checkbox pattern). Excludes published-but-not-yet-started dungeons
+    via an explicit `start_date <= today` guard, since the DB has no
+    separate "upcoming" status.
+
+    Both reuse a newly extracted `resolveLeaderboardParticipants` in
+    `discordEmbeds.ts` -- the same solo/coop/team leaderboard-participant
+    logic `challengeProgress.ts` already had inline (team mode collapses
+    to one representative id per team, relabeled `Team {name}`), now
+    shared instead of duplicated a third time. `challengeProgress.ts`'s
+    own team-mode branch was refactored onto the shared helper with its
+    exact original gating condition preserved byte-for-byte -- its full
+    existing test suite still passes unchanged, confirming no behavior
+    drift.
+
+    **Needs the schema.sql migration run by hand in Supabase before the
+    daily-summary toggle actually persists/takes effect** (no direct DDL
+    access, per standing practice) -- confirmed live via a scratch
+    script (real `closeEndedChallenges`/`sendDailySummaries` functions,
+    a local HTTP listener standing in for Discord so nothing was ever
+    posted to a real webhook) that: (1) the ended-embed posts correctly
+    end-to-end today, with the right title, leaderboard, and board link;
+    and (2) pre-migration, `sendDailySummaries()` fails gracefully --
+    logs the missing-column error, returns `{sent: 0}`, posts nothing --
+    without throwing, so the rest of the cron (hiscores sync,
+    `closeEndedChallenges`) keeps running even before the migration is
+    applied. Build/lint/311 tests all passed (6 new cases in
+    `discordEmbeds.test.ts` covering `resolveLeaderboardParticipants`
+    and both new embed builders, including the empty-leaderboard and
+    zero-activity-today text).

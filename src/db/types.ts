@@ -45,6 +45,10 @@ export interface Challenge {
   end_date: string;
   status: 'draft' | 'active' | 'ended';
   discord_webhook_url: string | null;
+  // Opt-out, not opt-in -- defaults to true (see schema.sql), so a host
+  // who never touches this setting still gets the daily pulse once a
+  // webhook is connected. Only meaningful once discord_webhook_url is set.
+  discord_daily_summary_enabled: boolean;
   created_at: string;
 }
 

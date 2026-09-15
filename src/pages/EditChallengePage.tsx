@@ -142,6 +142,8 @@ export default function EditChallengePage() {
   // this toggles the actual URL form open, rather than the form always
   // being visible with the raw secret sitting in a text input.
   const [editingWebhook, setEditingWebhook] = useState(false);
+  const [dailySummaryEnabled, setDailySummaryEnabled] = useState(true);
+  const [savingDailySummary, setSavingDailySummary] = useState(false);
   const [inviteCopied, setInviteCopied] = useState(false);
   const [difficulty, setDifficulty] = useState<Difficulty>('medium');
   const [randomizing, setRandomizing] = useState(false);
@@ -186,6 +188,10 @@ export default function EditChallengePage() {
   useEffect(() => {
     if (challenge && challenge !== 'not-found') {
       setDiscordWebhookUrl(challenge.discord_webhook_url ?? '');
+      // `?? true` covers a pre-migration row where the column doesn't
+      // exist yet and PostgREST simply omits it (undefined, not a real
+      // false) -- matches the column's own eventual DB default.
+      setDailySummaryEnabled(challenge.discord_daily_summary_enabled ?? true);
       setEditName(challenge.name);
       setEditStartDate(challenge.start_date);
       setEditEndDate(challenge.end_date);
@@ -430,6 +436,20 @@ export default function EditChallengePage() {
     setEditingWebhook(false);
     setTimeout(() => setWebhookSaved(false), 2000);
     await load();
+  }
+
+  // Optimistic update + revert-on-error, same shape as
+  // ProfilePage.tsx's handleToggleEmailNotifications -- fails silently
+  // (matching saveDiscordWebhook above) until the schema.sql migration
+  // adding this column has actually been run.
+  async function handleToggleDailySummary(next: boolean) {
+    if (!challenge || challenge === 'not-found') return;
+    const prev = dailySummaryEnabled;
+    setDailySummaryEnabled(next);
+    setSavingDailySummary(true);
+    const { error } = await getSupabase().from('challenges').update({ discord_daily_summary_enabled: next }).eq('id', challenge.id);
+    setSavingDailySummary(false);
+    if (error) setDailySummaryEnabled(prev);
   }
 
   if (authLoading || challenge === null) return null;
@@ -952,6 +972,15 @@ export default function EditChallengePage() {
               </form>
             )}
             <p className="mt-2 text-xs text-stone-600">Server Settings → Integrations → Webhooks → New Webhook → Copy Webhook URL.</p>
+            <label className="mt-3 flex items-center gap-2 text-xs text-stone-400">
+              <input
+                type="checkbox"
+                checked={dailySummaryEnabled}
+                onChange={(e) => handleToggleDailySummary(e.target.checked)}
+                disabled={savingDailySummary || !discordWebhookUrl}
+              />
+              Send a daily summary (activity + standings, once a day)
+            </label>
           </div>
 
           <div className="mt-6">

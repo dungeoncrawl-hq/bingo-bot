@@ -18,6 +18,8 @@ const TILE_COLOR = 0x22c55e; // green-500
 const FIRST_COLOR = 0xfbbf24; // amber-400, matches the board's star badge
 const LINE_COLOR = 0xf59e0b; // amber-500
 const BOARD_COLOR = 0xffd700; // a richer gold for the biggest moment
+const ENDED_COLOR = 0x8b5cf6; // violet-500 -- distinct from every completion color above
+const SUMMARY_COLOR = 0x38bdf8; // sky-400 -- a calmer, informational tone vs. the celebratory colors
 
 export interface ParticipantLite {
   id: string;
@@ -165,5 +167,83 @@ export function buildBoardCompletionEmbed(params: {
     color: BOARD_COLOR,
     image: challenge.board_type === 'adventure' ? undefined : { url: boardImageUrl(participant.id) },
     fields: [boardLinkField(challenge)],
+  };
+}
+
+// Who counts as a leaderboard entry, and what do we call them -- shared by
+// every challenge-wide embed (a single participant's own tile/line/board
+// completion has its own "who triggered this" concept and stays inline in
+// challengeProgress.ts, which only calls this for its own team-mode case).
+// Solo/Coop: every participant stands for themselves, untouched. Team:
+// collapses to one representative per team (lexicographically smallest id,
+// matching computeLeaderboard's own tie-break), relabeled to `Team ${name}`
+// so formatLeaderboardField/computeLeaderboard need no changes at all.
+export function resolveLeaderboardParticipants(
+  gameMode: 'solo' | 'coop' | 'team',
+  allParticipants: (ParticipantLite & { team_id: string | null })[],
+  teamNameById: Map<string, string>,
+): { leaderboardParticipantIds: string[]; embedParticipants: ParticipantLite[] } {
+  if (gameMode !== 'team') {
+    return { leaderboardParticipantIds: allParticipants.map((p) => p.id), embedParticipants: allParticipants };
+  }
+  const representativeByTeam = new Map<string, string>();
+  for (const p of allParticipants) {
+    if (!p.team_id) continue;
+    const current = representativeByTeam.get(p.team_id);
+    if (!current || p.id < current) representativeByTeam.set(p.team_id, p.id);
+  }
+  const leaderboardParticipantIds = [...representativeByTeam.values()];
+  const embedParticipants = leaderboardParticipantIds.map((id) => {
+    const rep = allParticipants.find((p) => p.id === id)!;
+    return { id: rep.id, rsn: `Team ${teamNameById.get(rep.team_id!) ?? 'Unknown Team'}` };
+  });
+  return { leaderboardParticipantIds, embedParticipants };
+}
+
+// The dungeon's own lifecycle event -- posted once, the day its end_date
+// passes (challengeLifecycle.ts's closeEndedChallenges), not tied to any
+// one participant's board state, so no image/thumbnail like the
+// completion embeds above.
+export function buildDungeonEndedEmbed(params: {
+  challenge: ChallengeLite;
+  leaderboard: LeaderboardEntry[];
+  participants: ParticipantLite[];
+}): DiscordEmbed {
+  const { challenge, leaderboard, participants } = params;
+  return {
+    title: `🏁 ${challenge.name} has ended!`,
+    description: 'Final standings:',
+    color: ENDED_COLOR,
+    fields: [
+      { name: 'Final Leaderboard', value: formatLeaderboardField(leaderboard, participants) || 'No one scored any points.' },
+      boardLinkField(challenge),
+    ],
+  };
+}
+
+// A recurring pulse for a long-running dungeon, independent of any single
+// completion -- sent once a day (src/server/discordDailySummary.ts) for
+// every active, not-yet-ended dungeon that hasn't opted out
+// (discord_daily_summary_enabled). Posts every day regardless of activity
+// level by design (confirmed with the host) -- a quiet day still reads as
+// "0 tiles, N days left" rather than being silently skipped.
+export function buildDailySummaryEmbed(params: {
+  challenge: ChallengeLite;
+  tilesCompletedToday: number;
+  leaderboard: LeaderboardEntry[];
+  participants: ParticipantLite[];
+  daysRemaining: number;
+}): DiscordEmbed {
+  const { challenge, tilesCompletedToday, leaderboard, participants, daysRemaining } = params;
+  const tilePlural = tilesCompletedToday === 1 ? '' : 's';
+  const dayPlural = daysRemaining === 1 ? '' : 's';
+  return {
+    title: `📅 Daily update — ${challenge.name}`,
+    description: `${tilesCompletedToday} tile${tilePlural} completed in the last 24 hours. ${daysRemaining} day${dayPlural} remaining.`,
+    color: SUMMARY_COLOR,
+    fields: [
+      { name: 'Leaderboard', value: formatLeaderboardField(leaderboard.slice(0, 3), participants) || 'No one has scored yet.' },
+      boardLinkField(challenge),
+    ],
   };
 }
