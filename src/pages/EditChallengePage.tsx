@@ -10,7 +10,7 @@ import PlayerChip from '../components/PlayerChip';
 import HostBadge from '../components/HostBadge';
 import ProfileIconPicker from '../components/ProfileIconPicker';
 import { CopyIcon, PublishIcon, BoardTypeIcon } from '../components/DungeonIcons';
-import { formatTileGoal, type TileCondition } from '../lib/tileConditions';
+import { formatTileGoal, gridSizeFromBoardSize, type TileCondition } from '../lib/tileConditions';
 import { daysBetween, displayStatus, formatLocalRange, MAX_DUNGEON_LENGTH_DAYS, STATUS_STYLE, GAME_MODE_LABEL } from '../lib/dungeonStatus';
 import { formatBytes } from '../lib/format';
 import { PLAYER_COLORS } from '../lib/playerColors';
@@ -24,7 +24,6 @@ import {
 import { randomizeBoard } from '../lib/randomizeBoard';
 import { DEFAULT_RANDOMIZE_SETTINGS, type Difficulty, type RandomizeSettings } from '../lib/randomizeSettings';
 
-const GRID_SIZE = 5;
 // Same reasoning as NewChallengePage.tsx's own copy -- dates are a fixed
 // UTC calendar date (BACKLOG.md #14), shown converted to the viewer's own
 // zone so a host editing an evening date isn't surprised later.
@@ -243,10 +242,11 @@ export default function EditChallengePage() {
   // section intro in BACKLOG.md).
   async function handleRandomize() {
     if (!challenge || challenge === 'not-found') return;
+    const gridSize = gridSizeFromBoardSize(challenge.board_size);
     const emptySlots: GridLayout[] = [];
-    for (let i = 0; i < GRID_SIZE * GRID_SIZE; i++) {
-      const row = Math.floor(i / GRID_SIZE);
-      const col = i % GRID_SIZE;
+    for (let i = 0; i < gridSize * gridSize; i++) {
+      const row = Math.floor(i / gridSize);
+      const col = i % gridSize;
       if (!tileAt({ row, col })) emptySlots.push({ row, col });
     }
     if (emptySlots.length === 0) return;
@@ -494,9 +494,10 @@ export default function EditChallengePage() {
     day: 'numeric',
     timeZone: 'UTC',
   });
-  const totalSlots = challenge.board_type === 'adventure' ? ADVENTURE_SMALL_LAYOUT.length : GRID_SIZE * GRID_SIZE;
+  const gridSize = gridSizeFromBoardSize(challenge.board_size);
+  const totalSlots = challenge.board_type === 'adventure' ? ADVENTURE_SMALL_LAYOUT.length : gridSize * gridSize;
   const filledSlots = tiles.length;
-  const emptySlots5x5 = GRID_SIZE * GRID_SIZE - tiles.length;
+  const emptySlotsCount = gridSize * gridSize - tiles.length;
   const canRandomize = challenge.board_type === 'grid5x5' && challenge.game_mode === 'solo';
 
   async function handleCopyInvite() {
@@ -592,7 +593,7 @@ export default function EditChallengePage() {
           <div className="flex flex-wrap items-center gap-2">
             <span className="flex items-center gap-1 rounded border border-stone-700 px-1.5 py-px text-[10px] uppercase tracking-wide text-stone-500">
               <BoardTypeIcon boardType={challenge.board_type} />
-              {challenge.board_type === 'adventure' ? 'Adventure' : 'Standard'}
+              {challenge.board_type === 'adventure' ? 'Adventure' : `Standard ${gridSize}x${gridSize}`}
             </span>
             <span className="rounded border border-stone-700 px-1.5 py-px text-[10px] uppercase tracking-wide text-stone-500">
               {GAME_MODE_LABEL[challenge.game_mode]}
@@ -682,10 +683,10 @@ export default function EditChallengePage() {
                 <button
                   type="button"
                   onClick={handleRandomize}
-                  disabled={randomizing || emptySlots5x5 === 0}
+                  disabled={randomizing || emptySlotsCount === 0}
                   className="rounded-lg border border-stone-700 px-3 py-2 text-xs text-stone-300 disabled:opacity-40"
                 >
-                  {randomizing ? 'Randomizing…' : emptySlots5x5 === 0 ? 'Board full' : `Randomize ${emptySlots5x5} empty room${emptySlots5x5 === 1 ? '' : 's'}`}
+                  {randomizing ? 'Randomizing…' : emptySlotsCount === 0 ? 'Board full' : `Randomize ${emptySlotsCount} empty room${emptySlotsCount === 1 ? '' : 's'}`}
                 </button>
               </div>
             )}
@@ -736,10 +737,10 @@ export default function EditChallengePage() {
               </div>
             </div>
           ) : (
-            <div className="mt-4 grid grid-cols-5 gap-2">
-              {Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, i) => {
-                const row = Math.floor(i / GRID_SIZE);
-                const col = i % GRID_SIZE;
+            <div className="mt-4 grid gap-2" style={{ gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))` }}>
+              {Array.from({ length: gridSize * gridSize }, (_, i) => {
+                const row = Math.floor(i / gridSize);
+                const col = i % gridSize;
                 return <TileButton key={i} tile={tileAt({ row, col })} onClick={() => setEditingCell({ row, col })} emptyLabel="+ Add room" />;
               })}
             </div>

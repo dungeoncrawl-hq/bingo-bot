@@ -4,6 +4,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
 import { getSupabase } from '../db/supabaseClient';
 import { daysBetween, formatLocalRange, MAX_DUNGEON_LENGTH_DAYS } from '../lib/dungeonStatus';
+import { DEFAULT_BOARD_SIZE, STANDARD_BOARD_SIZES, type StandardBoardSize } from '../lib/tileConditions';
 
 // Every date in this app is a UTC calendar date (BACKLOG.md #14) -- shown
 // once both dates are picked, so a host setting an evening start date
@@ -25,6 +26,7 @@ export default function NewChallengePage() {
   const [slug, setSlug] = useState('');
   const [slugEdited, setSlugEdited] = useState(false);
   const [boardType, setBoardType] = useState<'grid5x5' | 'adventure'>('grid5x5');
+  const [boardSize, setBoardSize] = useState<StandardBoardSize>(DEFAULT_BOARD_SIZE);
   const [gameMode, setGameMode] = useState<'solo' | 'coop' | 'team'>('solo');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -84,7 +86,7 @@ export default function NewChallengePage() {
         name: name.trim(),
         slug: slug.trim(),
         board_type: boardType,
-        board_size: boardType === 'adventure' ? 'small' : null,
+        board_size: boardType === 'adventure' ? 'small' : boardSize,
         game_mode: gameMode,
         start_date: startDate,
         end_date: endDate,
@@ -139,7 +141,9 @@ export default function NewChallengePage() {
               }`}
             >
               <span className="block font-medium text-stone-200">Standard</span>
-              <span className="block text-xs text-stone-500">5x5 grid, 25 tiles</span>
+              <span className="block text-xs text-stone-500">
+                {boardSize} grid, {parseInt(boardSize, 10) ** 2} tiles
+              </span>
             </button>
             <button
               type="button"
@@ -159,6 +163,26 @@ export default function NewChallengePage() {
             </button>
           </div>
         </div>
+        {boardType === 'grid5x5' && (
+          <div>
+            <label className="block text-sm text-stone-400">Board size</label>
+            <div className="mt-1 grid grid-cols-3 gap-2">
+              {STANDARD_BOARD_SIZES.map((size) => (
+                <button
+                  key={size}
+                  type="button"
+                  onClick={() => setBoardSize(size)}
+                  className={`rounded-lg border px-3 py-2 text-left text-sm ${
+                    boardSize === size ? 'border-amber-500 bg-stone-900' : 'border-stone-700 bg-stone-900/50 text-stone-400'
+                  }`}
+                >
+                  <span className="block font-medium text-stone-200">{size}</span>
+                  <span className="block text-xs text-stone-500">{parseInt(size, 10) ** 2} tiles</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {boardType === 'grid5x5' && (
           <div>
             <label className="block text-sm text-stone-400">Game mode</label>

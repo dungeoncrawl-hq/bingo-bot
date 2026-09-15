@@ -691,8 +691,9 @@ export function formatContributionValue(cond: TileCondition, value: number): str
 
 // Every row, every column, and both diagonals of an NxN grid -- a completed
 // line is classic bingo scoring. Specific to board_type='grid5x5' (called
-// with size=5); a future irregular board_type brings its own scoring
-// function instead of generalizing this one.
+// with whatever size that challenge's board_size resolves to -- see
+// gridSizeFromBoardSize below); a future irregular board_type brings its
+// own scoring function instead of generalizing this one.
 export function gridLines(size: number): number[][] {
   return [
     ...Array.from({ length: size }, (_, r) => Array.from({ length: size }, (_, c) => r * size + c)),
@@ -700,4 +701,19 @@ export function gridLines(size: number): number[][] {
     Array.from({ length: size }, (_, i) => i * size + i),
     Array.from({ length: size }, (_, i) => i * size + (size - 1 - i)),
   ];
+}
+
+// BACKLOG.md #51 -- board_type='grid5x5' covers every Standard board
+// regardless of dimension; board_size (reused from Adventure's own size
+// variant, previously only ever 'small') carries the actual NxN. Every
+// consumer that used to hardcode its own `const GRID_SIZE = 5` now calls
+// this instead.
+export const STANDARD_BOARD_SIZES = ['3x3', '4x4', '5x5'] as const;
+export type StandardBoardSize = (typeof STANDARD_BOARD_SIZES)[number];
+export const DEFAULT_BOARD_SIZE: StandardBoardSize = '5x5';
+
+// Defaults to 5 for null (pre-migration rows) or anything unrecognized --
+// matches every board's only behavior before this existed.
+export function gridSizeFromBoardSize(boardSize: string | null): number {
+  return STANDARD_BOARD_SIZES.includes(boardSize as StandardBoardSize) ? parseInt(boardSize as string, 10) : 5;
 }

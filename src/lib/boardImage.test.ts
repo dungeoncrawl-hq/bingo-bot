@@ -28,20 +28,20 @@ describe('colorForCell', () => {
 describe('renderBoardImage', () => {
   it('produces a non-empty buffer starting with the PNG signature', () => {
     const cells: CellStatus[] = Array.from({ length: 25 }, (_, i) => (i % 2 === 0 ? 'done' : 'notDone'));
-    const buffer = renderBoardImage(cells);
+    const buffer = renderBoardImage(cells, 5);
     expect(buffer.length).toBeGreaterThan(0);
     expect([...buffer.subarray(0, 8)]).toEqual(PNG_SIGNATURE);
   });
 
   it('defaults missing cells to empty rather than throwing', () => {
-    const buffer = renderBoardImage([]);
+    const buffer = renderBoardImage([], 5);
     expect(buffer.length).toBeGreaterThan(0);
     expect([...buffer.subarray(0, 8)]).toEqual(PNG_SIGNATURE);
   });
 
   it('an all-empty board still shows a visible grid -- empty cells must not match the gutter color', () => {
     const cells: CellStatus[] = Array.from({ length: 25 }, () => 'empty');
-    const png = PNG.sync.read(renderBoardImage(cells));
+    const png = PNG.sync.read(renderBoardImage(cells, 5));
     // Sample a pixel from the middle of the top-left cell's interior and
     // one from the gutter strip along the image's very top edge -- if
     // empty cells ever match the gutter color again, this pair collapses
@@ -49,6 +49,16 @@ describe('renderBoardImage', () => {
     const cellPixel = pixelAt(png, 40, 40);
     const gutterPixel = pixelAt(png, 40, 2);
     expect(cellPixel).not.toEqual(gutterPixel);
+  });
+
+  it('scales the canvas down for a smaller grid (BACKLOG.md #51 -- 3x3/4x4)', () => {
+    const cells: CellStatus[] = Array.from({ length: 9 }, () => 'done');
+    const png5x5 = PNG.sync.read(renderBoardImage(cells, 5));
+    const png3x3 = PNG.sync.read(renderBoardImage(cells, 3));
+    expect(png3x3.width).toBeLessThan(png5x5.width);
+    // CELL_SIZE=84, GUTTER=8 -- 3 cells + 4 gutters = 3*84 + 4*8 = 284.
+    expect(png3x3.width).toBe(284);
+    expect(png3x3.height).toBe(284);
   });
 });
 

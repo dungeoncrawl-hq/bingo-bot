@@ -2549,3 +2549,57 @@ instead of renumbering the existing list.
     `discordEmbeds.test.ts` covering `resolveLeaderboardParticipants`
     and both new embed builders, including the empty-leaderboard and
     zero-activity-today text).
+
+55. **#51's 3x3 and 4x4 Standard board sizes, shipped alongside the
+    existing 5x5 (which stays the default).** **Shipped 2026-09-15.**
+    The hard part turned out to already be done: `gridLines(size)`
+    (`src/lib/tileConditions.ts`) -- the bingo row/column/diagonal
+    detection math -- was already written generically, just always
+    *called* with a hardcoded `5`, and `randomizeBoard.ts`/
+    `leaderboard.ts`/`firstCompletions.ts` were already fully
+    size-agnostic. The real work was replacing five independent
+    `const GRID_SIZE = 5` copies (`challengeProgress.ts`, `BoardPage.tsx`,
+    `EditChallengePage.tsx`, `boardImage.ts`,
+    `api/board-image/[participantId].ts`) with one shared
+    `gridSizeFromBoardSize()` reading the real per-challenge dimension.
+
+    **No board_type rename** -- every Standard board keeps
+    `board_type='grid5x5'` regardless of size, so every existing
+    `=== 'grid5x5'` / `!== 'adventure'` branch across the app stayed
+    correct as-is. The actual NxN now lives in `board_size` (reused from
+    Adventure's own size variant, previously only ever `'small'`) --
+    `'3x3'`/`'4x4'`/`'5x5'`. A migration backfills every existing
+    Standard challenge's null `board_size` to `'5x5'` explicitly, and
+    `NewChallengePage.tsx` now always writes a real value instead of
+    `null`.
+
+    New at creation: a "Board size" picker (3x3/9 tiles, 4x4/16 tiles,
+    5x5/25 tiles) shown under the Standard card once selected, 5x5
+    pre-selected, with the card's own subtitle now dynamic. The board
+    editor and player board both swapped their hardcoded `grid-cols-5`
+    Tailwind class for an inline `gridTemplateColumns` (matching the
+    Adventure board's own existing inline-style pattern) so the actual
+    grid renders at 3/4/5 columns correctly. The Discord embed board-image
+    PNG renderer (`boardImage.ts`) now scales its canvas to the real
+    size instead of a fixed 25-cell/5x5 image. Dashboard and Edit-screen
+    header pills now show the size (`Standard 3x3`) instead of a bare
+    "Standard" that couldn't distinguish sizes at a glance.
+
+    Live-verified via a scratch script (real DB, `checkChallengeProgress`
+    called directly against freeSpace tiles so no fake Dink events were
+    needed, no Discord webhook involved): a 3x3 board correctly produced
+    9 tile + 8 line (3 rows + 3 cols + 2 diagonals) + 1 board completion,
+    a 4x4 produced 16 tiles + 10 lines + 1 board, and the real
+    `api/board-image/[participantId]` handler (invoked directly with a
+    stub req/res, since that route is Vercel-only and isn't mounted in
+    `vite.config.ts`'s local dev API) rendered a correctly-scaled
+    284x284 PNG for the 3x3 participant and 376x376 for the 4x4 (not the
+    old fixed 5x5 canvas). Separately browser-verified signed in as the
+    real host: the New Dungeon form's size picker defaults to 5x5
+    selected, and a scratch 3x3 draft's edit screen showed the right
+    header pill ("STANDARD 3x3"), "Board (0/9)"/"9/9 ROOMS SET" after
+    Randomize, a genuine 3-column grid, and "Board full" once filled --
+    all cleaned up after. Build/lint/315 tests all passed (4 new cases
+    for the new `gridSizeFromBoardSize` helper, 1 new case in
+    `boardImage.test.ts` asserting the canvas scales down for a smaller
+    grid).

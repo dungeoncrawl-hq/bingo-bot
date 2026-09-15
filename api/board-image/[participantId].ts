@@ -7,14 +7,13 @@ import { computeHiscoresRecap } from '../../src/lib/hiscoresRecap.js';
 import type { SnapshotRow } from '../../src/lib/hiscoresRecap.js';
 import { computeFirstCompleters } from '../../src/lib/firstCompletions.js';
 import { renderBoardImage, type CellStatus } from '../../src/lib/boardImage.js';
+import { gridSizeFromBoardSize } from '../../src/lib/tileConditions.js';
 import type { Challenge, GridLayout, Tile } from '../../src/db/types.js';
 
 interface ParticipantRow {
   id: string;
   challenge_id: string;
 }
-
-const GRID_SIZE = 5;
 
 // Public, no auth -- same exposure level as the board page itself, which
 // is already public-read. Discord fetches this URL directly when
@@ -43,14 +42,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.status(404).json({ error: 'Unknown challenge' });
     return;
   }
-  // This renderer is hardcoded to the 5x5 grid (row*GRID_SIZE+col below) --
-  // discordEmbeds.ts already knows not to link here for an 'adventure'
-  // challenge, but guard directly too in case this route is ever hit for
-  // one some other way.
+  // Renders any Standard size (BACKLOG.md #51 -- 3x3/4x4/5x5, via
+  // gridSizeFromBoardSize below) but nothing else -- discordEmbeds.ts
+  // already knows not to link here for an 'adventure' challenge, but
+  // guard directly too in case this route is ever hit for one some other
+  // way.
   if (challenge.board_type !== 'grid5x5') {
     res.status(404).json({ error: 'No board image available for this board type' });
     return;
   }
+  const gridSize = gridSizeFromBoardSize(challenge.board_size);
 
   const tiles = await selectRows<Tile>('tiles', `challenge_id=eq.${encodeURIComponent(challenge.id)}&select=*`);
 
@@ -82,8 +83,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const stats = computeParticipantStats(raw, window, hiscoresRecap);
   const firstCompleters = computeFirstCompleters(challengeCompletions);
 
-  const tileByIndex = new Map(tiles.map((t) => [(t.layout as GridLayout).row * GRID_SIZE + (t.layout as GridLayout).col, t]));
-  const cells: CellStatus[] = Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, i) => {
+  const tileByIndex = new Map(tiles.map((t) => [(t.layout as GridLayout).row * gridSize + (t.layout as GridLayout).col, t]));
+  const cells: CellStatus[] = Array.from({ length: gridSize * gridSize }, (_, i) => {
     const tile = tileByIndex.get(i);
     if (!tile) return 'empty';
     const done = checkTile(tile.condition, stats).done;
@@ -91,7 +92,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return firstCompleters[tile.id] === participantId ? 'first' : 'done';
   });
 
-  const png = renderBoardImage(cells);
+  const png = renderBoardImage(cells, gridSize);
   res.setHeader('Content-Type', 'image/png');
   res.setHeader('Cache-Control', 'no-store');
   res.status(200).send(png);

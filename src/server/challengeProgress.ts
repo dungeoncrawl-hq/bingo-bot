@@ -11,7 +11,7 @@ import { buildTileCompletionEmbed, buildLineCompletionEmbed, buildBoardCompletio
 import type { ParticipantLite } from './discordEmbeds.js';
 import { fetchBanterPools } from './discordBanterStore.js';
 import { fetchTitleTemplates } from './discordTitleStore.js';
-import { checkTile, gridLines } from '../lib/tileConditions.js';
+import { checkTile, gridLines, gridSizeFromBoardSize } from '../lib/tileConditions.js';
 import { computeParticipantStats, poolStats } from '../lib/participantStats.js';
 import type { RawParticipantData } from '../lib/participantStats.js';
 import type { ParticipantStats } from '../lib/tileConditions.js';
@@ -46,8 +46,6 @@ interface ChallengeCompletionRow {
   ref: string;
   completed_at: string;
 }
-
-const GRID_SIZE = 5;
 
 // Every pool member's raw event rows + computed ParticipantStats, in
 // bulk (one .in(participant_id, ...) query per raw table, not one round
@@ -160,6 +158,7 @@ export async function checkChallengeProgress(participantId: string, isLogout: bo
     `id=eq.${encodeURIComponent(participant.challenge_id)}&select=*`,
   );
   if (!challenge) return;
+  const gridSize = gridSizeFromBoardSize(challenge.board_size);
 
   const tiles = await selectRows<Tile>('tiles', `challenge_id=eq.${encodeURIComponent(challenge.id)}&select=*`);
   if (tiles.length === 0) return;
@@ -231,9 +230,9 @@ export async function checkChallengeProgress(participantId: string, isLogout: bo
       if (await insertForPool('tile', tileId)) insertedTileIds.push(tileId);
     }
 
-    const tileByIndex = new Map(tiles.map((t) => [(t.layout as GridLayout).row * GRID_SIZE + (t.layout as GridLayout).col, t]));
+    const tileByIndex = new Map(tiles.map((t) => [(t.layout as GridLayout).row * gridSize + (t.layout as GridLayout).col, t]));
     const alreadyLineIndices = new Set(existingCompletions.filter((c) => c.kind === 'line').map((c) => c.ref));
-    const lines = gridLines(GRID_SIZE);
+    const lines = gridLines(gridSize);
 
     for (let i = 0; i < lines.length; i++) {
       const allDone = lines[i].every((idx) => {
@@ -245,7 +244,7 @@ export async function checkChallengeProgress(participantId: string, isLogout: bo
       }
     }
 
-    const boardDone = tiles.length === GRID_SIZE * GRID_SIZE && tiles.every((t) => doneTileIds.has(t.id));
+    const boardDone = tiles.length === gridSize * gridSize && tiles.every((t) => doneTileIds.has(t.id));
     const alreadyBoard = existingCompletions.some((c) => c.kind === 'board');
     if (boardDone && !alreadyBoard) {
       boardInserted = await insertForPool('board', 'board');

@@ -6,6 +6,7 @@ import {
   formatContributionValue,
   formatTileProgress,
   gridLines,
+  gridSizeFromBoardSize,
   itemCountModalDescription,
   progressPercent,
   supportsContributionBreakdown,
@@ -394,6 +395,23 @@ describe('gridLines', () => {
     const antiDiagonal = lines.find((l) => l[0] === 2 && l[l.length - 1] === 6);
     expect(mainDiagonal).toEqual([0, 4, 8]);
     expect(antiDiagonal).toEqual([2, 4, 6]);
+  });
+});
+
+describe('gridSizeFromBoardSize', () => {
+  it('parses each Standard board size to its dimension', () => {
+    expect(gridSizeFromBoardSize('3x3')).toBe(3);
+    expect(gridSizeFromBoardSize('4x4')).toBe(4);
+    expect(gridSizeFromBoardSize('5x5')).toBe(5);
+  });
+
+  it('defaults to 5 for null (pre-migration rows)', () => {
+    expect(gridSizeFromBoardSize(null)).toBe(5);
+  });
+
+  it('defaults to 5 for anything unrecognized (e.g. Adventure\'s "small")', () => {
+    expect(gridSizeFromBoardSize('small')).toBe(5);
+    expect(gridSizeFromBoardSize('bogus')).toBe(5);
   });
 });
 

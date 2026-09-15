@@ -54,7 +54,9 @@ create policy "host writes own" on challenges for all
   to authenticated using (host_id = auth.uid()) with check (host_id = auth.uid());
 
 -- One row per tile/room. `layout` is intentionally free-form jsonb: for
--- board_type='grid5x5' it holds {"row": 0-4, "col": 0-4}; a future
+-- board_type='grid5x5' it holds {"row": 0-N, "col": 0-N} (N per that
+-- challenge's own board_size -- 2 for a 3x3, 4 for a 5x5, etc., see
+-- gridSizeFromBoardSize in src/lib/tileConditions.ts); a future
 -- irregular board_type can store whatever positional/adjacency shape it
 -- needs without a schema change. `condition` reuses the exact shape of
 -- SeasonalTileCondition from rs/src/lib/seasonalBingoConditions.ts (ported
@@ -425,7 +427,10 @@ $$;
 -- unconstrained text -- see its own comment above); these two columns are
 -- what a board_type='adventure' challenge additionally needs.
 -- board_size stays unconstrained text too, same "no migration for a new
--- value" reasoning -- only 'small' exists today.
+-- value" reasoning -- 'small' for board_type='adventure'; BACKLOG.md #51
+-- later reuses this same column for board_type='grid5x5' too
+-- ('3x3'/'4x4'/'5x5', see the backfill + gridSizeFromBoardSize further
+-- down this file / in src/lib/tileConditions.ts).
 alter table challenges add column if not exists board_size text;
 -- Keyed by fork index as a string ("0", "1", "2" for the small layout) ->
 -- which lane ('top'/'bottom') the participant picked at that fork. A
@@ -1011,3 +1016,18 @@ alter table challenges add column if not exists discord_daily_summary_enabled bo
 -- second narrower grant).
 revoke update on challenges from authenticated;
 grant update (name, start_date, end_date, status, discord_webhook_url, discord_daily_summary_enabled) on challenges to authenticated;
+
+-- BACKLOG.md #51 -- 3x3/4x4 Standard board sizes alongside the existing
+-- 5x5. board_type stays 'grid5x5' for every size (no rename, no new app
+-- code needed to interpret a different shape -- it's the same grid,
+-- just a different N); board_size (added above for Adventure's own
+-- 'small' variant, previously null for every Standard challenge) now
+-- carries the actual dimension ('3x3'/'4x4'/'5x5'). No new column, no
+-- CHECK, no grant change -- board_size is set once at creation and never
+-- edited after (same precedent Adventure already set), so it was never
+-- part of the update grant allowlist above. Backfills every existing
+-- Standard challenge so board_size is explicit rather than relying on
+-- "null means 5" everywhere in app code (still the fallback -- see
+-- gridSizeFromBoardSize in src/lib/tileConditions.ts -- but this keeps
+-- the data itself correct going forward).
+update challenges set board_size = '5x5' where board_type = 'grid5x5' and board_size is null;

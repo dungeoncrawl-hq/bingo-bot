@@ -1,5 +1,6 @@
-// Renders a participant's 5x5 board as a PNG for Discord completion embeds
-// (see src/server/discordEmbeds.ts, api/board-image/[participantId].ts).
+// Renders a participant's Standard board (any of BACKLOG.md #51's 3x3/
+// 4x4/5x5 sizes) as a PNG for Discord completion embeds (see
+// src/server/discordEmbeds.ts, api/board-image/[participantId].ts).
 // Colored squares only -- no tile icons/labels composited in, to avoid
 // fetching/decoding/resizing external wiki images server-side. Uses pngjs
 // (pure JS, no native binaries) so this runs anywhere Vercel's Node
@@ -36,38 +37,42 @@ export function colorForCell(status: CellStatus): Rgb {
   }
 }
 
-const GRID_SIZE = 5;
 const CELL_SIZE = 84;
 const GUTTER = 8;
-const CANVAS_SIZE = CELL_SIZE * GRID_SIZE + GUTTER * (GRID_SIZE + 1);
 
-function setPixel(png: PNG, x: number, y: number, color: Rgb): void {
-  const idx = (CANVAS_SIZE * y + x) << 2;
+function canvasSizeFor(gridSize: number): number {
+  return CELL_SIZE * gridSize + GUTTER * (gridSize + 1);
+}
+
+function setPixel(png: PNG, canvasSize: number, x: number, y: number, color: Rgb): void {
+  const idx = (canvasSize * y + x) << 2;
   png.data[idx] = color.r;
   png.data[idx + 1] = color.g;
   png.data[idx + 2] = color.b;
   png.data[idx + 3] = 255;
 }
 
-// cells is row-major (index = row * 5 + col), matching gridLines'
-// indexing convention in tileConditions.ts -- must have exactly 25 entries.
-export function renderBoardImage(cells: CellStatus[]): Buffer {
-  const png = new PNG({ width: CANVAS_SIZE, height: CANVAS_SIZE });
+// cells is row-major (index = row * gridSize + col), matching gridLines'
+// indexing convention in tileConditions.ts -- must have exactly
+// gridSize*gridSize entries.
+export function renderBoardImage(cells: CellStatus[], gridSize: number): Buffer {
+  const canvasSize = canvasSizeFor(gridSize);
+  const png = new PNG({ width: canvasSize, height: canvasSize });
 
-  for (let y = 0; y < CANVAS_SIZE; y++) {
-    for (let x = 0; x < CANVAS_SIZE; x++) {
-      setPixel(png, x, y, GUTTER_COLOR);
+  for (let y = 0; y < canvasSize; y++) {
+    for (let x = 0; x < canvasSize; x++) {
+      setPixel(png, canvasSize, x, y, GUTTER_COLOR);
     }
   }
 
-  for (let row = 0; row < GRID_SIZE; row++) {
-    for (let col = 0; col < GRID_SIZE; col++) {
-      const color = colorForCell(cells[row * GRID_SIZE + col] ?? 'empty');
+  for (let row = 0; row < gridSize; row++) {
+    for (let col = 0; col < gridSize; col++) {
+      const color = colorForCell(cells[row * gridSize + col] ?? 'empty');
       const originX = GUTTER + col * (CELL_SIZE + GUTTER);
       const originY = GUTTER + row * (CELL_SIZE + GUTTER);
       for (let y = originY; y < originY + CELL_SIZE; y++) {
         for (let x = originX; x < originX + CELL_SIZE; x++) {
-          setPixel(png, x, y, color);
+          setPixel(png, canvasSize, x, y, color);
         }
       }
     }

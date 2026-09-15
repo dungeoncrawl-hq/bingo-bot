@@ -10,6 +10,7 @@ import {
   describeTileCondition,
   formatTileGoal,
   formatTileProgress,
+  gridSizeFromBoardSize,
   progressPercent,
   type ParticipantStats,
   type TileStatus,
@@ -41,7 +42,6 @@ import {
   roomNumberForColumn,
 } from '../lib/adventureProgress';
 
-const GRID_SIZE = 5;
 // Every challenge date is a fixed UTC calendar date (BACKLOG.md #14) --
 // this is the viewer's own zone, used only to show what those UTC
 // boundaries mean on their clock, never for gating/status logic itself.
@@ -473,6 +473,7 @@ export default function BoardPage() {
     return <p className="mx-auto max-w-lg py-24 text-center text-stone-400">Dungeon not found.</p>;
   }
 
+  const gridSize = gridSizeFromBoardSize(challenge.board_size);
   const tileAt = (row: number, col: number) =>
     tiles.find((t) => 'row' in t.layout && t.layout.row === row && t.layout.col === col) ?? null;
   const adventureTileAt = (column: number, lane: 'top' | 'bottom' | 'center') =>
@@ -958,10 +959,10 @@ export default function BoardPage() {
               </div>
             </div>
           ) : (
-          <div className="grid grid-cols-5 gap-2">
-            {Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, i) => {
-              const row = Math.floor(i / GRID_SIZE);
-              const col = i % GRID_SIZE;
+          <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))` }}>
+            {Array.from({ length: gridSize * gridSize }, (_, i) => {
+              const row = Math.floor(i / gridSize);
+              const col = i % gridSize;
               const tile = tileAt(row, col);
               const done = tile != null && viewedCompletedTileIds.has(tile.id);
               const status = tile ? viewedTileStatuses[tile.id] : undefined;

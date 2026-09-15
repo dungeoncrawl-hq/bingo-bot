@@ -5,12 +5,13 @@ import { getSupabase } from '../db/supabaseClient';
 import type { Challenge } from '../db/types';
 import { displayStatus, formatDateRange, countdownText, daysBetween, STATUS_STYLE, GAME_MODE_LABEL } from '../lib/dungeonStatus';
 import { ADVENTURE_SMALL_TILES_IN_PLAY } from '../lib/adventureProgress';
+import { gridSizeFromBoardSize } from '../lib/tileConditions';
 import HostBadge from '../components/HostBadge';
 import { CopyIcon, EditIcon, CheckIcon, PersonIcon, PublishIcon, BoardTypeIcon } from '../components/DungeonIcons';
 
 type ChallengeRow = Pick<
   Challenge,
-  'id' | 'name' | 'slug' | 'status' | 'start_date' | 'end_date' | 'created_at' | 'board_type' | 'game_mode'
+  'id' | 'name' | 'slug' | 'status' | 'start_date' | 'end_date' | 'created_at' | 'board_type' | 'board_size' | 'game_mode'
 > & {
   // True for the primary host AND a co-host (BACKLOG.md #26) -- gates
   // Edit/past-dungeon visibility exactly as it always has, since a
@@ -67,6 +68,7 @@ function DungeonCard({ c, stats, today }: { c: ChallengeRow; stats: ChallengeSta
   const progressLabel = c.game_mode === 'coop' ? 'Shared progress' : c.game_mode === 'team' ? "Your team's progress" : 'Your progress';
   const daysToStart = daysBetween(today, c.start_date);
   const draftMessage = daysToStart > 0 ? `${daysToStart} day${daysToStart === 1 ? '' : 's'} until its start date` : daysToStart === 0 ? 'Starts today' : 'Start date has passed';
+  const gridSize = gridSizeFromBoardSize(c.board_size);
 
   return (
     <div
@@ -89,7 +91,7 @@ function DungeonCard({ c, stats, today }: { c: ChallengeRow; stats: ChallengeSta
             <h3 className="truncate text-lg font-semibold text-stone-100">{c.name}</h3>
             <div className="mt-0.5 flex gap-1.5">
               <span className="rounded border border-stone-700 px-1.5 py-px text-[10px] uppercase tracking-wide text-stone-500">
-                {c.board_type === 'adventure' ? 'Adventure' : 'Standard'}
+                {c.board_type === 'adventure' ? 'Adventure' : `Standard ${gridSize}x${gridSize}`}
               </span>
               <span className="rounded border border-stone-700 px-1.5 py-px text-[10px] uppercase tracking-wide text-stone-500">
                 {GAME_MODE_LABEL[c.game_mode]}
@@ -232,7 +234,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!session) return;
     const supabase = getSupabase();
-    const fields = 'id, name, slug, status, start_date, end_date, created_at, board_type, game_mode';
+    const fields = 'id, name, slug, status, start_date, end_date, created_at, board_type, board_size, game_mode';
     type BareRow = Omit<ChallengeRow, 'isHost' | 'isPrimaryHost'>;
     Promise.all([
       supabase.from('challenges').select(fields).eq('host_id', session.user.id),

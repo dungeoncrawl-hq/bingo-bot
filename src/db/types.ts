@@ -34,8 +34,10 @@ export interface Challenge {
   name: string;
   slug: string;
   board_type: string;
-  // Only meaningful for board_type='adventure' ('small' today, the only
-  // size built so far) -- null for every other board_type.
+  // 'small' for board_type='adventure' (the only Adventure size built so
+  // far); '3x3'/'4x4'/'5x5' for board_type='grid5x5' (BACKLOG.md #51 --
+  // see gridSizeFromBoardSize in src/lib/tileConditions.ts). null only
+  // for a pre-migration Standard row -- treated the same as '5x5'.
   board_size: string | null;
   // How the board is *scored* -- orthogonal to board_type, which is how
   // it's *shaped*. 'solo' matches every challenge's behavior before this
