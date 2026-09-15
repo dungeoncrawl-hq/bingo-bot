@@ -321,8 +321,8 @@ export default function EditChallengePage() {
     if (
       nextStatus === 'active' &&
       !window.confirm(
-        "Publish this dungeon? It'll become visible and joinable. Once its start date arrives, tile " +
-          "conditions can no longer be changed -- only points, the first-completer bonus, and adding new tiles " +
+        "Publish this dungeon? It'll become visible and joinable. Once its start date arrives, room " +
+          "conditions can no longer be changed -- only points, the first-completer bonus, and adding new rooms " +
           'stay editable after that.',
       )
     ) {
@@ -340,7 +340,7 @@ export default function EditChallengePage() {
     if (!challenge || challenge === 'not-found') return;
     if (
       !window.confirm(
-        `Delete "${challenge.name}"? This can't be undone -- the dungeon, its tiles, and any join history will be permanently gone.`,
+        `Delete "${challenge.name}"? This can't be undone -- the dungeon, its rooms, and any join history will be permanently gone.`,
       )
     ) {
       return;
@@ -655,7 +655,7 @@ export default function EditChallengePage() {
               <span className="text-sm font-semibold tabular-nums text-stone-100">
                 {filledSlots} / {totalSlots}
               </span>
-              <span className="text-[11px] uppercase tracking-wide text-stone-500">tiles set</span>
+              <span className="text-[11px] uppercase tracking-wide text-stone-500">rooms set</span>
               <div className="h-1.5 w-16 overflow-hidden rounded-full border border-stone-800 bg-stone-950">
                 <div
                   className="h-full rounded-full bg-gradient-to-r from-amber-700 to-amber-500"
@@ -685,7 +685,7 @@ export default function EditChallengePage() {
                   disabled={randomizing || emptySlots5x5 === 0}
                   className="rounded-lg border border-stone-700 px-3 py-2 text-xs text-stone-300 disabled:opacity-40"
                 >
-                  {randomizing ? 'Randomizing…' : emptySlots5x5 === 0 ? 'Board full' : `Randomize ${emptySlots5x5} empty tile${emptySlots5x5 === 1 ? '' : 's'}`}
+                  {randomizing ? 'Randomizing…' : emptySlots5x5 === 0 ? 'Board full' : `Randomize ${emptySlots5x5} empty room${emptySlots5x5 === 1 ? '' : 's'}`}
                 </button>
               </div>
             )}
@@ -703,8 +703,8 @@ export default function EditChallengePage() {
             <p className="mt-3 flex items-start gap-2 rounded-lg border border-sky-800 bg-sky-950/30 px-3 py-2.5 text-xs text-sky-200">
               <span className="mt-0.5">🔒</span>
               <span>
-                <span className="font-semibold text-sky-100">Started {startDateLabel}</span> -- tile conditions are locked. You can still
-                adjust points, the first-completer bonus, or add brand-new tiles.
+                <span className="font-semibold text-sky-100">Started {startDateLabel}</span> -- room conditions are locked. You can still
+                adjust points, the first-completer bonus, or add brand-new rooms.
               </span>
             </p>
           )}
@@ -726,7 +726,7 @@ export default function EditChallengePage() {
                             onClick={() => setEditingCell({ column, lane })}
                             boss={lane === 'center'}
                             finalBoss={isFinalBoss}
-                            emptyLabel={lane === 'center' ? '+ Boss' : '+ Add tile'}
+                            emptyLabel={lane === 'center' ? '+ Boss' : '+ Add room'}
                           />
                         ))}
                       </div>
@@ -740,7 +740,7 @@ export default function EditChallengePage() {
               {Array.from({ length: GRID_SIZE * GRID_SIZE }, (_, i) => {
                 const row = Math.floor(i / GRID_SIZE);
                 const col = i % GRID_SIZE;
-                return <TileButton key={i} tile={tileAt({ row, col })} onClick={() => setEditingCell({ row, col })} emptyLabel="+ Add tile" />;
+                return <TileButton key={i} tile={tileAt({ row, col })} onClick={() => setEditingCell({ row, col })} emptyLabel="+ Add room" />;
               })}
             </div>
           )}
@@ -925,7 +925,7 @@ export default function EditChallengePage() {
 
           <div className="mt-6 border-b border-stone-800 pb-6">
             <h2 className="text-sm font-semibold text-stone-300">Discord notifications</h2>
-            <p className="mt-1 text-xs text-stone-500">Posts here whenever a player completes a tile, line, or the whole board.</p>
+            <p className="mt-1 text-xs text-stone-500">Posts to discord whenever a player completes a room, line, or the whole dungeon.</p>
             {!editingWebhook ? (
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-stone-800 bg-stone-900 px-3 py-2.5">
                 <span className="flex items-center gap-2 text-sm text-stone-300">
@@ -979,7 +979,7 @@ export default function EditChallengePage() {
                 onChange={(e) => handleToggleDailySummary(e.target.checked)}
                 disabled={savingDailySummary || !discordWebhookUrl}
               />
-              Send a daily summary (activity + standings, once a day)
+              Send a daily summary
             </label>
           </div>
 
@@ -991,8 +991,7 @@ export default function EditChallengePage() {
               </button>
             ) : (
               <p className="mt-1 text-xs text-stone-500">
-                Dungeons can only be deleted while still a draft -- this one has real player progress on it now. Unpublish won't bring the
-                delete option back.
+                Dungeons can only be deleted while still a draft.
               </p>
             )}
           </div>
