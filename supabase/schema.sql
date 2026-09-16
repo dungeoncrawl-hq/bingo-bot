@@ -146,13 +146,18 @@ create policy "self or host writes" on challenge_participants for all
 -- sign-in (auth.users insert) -- a DB trigger rather than client-side
 -- profile creation so the row always exists regardless of whether
 -- whatever client code was running at that moment succeeded. Magic-link
--- auth only collects an email, so display_name defaults to the email's
--- local part; profile editing is a later milestone.
+-- auth only collects an email, so display_name needs *some* placeholder
+-- -- BACKLOG.md #57 replaced the original "just use the email's local
+-- part" default (a partial-email leak, since profiles is public-read
+-- and display_name is shown site-wide with no login required) with a
+-- generic 'Player' + 6 hex chars of the account's own id. Profile
+-- editing (ProfilePage.tsx) lets a player replace this with a real name
+-- whenever they want.
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
   insert into public.profiles (id, display_name)
-  values (new.id, split_part(new.email, '@', 1))
+  values (new.id, 'Player' || substr(new.id::text, 1, 6))
   on conflict (id) do nothing;
   return new;
 end;
@@ -168,7 +173,7 @@ create trigger on_auth_user_created
 -- iterated on) -- harmless/idempotent to leave in permanently, since
 -- on conflict do nothing means it's a no-op once everyone's caught up.
 insert into public.profiles (id, display_name)
-select id, split_part(email, '@', 1) from auth.users
+select id, 'Player' || substr(id::text, 1, 6) from auth.users
 on conflict (id) do nothing;
 
 -- Milestone 3: Dink webhook raw event tables + tile completions. Unlike
@@ -657,7 +662,7 @@ create or replace function public.handle_new_user()
 returns trigger as $$
 begin
   insert into public.profiles (id, display_name)
-  values (new.id, split_part(new.email, '@', 1))
+  values (new.id, 'Player' || substr(new.id::text, 1, 6))
   on conflict (id) do nothing;
   insert into public.profile_secrets (profile_id)
   values (new.id)
@@ -935,8 +940,12 @@ grant update (name, start_date, end_date, status, discord_webhook_url) on challe
 -- every column in the allowlist below (default_rsn, icon_url, color,
 -- email_notifications) already exists -- all four are added by ALTERs
 -- later in the file than is_site_admin's own declaration.
+-- Re-declared again (BACKLOG.md #57) with display_name added -- same
+-- table-vs-column-grant reasoning as every other re-grant in this file:
+-- a blanket table-level UPDATE makes a column-only revoke silently a
+-- no-op, so the whole allowlist has to be re-granted together.
 revoke update on profiles from authenticated;
-grant update (default_rsn, email_notifications, icon_url, color) on profiles to authenticated;
+grant update (display_name, default_rsn, email_notifications, icon_url, color) on profiles to authenticated;
 
 -- 2026-09-08 fix, deferred from challenge_participants' screenshot/
 -- webhook counter columns' declaration earlier in this file: same
@@ -1031,3 +1040,19 @@ grant update (name, start_date, end_date, status, discord_webhook_url, discord_d
 -- gridSizeFromBoardSize in src/lib/tileConditions.ts -- but this keeps
 -- the data itself correct going forward).
 update challenges set board_size = '5x5' where board_type = 'grid5x5' and board_size is null;
+
+-- BACKLOG.md #57 -- display_name used to default to the signup email's
+-- local part (see handle_new_user's own comment above), and profiles is
+-- public-read with no login required, so every account that never
+-- touched ProfilePage.tsx's new "Display name" field was showing part
+-- of its real email to every visitor. Backfills every row still sitting
+-- on that original email-derived default to the same generic
+-- placeholder the trigger now generates for new signups -- only rows
+-- that still exactly match are touched, so anyone who already picked
+-- their own name (even one that coincidentally equals their own email's
+-- local part) is left alone.
+update profiles p
+set display_name = 'Player' || substr(p.id::text, 1, 6)
+from auth.users u
+where p.id = u.id
+  and p.display_name = split_part(u.email, '@', 1);

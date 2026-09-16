@@ -3,6 +3,10 @@ import type { SnapshotRow } from '../lib/hiscoresRecap.js';
 
 export interface Profile {
   id: string;
+  // BACKLOG.md #57 -- editable from ProfilePage.tsx. Defaults at signup
+  // to a generic 'Player<id prefix>' placeholder (handle_new_user in
+  // schema.sql), not anything email-derived -- profiles is public-read
+  // with no login required, so this is shown site-wide.
   display_name: string;
   created_at: string;
   is_site_admin: boolean;

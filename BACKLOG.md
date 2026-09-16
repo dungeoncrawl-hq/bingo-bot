@@ -2683,3 +2683,53 @@ instead of renumbering the existing list.
     chart renders the real cumulative signup/dungeon lines against the
     real 8-day activity window. Build/lint/318 tests all passed (3 new
     cases for `buildCumulativeSeries`).
+
+57. **A player can now edit their display name, and the signup default
+    no longer leaks part of a real email address.** **Shipped 2026-09-16.**
+    Prompted by a direct question about whether any player could see
+    another's email -- the audit turned up no path to a full address
+    (`profiles` has no email column, `auth.users` isn't reachable
+    through PostgREST, and `subscribed_emails()` -- the one function
+    that reads real addresses -- has execute revoked from every
+    client-facing role and only ever returns a count, never the list,
+    even to the admin's own browser), but did turn up a real partial
+    leak: `handle_new_user()`'s trigger set every new account's
+    `display_name` to the signup email's local part (`split_part(email,
+    '@', 1)`), and `profiles` is public-read with **no login required**
+    -- so every account that never touched a (previously nonexistent)
+    display-name editor was showing part of its real email to any
+    visitor. Checked against the real user list: all 7 existing accounts
+    were still sitting on that exact default.
+
+    **`ProfilePage.tsx` gains a "Display name" field** (first section on
+    the page, ahead of icon/color) -- same inline save-button pattern as
+    the existing Default RSN field, required (unlike RSN, `display_name`
+    is `not null`), `maxLength={40}`.
+
+    **`handle_new_user()` (both definitions in `schema.sql` -- it's
+    redeclared once later to also seed `profile_secrets`) now generates
+    `'Player' || substr(id, 1, 6)`** instead of splitting the email --
+    generic, deterministic, no email involved. The one-time backfill
+    insert for pre-trigger `auth.users` rows was updated the same way.
+    **Grant**: `display_name` added to the `authenticated` column
+    allowlist on `profiles` (same table-vs-column-grant re-declare
+    pattern as every other grant fix this project has needed).
+    **Backfill**: a new migration resets any *existing* row still
+    exactly matching its own email's local part to the same generic
+    placeholder -- narrowly scoped (`p.display_name = split_part(u.email,
+    '@', 1)`) so a name someone already chose for themselves is never
+    touched, even in the vanishingly unlikely case it happens to equal
+    their own email prefix.
+
+    **Needs the schema.sql migration run by hand in Supabase** (no
+    direct DDL/data access, per standing practice) -- confirmed live by
+    actually trying to save a new display name signed in as the real
+    host: it failed cleanly with `permission denied for table profiles`
+    (the grant not being applied yet), and a re-query confirmed the real
+    row was left completely untouched, not partially written. Worth
+    flagging for next time: once the migration runs, the backfill will
+    also reset the real host's own current name (still sitting on its
+    email-derived default, same as every other account) to the generic
+    placeholder -- a one-time rename back to whatever's wanted, from the
+    new Profile page field, is expected. Build/lint/318 tests all
+    passed.

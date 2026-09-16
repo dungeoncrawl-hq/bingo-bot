@@ -24,6 +24,10 @@ interface RecentEvent {
 
 export default function ProfilePage() {
   const { session, profile, loading } = useAuth();
+  const [displayName, setDisplayName] = useState('');
+  const [displayNameSaving, setDisplayNameSaving] = useState(false);
+  const [displayNameSaved, setDisplayNameSaved] = useState(false);
+  const [displayNameError, setDisplayNameError] = useState('');
   const [email, setEmail] = useState('');
   const [emailSaving, setEmailSaving] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
@@ -43,6 +47,10 @@ export default function ProfilePage() {
   // flash "no events" before the fetch has actually finished.
   const [lastDinkEventAt, setLastDinkEventAt] = useState<string | null | 'loading'>('loading');
   const [recentEvents, setRecentEvents] = useState<RecentEvent[] | 'loading'>('loading');
+
+  useEffect(() => {
+    if (profile) setDisplayName(profile.display_name);
+  }, [profile]);
 
   useEffect(() => {
     if (session?.user.email) setEmail(session.user.email);
@@ -255,6 +263,24 @@ export default function ProfilePage() {
   if (loading) return null;
   if (!session) return <Navigate to="/login" replace />;
 
+  async function handleSaveDisplayName(e: FormEvent) {
+    e.preventDefault();
+    if (!session || !displayName.trim()) return;
+    setDisplayNameSaving(true);
+    setDisplayNameError('');
+    const { error } = await getSupabase()
+      .from('profiles')
+      .update({ display_name: displayName.trim() })
+      .eq('id', session.user.id);
+    setDisplayNameSaving(false);
+    if (error) {
+      setDisplayNameError(error.message);
+      return;
+    }
+    setDisplayNameSaved(true);
+    setTimeout(() => setDisplayNameSaved(false), 2000);
+  }
+
   async function handleChangeEmail(e: FormEvent) {
     e.preventDefault();
     if (!email.trim() || email.trim() === session?.user.email) return;
@@ -321,6 +347,28 @@ export default function ProfilePage() {
   return (
     <div className="mx-auto max-w-lg py-12">
       <h1 className="text-2xl font-semibold">My Profile</h1>
+
+      <div className="mt-8 max-w-md">
+        <h2 className="text-sm font-semibold text-stone-300">Display name</h2>
+        <p className="mt-1 text-xs text-stone-500">Shown site-wide -- leaderboards, participant lists, anywhere your account is credited.</p>
+        <form onSubmit={handleSaveDisplayName} className="mt-2 flex gap-2">
+          <input
+            required
+            maxLength={40}
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            className="flex-1 rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={displayNameSaving || !displayName.trim()}
+            className="shrink-0 rounded-lg border border-stone-700 px-4 py-2 text-sm text-stone-300 disabled:opacity-40"
+          >
+            {displayNameSaving ? 'Saving…' : displayNameSaved ? 'Saved ✓' : 'Save'}
+          </button>
+        </form>
+        {displayNameError && <p className="mt-1 text-sm text-red-400">{displayNameError}</p>}
+      </div>
 
       <div className="mt-8 max-w-md">
         <h2 className="text-sm font-semibold text-stone-300">Profile icon</h2>
