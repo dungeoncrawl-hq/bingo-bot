@@ -15,6 +15,7 @@ export default function AdminFeedbackPage() {
   const [rows, setRows] = useState<FeedbackRow[] | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [showReviewed, setShowReviewed] = useState(false);
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     load();
@@ -47,7 +48,24 @@ export default function AdminFeedbackPage() {
     }
   }
 
-  const visible = rows?.filter((r) => showReviewed || !r.reviewed) ?? [];
+  // Bulk version of the same toggle -- on failure this re-loads from the
+  // server rather than trying to hand-revert every optimistically-flipped
+  // row individually.
+  async function markAllReviewed() {
+    const unreviewedIds = rows?.filter((r) => !r.reviewed).map((r) => r.id) ?? [];
+    if (unreviewedIds.length === 0) return;
+    setRows((prev) => prev?.map((r) => ({ ...r, reviewed: true })) ?? prev);
+    const { error } = await getSupabase().from('feedback').update({ reviewed: true }).eq('reviewed', false);
+    if (error) {
+      console.error('Failed to mark all feedback reviewed', error);
+      await load();
+    }
+  }
+
+  const visible = (rows ?? []).filter(
+    (r) => (showReviewed || !r.reviewed) && r.message.toLowerCase().includes(query.toLowerCase()),
+  );
+  const unreviewedCount = rows?.filter((r) => !r.reviewed).length ?? 0;
 
   return (
     <AdminLayout>
@@ -56,11 +74,31 @@ export default function AdminFeedbackPage() {
           <h1 className="text-2xl font-semibold">Feedback</h1>
           <p className="mt-1 text-sm text-stone-500">Submitted from the "Feedback" link in the site footer.</p>
         </div>
-        <label className="flex shrink-0 items-center gap-2 text-xs text-stone-400">
-          <input type="checkbox" checked={showReviewed} onChange={(e) => setShowReviewed(e.target.checked)} />
-          Show reviewed
-        </label>
+        <div className="flex shrink-0 flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-xs text-stone-400">
+            <input type="checkbox" checked={showReviewed} onChange={(e) => setShowReviewed(e.target.checked)} />
+            Show reviewed
+          </label>
+          <button
+            type="button"
+            onClick={markAllReviewed}
+            disabled={unreviewedCount === 0}
+            className="rounded-lg border border-stone-700 px-3 py-1.5 text-xs text-stone-300 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Mark all reviewed
+          </button>
+        </div>
       </div>
+
+      {rows && rows.length > 0 && (
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search messages..."
+          className="mt-4 w-full max-w-xs rounded-lg border border-stone-700 bg-stone-900 px-3 py-1.5 text-sm focus:border-amber-500 focus:outline-none"
+        />
+      )}
+
       {loadError && <p className="mt-4 text-sm text-red-400">Couldn't load feedback. Try refreshing the page.</p>}
       {!loadError && !rows && <p className="mt-4 text-stone-500">Loading…</p>}
       {rows && visible.length === 0 && <p className="mt-4 text-stone-500">Nothing here.</p>}

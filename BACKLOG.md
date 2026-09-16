@@ -2603,3 +2603,83 @@ instead of renumbering the existing list.
     for the new `gridSizeFromBoardSize` helper, 1 new case in
     `boardImage.test.ts` asserting the canvas scales down for a smaller
     grid).
+
+56. **#52's admin UI overhaul, shipped.** **Shipped 2026-09-16.** Same
+    mockup-first pattern the idea called for: a standalone Artifact
+    against real admin data, reviewed and iterated on twice (a
+    Tailwind-CDN mobile rendering bug, then adding a missing "Dungeons"
+    browse page the review itself surfaced) before any app code changed.
+
+    **`AdminLayout.tsx` rebuilt** from a flat wrapping 8-tab row +
+    `max-w-4xl` content cap to a grouped left sidebar (Overview / People
+    / Content / Configuration) with a slide-in drawer below `md:`, and a
+    much wider content area -- the old cap was clipping the Randomize
+    Settings tables. Deliberately does *not* repeat a logo or sign-out
+    control the mockup itself had, since the real app's `Header.tsx`
+    already renders those above every page, admin included -- porting
+    the mockup literally would have duplicated existing chrome.
+
+    **New `AdminDungeonsPage.tsx`** (route `/dungeon-master-admin/
+    dungeons`) fills the exact gap the review flagged: no admin page
+    browsed dungeons directly before this, despite the Dashboard showing
+    draft/active/ended counts with nowhere to click through to. Status
+    filter pills + search + sortable table/mobile-card dual render, same
+    merge-via-Map pattern `AdminAccountsPage.tsx` already used for its
+    hosted/participating counts. Reuses `gridSizeFromBoardSize` (#55) and
+    `ADVENTURE_SMALL_TILES_IN_PLAY` for a real tiles-placed/total column,
+    and `formatDateRange` from `dungeonStatus.ts` -- no new date/size
+    logic invented. Dashboard's Draft/Active/Ended tiles now link here
+    with `?status=draft` etc. instead of being dead ends; the "Recent
+    activity" feed (also new) links each row straight to `/c/:slug/edit`.
+
+    **Every other admin page rewritten**: Accounts and Participants both
+    gained a search box and a mobile card list alongside the existing
+    table (kept each page's own sort-state logic un-abstracted -- the
+    row shapes differ enough that a shared generic table would've added
+    indirection without real benefit); Participants also split its
+    combined "27 (16.0 MB)" screenshots cell into two independently
+    -sortable columns and gained 3 summary stat tiles. Growth -- the
+    thinnest page and the biggest content gap, a page called "Growth"
+    with no chart -- gained a third data source (signup dates, the exact
+    query Accounts already ran), 4 KPI tiles, and a real hand-drawn
+    inline-SVG cumulative line chart (new pure `src/lib/growthChart.ts`
+    + test, same zero-dependency-graphics approach `boardImage.ts`
+    already uses). Randomize Settings' 22-row flat threshold table is
+    now 5 named collapsible groups (Combat & bossing / Skilling / Slayer
+    / Clues / Collection & pets) plus a search box over the 79-row boss
+    table. Discord Templates split into Titles/Flavor-lines tabs.
+    Feedback gained a search box and a bulk "mark all reviewed". Both
+    Randomize Settings' and Discord Templates' "reset to defaults" now
+    go through a new shared `ConfirmButton.tsx` (inline warning +
+    Confirm/Cancel) instead of firing on one misclick. Announcements
+    split into Published/Drafts sections with a compact icon-button row
+    (two new icons, `UnpublishIcon`/`TrashIcon`, added to
+    `DungeonIcons.tsx`) replacing the old vertical text-button stack --
+    Delete's and Email-subscribers' existing `confirm()`/`alert()`
+    dialogs were deliberately left untouched, since those guard genuinely
+    irreversible actions and weren't something the mockup redesigned.
+
+    **No schema/RLS/grant changes anywhere in this feature** -- confirmed
+    by direct reading of `schema.sql` before writing any code that
+    `challenges`/`tiles`/`challenge_participants` are already public-read
+    and `feedback`/`announcements` already grant full admin read+update
+    via existing `is_site_admin` RLS checks, including for the new bulk
+    "mark all reviewed" write. Pure frontend build.
+
+    Live-verified signed in as the real site admin, at both desktop and
+    mobile widths: the sidebar drawer opens/closes correctly; a Dashboard
+    KPI tile lands on a correctly pre-filtered Dungeons page (confirmed
+    via the rendered `?status=draft` link and the resulting "2 of 5"
+    count); Dungeons' status pills, search, and mobile card list all
+    render real data correctly; Randomize Settings' groups expand/
+    collapse with the right per-group condition counts (5/5/1/7/3) and
+    the boss search filters live across all 79 real bosses; the reset
+    confirm-then-cancel flow works; Discord Templates' tabs switch and
+    correctly hide the other tab's content; Feedback's search and
+    Show-reviewed filter both work against the 2 real feedback rows;
+    Announcements' Published/Drafts split and icon buttons render
+    correctly against the 1 real announcement, with Email-subscribers
+    correctly staying hidden since it's already been emailed; Growth's
+    chart renders the real cumulative signup/dungeon lines against the
+    real 8-day activity window. Build/lint/318 tests all passed (3 new
+    cases for `buildCumulativeSeries`).

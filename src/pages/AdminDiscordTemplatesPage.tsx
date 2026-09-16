@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import AdminLayout from '../components/AdminLayout';
+import ConfirmButton from '../components/ConfirmButton';
 import { getSupabase } from '../db/supabaseClient';
 import { DEFAULT_BANTER_POOLS, type BanterPools } from '../server/discordBanter';
 import { DEFAULT_TITLE_TEMPLATES, type TitleTemplates } from '../server/discordTitles';
@@ -97,6 +98,7 @@ export default function AdminDiscordTemplatesPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
+  const [tab, setTab] = useState<'titles' | 'flavor'>('titles');
 
   useEffect(() => {
     (async () => {
@@ -216,9 +218,7 @@ export default function AdminDiscordTemplatesPage() {
         </div>
         {pools && titles && (
           <div className="flex shrink-0 items-center gap-2">
-            <button type="button" onClick={resetAllToDefaults} className="rounded-lg border border-stone-700 px-3 py-2 text-xs text-stone-400">
-              Reset all to defaults
-            </button>
+            <ConfirmButton label="Reset all to defaults" warning="Discards every custom title and flavor line." onConfirm={resetAllToDefaults} />
             <button
               type="button"
               onClick={handleSave}
@@ -234,7 +234,26 @@ export default function AdminDiscordTemplatesPage() {
 
       {loading && <p className="mt-6 text-stone-500">Loading…</p>}
 
-      {titles && (
+      {pools && titles && (
+        <div className="mt-6 flex gap-1.5 border-b border-stone-800">
+          <button
+            type="button"
+            onClick={() => setTab('titles')}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm ${tab === 'titles' ? 'border-amber-500 text-amber-400' : 'border-transparent text-stone-500 hover:text-stone-300'}`}
+          >
+            Titles
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('flavor')}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm ${tab === 'flavor' ? 'border-amber-500 text-amber-400' : 'border-transparent text-stone-500 hover:text-stone-300'}`}
+          >
+            Flavor lines
+          </button>
+        </div>
+      )}
+
+      {titles && tab === 'titles' && (
         <div className="mt-8 space-y-8">
           <h2 className="text-lg font-semibold">Titles</h2>
           {TITLE_GROUPS.map((group) => (
@@ -283,8 +302,8 @@ export default function AdminDiscordTemplatesPage() {
         </div>
       )}
 
-      {pools && (
-        <div className="mt-10 space-y-8 border-t border-stone-800 pt-8">
+      {pools && tab === 'flavor' && (
+        <div className="mt-8 space-y-8">
           <h2 className="text-lg font-semibold">Flavor lines</h2>
           {POOL_ORDER.map((pool) => {
             const info = POOL_INFO[pool];

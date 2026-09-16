@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import AdminLayout from '../components/AdminLayout';
+import ConfirmButton from '../components/ConfirmButton';
 import { getSupabase } from '../db/supabaseClient';
 import { DEFAULT_RANDOMIZE_SETTINGS, type Difficulty, type KcTier, type RandomizeSettings, type ThresholdConditionType } from '../lib/randomizeSettings';
 import { BOSS_ACTIVITIES } from '../lib/bossActivities';
@@ -36,6 +37,21 @@ const THRESHOLD_LABELS: Record<ThresholdConditionType, string> = {
   petsObtained: 'Pets obtained',
 };
 
+// Grouped the way a host actually thinks about tile categories, rather
+// than as one flat 22-row table (20 ThresholdConditionType keys +
+// bigDropsCount + the extra "big drops min value" row rendered inside
+// this same group below).
+const THRESHOLD_GROUPS: { label: string; types: ThresholdConditionType[] }[] = [
+  { label: 'Combat & bossing', types: ['bossKcGained', 'lootValueGained', 'singleDropValue', 'bigDropsCount', 'maxDeaths'] },
+  { label: 'Skilling', types: ['xpGained', 'skillLevelGained', 'skillXpGained', 'xpGainedLowestSkill', 'levelsGainedLowestSkill'] },
+  { label: 'Slayer', types: ['slayerTasksCompleted'] },
+  {
+    label: 'Clues',
+    types: ['cluesCompleted', 'beginnerCluesCompleted', 'easyCluesCompleted', 'mediumCluesCompleted', 'hardCluesCompleted', 'eliteCluesCompleted', 'masterCluesCompleted'],
+  },
+  { label: 'Collection & pets', types: ['collectionLogGained', 'itemCount', 'petsObtained'] },
+];
+
 const inputClass =
   'w-24 rounded-lg border border-stone-700 bg-stone-900 px-2 py-1 text-sm focus:border-amber-500 focus:outline-none';
 
@@ -49,6 +65,11 @@ export default function AdminRandomizeSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState('');
+  // All collapsed by default -- a host-facing analogue of this exact
+  // pattern doesn't exist elsewhere in the app to match, so this just
+  // follows the reviewed mockup directly.
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [bossQuery, setBossQuery] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -98,6 +119,15 @@ export default function AdminRandomizeSettingsPage() {
     );
   }
 
+  function toggleGroup(label: string) {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  }
+
   async function handleSave() {
     if (!settings) return;
     setSaving(true);
@@ -117,6 +147,8 @@ export default function AdminRandomizeSettingsPage() {
     }
   }
 
+  const filteredBosses = BOSS_ACTIVITIES.filter((b) => b.name.toLowerCase().includes(bossQuery.toLowerCase()));
+
   return (
     <AdminLayout>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -129,13 +161,11 @@ export default function AdminRandomizeSettingsPage() {
         </div>
         {settings && (
           <div className="flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setSettings(deepClone(DEFAULT_RANDOMIZE_SETTINGS))}
-              className="rounded-lg border border-stone-700 px-3 py-2 text-xs text-stone-400"
-            >
-              Reset to defaults
-            </button>
+            <ConfirmButton
+              label="Reset to defaults"
+              warning="This discards every unsaved edit on this page."
+              onConfirm={() => setSettings(deepClone(DEFAULT_RANDOMIZE_SETTINGS))}
+            />
             <button
               type="button"
               onClick={handleSave}
@@ -175,53 +205,76 @@ export default function AdminRandomizeSettingsPage() {
             <h2 className="text-lg font-semibold">Thresholds</h2>
             <p className="mt-1 text-xs text-stone-500">
               The goal number a generated tile of this type gets, per difficulty. `kcGained` isn't here -- see boss
-              farm-rate tiers below instead.
+              farm-rate tiers below instead. Grouped by category -- click a group to expand it.
             </p>
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-stone-800 text-xs uppercase text-stone-500">
-                    <th className="py-2 pr-4">Condition</th>
-                    {DIFFICULTIES.map((d) => (
-                      <th key={d} className="py-2 pr-4 capitalize">
-                        {d}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {(Object.keys(settings.thresholds) as ThresholdConditionType[]).map((type) => (
-                    <tr key={type} className="border-b border-stone-900">
-                      <td className="py-2 pr-4 text-stone-300">{THRESHOLD_LABELS[type]}</td>
-                      {DIFFICULTIES.map((d) => (
-                        <td key={d} className="py-2 pr-4">
-                          <input
-                            type="number"
-                            min={0}
-                            value={settings.thresholds[type][d]}
-                            onChange={(e) => updateThreshold(type, d, Number(e.target.value))}
-                            className={inputClass}
-                          />
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                  <tr>
-                    <td className="py-2 pr-4 text-stone-300">Big drops -- minimum value per drop (gp)</td>
-                    {DIFFICULTIES.map((d) => (
-                      <td key={d} className="py-2 pr-4">
-                        <input
-                          type="number"
-                          min={100_000}
-                          value={settings.bigDropsCountDropValueThreshold[d]}
-                          onChange={(e) => updateBigDropsThreshold(d, Number(e.target.value))}
-                          className={inputClass}
-                        />
-                      </td>
-                    ))}
-                  </tr>
-                </tbody>
-              </table>
+            <div className="mt-3 space-y-2">
+              {THRESHOLD_GROUPS.map((group) => {
+                const expanded = expandedGroups.has(group.label);
+                return (
+                  <div key={group.label} className="rounded-lg border border-stone-800 overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(group.label)}
+                      className="flex w-full items-center justify-between px-3 py-2 text-sm text-stone-300 hover:bg-stone-900"
+                    >
+                      <span className="font-medium">{group.label}</span>
+                      <span className="text-xs text-stone-600">
+                        {group.types.length} condition{group.types.length === 1 ? '' : 's'}
+                      </span>
+                    </button>
+                    {expanded && (
+                      <div className="border-t border-stone-800 overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                          <thead>
+                            <tr className="border-b border-stone-800 text-xs uppercase text-stone-500">
+                              <th className="py-2 pl-3 pr-4">Condition</th>
+                              {DIFFICULTIES.map((d) => (
+                                <th key={d} className="py-2 pr-4 capitalize">
+                                  {d}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {group.types.map((type) => (
+                              <tr key={type} className="border-b border-stone-900">
+                                <td className="py-2 pl-3 pr-4 text-stone-300">{THRESHOLD_LABELS[type]}</td>
+                                {DIFFICULTIES.map((d) => (
+                                  <td key={d} className="py-2 pr-4">
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      value={settings.thresholds[type][d]}
+                                      onChange={(e) => updateThreshold(type, d, Number(e.target.value))}
+                                      className={inputClass}
+                                    />
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                            {group.label === 'Combat & bossing' && (
+                              <tr>
+                                <td className="py-2 pl-3 pr-4 text-stone-300">Big drops -- minimum value per drop (gp)</td>
+                                {DIFFICULTIES.map((d) => (
+                                  <td key={d} className="py-2 pr-4">
+                                    <input
+                                      type="number"
+                                      min={100_000}
+                                      value={settings.bigDropsCountDropValueThreshold[d]}
+                                      onChange={(e) => updateBigDropsThreshold(d, Number(e.target.value))}
+                                      className={inputClass}
+                                    />
+                                  </td>
+                                ))}
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </section>
 
@@ -253,7 +306,14 @@ export default function AdminRandomizeSettingsPage() {
               ))}
             </div>
 
-            <div className="mt-4 max-h-96 overflow-y-auto rounded-lg border border-stone-800">
+            <input
+              value={bossQuery}
+              onChange={(e) => setBossQuery(e.target.value)}
+              placeholder="Search bosses..."
+              className="mt-4 w-full max-w-xs rounded-lg border border-stone-700 bg-stone-900 px-3 py-1.5 text-sm focus:border-amber-500 focus:outline-none"
+            />
+
+            <div className="mt-3 max-h-96 overflow-y-auto rounded-lg border border-stone-800">
               <table className="w-full text-left text-sm">
                 <thead className="sticky top-0 bg-stone-950">
                   <tr className="border-b border-stone-800 text-xs uppercase text-stone-500">
@@ -262,7 +322,7 @@ export default function AdminRandomizeSettingsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {BOSS_ACTIVITIES.map((b) => (
+                  {filteredBosses.map((b) => (
                     <tr key={b.name} className="border-b border-stone-900">
                       <td className="py-1.5 pl-3 pr-4 text-stone-300">{b.name}</td>
                       <td className="py-1.5 pr-3">
@@ -280,6 +340,13 @@ export default function AdminRandomizeSettingsPage() {
                       </td>
                     </tr>
                   ))}
+                  {filteredBosses.length === 0 && (
+                    <tr>
+                      <td colSpan={2} className="py-4 text-center text-sm text-stone-600">
+                        No bosses match.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

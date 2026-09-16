@@ -68,6 +68,25 @@ export function PublishIcon() {
   );
 }
 
+// Announcements' "Unpublish" action -- a crossed-out variant reusing
+// PublishIcon's own stroke weight/size so the two read as a pair.
+export function UnpublishIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="h-[13px] w-[13px] shrink-0">
+      <path d="M4 4l12 12M4 16 16 4" />
+    </svg>
+  );
+}
+
+// Announcements' "Delete" action.
+export function TrashIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="h-[13px] w-[13px] shrink-0">
+      <path d="M5 6h10M8 6V4.5h4V6M6 6l.6 10h6.8L14 6" />
+    </svg>
+  );
+}
+
 // Adventure's board is a branching path (nodes + lanes); Standard is a
 // flat grid -- the same visual distinction the board pages themselves
 // draw, shrunk to a badge.

@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import AdminLayout from '../components/AdminLayout';
+import { EditIcon, PublishIcon, UnpublishIcon, TrashIcon } from '../components/DungeonIcons';
 import { getSupabase } from '../db/supabaseClient';
 import type { Announcement } from '../db/types';
 
 const inputClass =
   'w-full rounded-lg border border-stone-700 bg-stone-900 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none';
 
-const actionButtonClass =
-  'shrink-0 rounded-lg border border-stone-700 px-3 py-1.5 text-xs text-stone-300 disabled:cursor-not-allowed disabled:opacity-40';
+const iconButtonClass = 'rounded-lg border border-stone-700 p-1.5 text-stone-400 hover:border-amber-500 hover:text-amber-400';
 
 export default function AdminAnnouncementsPage() {
   const [rows, setRows] = useState<Announcement[] | null>(null);
@@ -128,6 +128,87 @@ export default function AdminAnnouncementsPage() {
     }
   }
 
+  function renderCard(r: Announcement) {
+    if (editingId === r.id) {
+      return (
+        <li key={r.id} className="space-y-3 rounded-lg border border-amber-800 bg-amber-950/10 px-4 py-3">
+          <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="Title" className={inputClass} />
+          <textarea
+            value={editBody}
+            onChange={(e) => setEditBody(e.target.value)}
+            rows={4}
+            placeholder="What's new..."
+            className={inputClass}
+          />
+          {editError && <p className="text-sm text-red-400">{editError}</p>}
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => handleSaveEdit(r.id)}
+              disabled={editSaving || !editTitle.trim() || !editBody.trim()}
+              className="rounded-lg bg-amber-500 hover:bg-amber-400 transition-colors px-4 py-2 text-sm font-semibold text-stone-950 disabled:opacity-40"
+            >
+              {editSaving ? 'Saving…' : 'Save changes'}
+            </button>
+            <button type="button" onClick={cancelEdit} className="rounded-lg border border-stone-700 px-3 py-1.5 text-xs text-stone-300">
+              Cancel
+            </button>
+          </div>
+        </li>
+      );
+    }
+
+    return (
+      <li key={r.id} className="rounded-lg border border-stone-800 px-4 py-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-semibold">{r.title}</p>
+            <p className="mt-1 whitespace-pre-wrap text-sm text-stone-400">{r.body}</p>
+            <p className="mt-2 text-xs text-stone-500">
+              {r.published_at ? `Published ${new Date(r.published_at).toLocaleString()}` : 'Draft'}
+              {r.emailed_at && ` · Emailed ${new Date(r.emailed_at).toLocaleString()}`}
+            </p>
+            {r.published_at && !r.emailed_at && (
+              <button
+                type="button"
+                onClick={() => handleSendEmail(r)}
+                disabled={sendingId === r.id}
+                className="mt-2 rounded-lg border border-stone-700 px-3 py-1.5 text-xs text-stone-300 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {sendingId === r.id ? 'Sending…' : 'Email subscribers'}
+              </button>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button type="button" onClick={() => startEdit(r)} title="Edit" className={iconButtonClass}>
+              <EditIcon />
+            </button>
+            {r.published_at ? (
+              <button type="button" onClick={() => handleUnpublish(r.id)} title="Unpublish" className={iconButtonClass}>
+                <UnpublishIcon />
+              </button>
+            ) : (
+              <button type="button" onClick={() => handlePublish(r.id)} title="Publish" className={iconButtonClass}>
+                <PublishIcon />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => handleDelete(r.id)}
+              title="Delete"
+              className="rounded-lg border border-stone-700 p-1.5 text-stone-500 hover:border-red-800 hover:text-red-400"
+            >
+              <TrashIcon />
+            </button>
+          </div>
+        </div>
+      </li>
+    );
+  }
+
+  const published = rows?.filter((r) => r.published_at) ?? [];
+  const drafts = rows?.filter((r) => !r.published_at) ?? [];
+
   return (
     <AdminLayout>
       <h1 className="text-2xl font-semibold">Announcements</h1>
@@ -157,77 +238,26 @@ export default function AdminAnnouncementsPage() {
       {loadError && <p className="mt-4 text-sm text-red-400">Couldn't load announcements. Try refreshing the page.</p>}
       {!loadError && !rows && <p className="mt-4 text-stone-500">Loading…</p>}
       {rows && rows.length === 0 && <p className="mt-4 text-stone-500">No announcements yet.</p>}
+
       {rows && rows.length > 0 && (
-        <ul className="mt-6 space-y-3">
-          {rows.map((r) =>
-            editingId === r.id ? (
-              <li key={r.id} className="space-y-3 rounded-lg border border-amber-800 bg-amber-950/10 px-4 py-3">
-                <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} placeholder="Title" className={inputClass} />
-                <textarea
-                  value={editBody}
-                  onChange={(e) => setEditBody(e.target.value)}
-                  rows={4}
-                  placeholder="What's new..."
-                  className={inputClass}
-                />
-                {editError && <p className="text-sm text-red-400">{editError}</p>}
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleSaveEdit(r.id)}
-                    disabled={editSaving || !editTitle.trim() || !editBody.trim()}
-                    className="rounded-lg bg-amber-500 hover:bg-amber-400 transition-colors px-4 py-2 text-sm font-semibold text-stone-950 disabled:opacity-40"
-                  >
-                    {editSaving ? 'Saving…' : 'Save changes'}
-                  </button>
-                  <button type="button" onClick={cancelEdit} className={actionButtonClass}>
-                    Cancel
-                  </button>
-                </div>
-              </li>
+        <>
+          <div className="mt-8">
+            <h2 className="text-sm font-semibold uppercase text-stone-500">Published</h2>
+            {published.length === 0 ? (
+              <p className="mt-2 text-sm text-stone-600">Nothing published yet.</p>
             ) : (
-              <li key={r.id} className="rounded-lg border border-stone-800 px-4 py-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold">{r.title}</p>
-                    <p className="mt-1 whitespace-pre-wrap text-sm text-stone-400">{r.body}</p>
-                    <p className="mt-2 text-xs text-stone-500">
-                      {r.published_at ? `Published ${new Date(r.published_at).toLocaleString()}` : 'Draft'}
-                      {r.emailed_at && ` · Emailed ${new Date(r.emailed_at).toLocaleString()}`}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 flex-col gap-1.5">
-                    <button type="button" onClick={() => startEdit(r)} className={actionButtonClass}>
-                      Edit
-                    </button>
-                    {r.published_at ? (
-                      <button type="button" onClick={() => handleUnpublish(r.id)} className={actionButtonClass}>
-                        Unpublish
-                      </button>
-                    ) : (
-                      <button type="button" onClick={() => handlePublish(r.id)} className={actionButtonClass}>
-                        Publish
-                      </button>
-                    )}
-                    {r.published_at && !r.emailed_at && (
-                      <button
-                        type="button"
-                        onClick={() => handleSendEmail(r)}
-                        disabled={sendingId === r.id}
-                        className={actionButtonClass}
-                      >
-                        {sendingId === r.id ? 'Sending…' : 'Email subscribers'}
-                      </button>
-                    )}
-                    <button type="button" onClick={() => handleDelete(r.id)} className="shrink-0 text-xs text-red-400 underline">
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              </li>
-            ),
-          )}
-        </ul>
+              <ul className="mt-2 space-y-3">{published.map(renderCard)}</ul>
+            )}
+          </div>
+          <div className="mt-8">
+            <h2 className="text-sm font-semibold uppercase text-stone-500">Drafts</h2>
+            {drafts.length === 0 ? (
+              <p className="mt-2 text-sm text-stone-600">No drafts waiting.</p>
+            ) : (
+              <ul className="mt-2 space-y-3">{drafts.map(renderCard)}</ul>
+            )}
+          </div>
+        </>
       )}
     </AdminLayout>
   );

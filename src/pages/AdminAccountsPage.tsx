@@ -43,6 +43,7 @@ function sortValue(r: AccountRow, key: SortKey): string | number {
 export default function AdminAccountsPage() {
   const [rows, setRows] = useState<AccountRow[] | null>(null);
   const [loadError, setLoadError] = useState(false);
+  const [query, setQuery] = useState('');
   // Newest accounts first by default -- this page exists to see who's
   // signing up, not to browse alphabetically.
   const [sortKey, setSortKey] = useState<SortKey>('created_at');
@@ -88,15 +89,17 @@ export default function AdminAccountsPage() {
 
   const sorted = useMemo(() => {
     if (!rows) return [];
+    const q = query.toLowerCase();
+    const filtered = rows.filter((r) => r.display_name.toLowerCase().includes(q) || (r.default_rsn ?? '').toLowerCase().includes(q));
     const dir = sortDesc ? -1 : 1;
-    return [...rows].sort((a, b) => {
+    return [...filtered].sort((a, b) => {
       const av = sortValue(a, sortKey);
       const bv = sortValue(b, sortKey);
       if (av < bv) return -1 * dir;
       if (av > bv) return 1 * dir;
       return 0;
     });
-  }, [rows, sortKey, sortDesc]);
+  }, [rows, query, sortKey, sortDesc]);
 
   function toggleSort(key: SortKey) {
     if (key === sortKey) {
@@ -115,34 +118,77 @@ export default function AdminAccountsPage() {
       {!loadError && !rows && <p className="mt-4 text-stone-500">Loading…</p>}
       {rows && rows.length === 0 && <p className="mt-4 text-stone-500">No accounts yet.</p>}
       {rows && rows.length > 0 && (
-        <div className="mt-6 overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-sm">
-            <thead>
-              <tr className="border-b border-stone-800 text-xs uppercase text-stone-500">
-                {COLUMNS.map((col) => (
-                  <th key={col.key} className="cursor-pointer select-none py-2 pr-4 hover:text-stone-300" onClick={() => toggleSort(col.key)}>
-                    {col.label}
-                    {sortKey === col.key && <span className="ml-1">{sortDesc ? '↓' : '↑'}</span>}
-                  </th>
+        <>
+          <div className="mt-6 flex items-center gap-2">
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search accounts..."
+              className="max-w-xs flex-1 rounded-lg border border-stone-700 bg-stone-900 px-3 py-1.5 text-sm focus:border-amber-500 focus:outline-none"
+            />
+            <span className="text-xs text-stone-600">
+              {sorted.length} of {rows.length}
+            </span>
+          </div>
+
+          {sorted.length === 0 && <p className="mt-6 text-stone-500">No accounts match.</p>}
+
+          {sorted.length > 0 && (
+            <>
+              <div className="mt-4 hidden overflow-x-auto sm:block">
+                <table className="w-full min-w-[720px] text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-stone-800 text-xs uppercase text-stone-500">
+                      {COLUMNS.map((col) => (
+                        <th key={col.key} className="cursor-pointer select-none py-2 pr-4 hover:text-stone-300" onClick={() => toggleSort(col.key)}>
+                          {col.label}
+                          {sortKey === col.key && <span className="ml-1">{sortDesc ? '↓' : '↑'}</span>}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sorted.map((r) => (
+                      <tr key={r.id} className="border-b border-stone-900">
+                        <td className="py-2 pr-4">{r.display_name}</td>
+                        <td className="py-2 pr-4 text-stone-400">{new Date(r.created_at).toLocaleDateString()}</td>
+                        <td className="py-2 pr-4">{r.hosted}</td>
+                        <td className="py-2 pr-4">{r.participating}</td>
+                        <td className="py-2 pr-4 text-stone-400">{r.default_rsn ?? <span className="text-stone-600">—</span>}</td>
+                        <td className="py-2 pr-4">
+                          {r.is_site_admin ? <span className="text-amber-400">Yes</span> : <span className="text-stone-600">—</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="mt-4 space-y-2 sm:hidden">
+                {sorted.map((r) => (
+                  <div key={r.id} className="rounded-lg border border-stone-800 bg-stone-900/40 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate font-medium text-stone-100">{r.display_name}</span>
+                      {r.is_site_admin && <span className="shrink-0 text-xs font-medium text-amber-400">Site admin</span>}
+                    </div>
+                    <div className="mt-1 text-xs text-stone-500">
+                      Joined {new Date(r.created_at).toLocaleDateString()}
+                      {r.default_rsn && <> · {r.default_rsn}</>}
+                    </div>
+                    <div className="mt-2 flex gap-4 text-xs text-stone-400">
+                      <span>
+                        <span className="tabular-nums font-medium text-stone-200">{r.hosted}</span> hosted
+                      </span>
+                      <span>
+                        <span className="tabular-nums font-medium text-stone-200">{r.participating}</span> participating
+                      </span>
+                    </div>
+                  </div>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((r) => (
-                <tr key={r.id} className="border-b border-stone-900">
-                  <td className="py-2 pr-4">{r.display_name}</td>
-                  <td className="py-2 pr-4 text-stone-400">{new Date(r.created_at).toLocaleDateString()}</td>
-                  <td className="py-2 pr-4">{r.hosted}</td>
-                  <td className="py-2 pr-4">{r.participating}</td>
-                  <td className="py-2 pr-4 text-stone-400">{r.default_rsn ?? <span className="text-stone-600">—</span>}</td>
-                  <td className="py-2 pr-4">
-                    {r.is_site_admin ? <span className="text-amber-400">Yes</span> : <span className="text-stone-600">—</span>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </div>
+            </>
+          )}
+        </>
       )}
     </AdminLayout>
   );

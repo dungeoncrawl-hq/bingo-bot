@@ -14,6 +14,7 @@ import ProfilePage from './pages/ProfilePage';
 import ChangelogPage from './pages/ChangelogPage';
 import UnsubscribedPage from './pages/UnsubscribedPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
+import AdminDungeonsPage from './pages/AdminDungeonsPage';
 import AdminParticipantsPage from './pages/AdminParticipantsPage';
 import AdminGrowthPage from './pages/AdminGrowthPage';
 import AdminRandomizeSettingsPage from './pages/AdminRandomizeSettingsPage';
@@ -42,6 +43,7 @@ function App() {
             <Route path="/changelog" element={<ChangelogPage />} />
             <Route path="/unsubscribed" element={<UnsubscribedPage />} />
             <Route path="/dungeon-master-admin" element={<AdminDashboardPage />} />
+            <Route path="/dungeon-master-admin/dungeons" element={<AdminDungeonsPage />} />
             <Route path="/dungeon-master-admin/participants" element={<AdminParticipantsPage />} />
             <Route path="/dungeon-master-admin/growth" element={<AdminGrowthPage />} />
             <Route path="/dungeon-master-admin/randomize-settings" element={<AdminRandomizeSettingsPage />} />
