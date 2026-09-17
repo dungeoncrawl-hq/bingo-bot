@@ -25,11 +25,15 @@ import { computeHiscoresRecap, type SnapshotRow } from '../lib/hiscoresRecap';
 import { progressColor } from '../lib/progressColor';
 import { resolveAdventureTileWindow, resolveFrontier } from '../lib/adventureProgress';
 import { itemIcon } from '../lib/itemSets';
+import { formatPlayerName } from '../lib/playerDisplay';
 import PlayerChip from './PlayerChip';
 
 interface ParticipantLite {
   id: string;
   rsn: string;
+  // BACKLOG.md #58 -- combined with rsn via formatPlayerName() everywhere
+  // this participant's name is shown.
+  display_name: string;
   chosen_lowest_skill: string | null;
   // Only meaningful for gameMode='team' -- null/absent otherwise.
   team_id?: string | null;
@@ -133,6 +137,7 @@ function rankValue(status: TileStatus, percent: number | null): number {
 interface ContribEntry {
   key: string;
   rsn: string;
+  displayName: string;
   iconUrl: string | null;
   iconColor: string | null;
   value: number;
@@ -149,6 +154,7 @@ interface BossLedgerEntry {
 // tile's threshold, ranked biggest to smallest.
 interface DropLedgerEntry {
   rsn: string;
+  displayName: string;
   source: string;
   items: string;
   value: number;
@@ -159,6 +165,7 @@ interface DropLedgerEntry {
 // have -- recency is the only meaningful order for a log).
 interface CollectionLogLedgerEntry {
   rsn: string;
+  displayName: string;
   itemName: string;
   createdAt: string;
 }
@@ -166,6 +173,11 @@ interface CollectionLogLedgerEntry {
 interface Row {
   key: string;
   label: string;
+  // BACKLOG.md #58 -- separate from label (which is now the combined
+  // "<Display Name> (<RSN>)" string for a solo row, or 'Everyone'/a team
+  // name for a pooled row) so PlayerChip's fallback-initial glyph still
+  // sources from a real rsn/name, not a display-name-first initial.
+  rsn: string;
   status: TileStatus;
   // From tile_completions, not the live-recomputed status.done above --
   // see the Props.completions comment. null means not actually done yet,
@@ -383,6 +395,7 @@ export default function TileDetailModal({
             return {
               key: id,
               rsn: participant.rsn,
+              displayName: participant.display_name,
               iconUrl: participant.icon_url,
               iconColor: participant.color,
               value: checkTile(tile.condition, statsById[id]).progress,
@@ -408,6 +421,7 @@ export default function TileDetailModal({
           const w = windowById[id] ?? window;
           return qualifyingBigDrops(lootByP.get(id) ?? [], w, threshold).map((d) => ({
             rsn: participant.rsn,
+            displayName: participant.display_name,
             source: d.source ?? 'Unknown',
             items: d.items.map((it) => it.name).join(', '),
             value: d.total_value,
@@ -423,6 +437,7 @@ export default function TileDetailModal({
           const w = windowById[id] ?? window;
           return collectionLogEntriesInWindow(clogByP.get(id) ?? [], w).map((e) => ({
             rsn: participant.rsn,
+            displayName: participant.display_name,
             itemName: e.item_name ?? 'Unknown item',
             createdAt: e.created_at,
           }));
@@ -438,6 +453,7 @@ export default function TileDetailModal({
           {
             key: 'pooled',
             label: 'Everyone',
+            rsn: 'Everyone',
             status,
             completedAt,
             isFirst: false,
@@ -464,6 +480,7 @@ export default function TileDetailModal({
             return {
               key: t.id,
               label: t.name,
+              rsn: t.name,
               status,
               completedAt,
               isFirst,
@@ -505,7 +522,8 @@ export default function TileDetailModal({
             key: p.id,
             awaitingBaselineReset: reached ? (awaitingBaselineResetById[p.id] ?? false) : false,
             notReached: !reached,
-            label: p.rsn,
+            label: formatPlayerName(p),
+            rsn: p.rsn,
             iconUrl: p.icon_url,
             iconColor: p.color,
             participantId: p.id,
@@ -601,7 +619,7 @@ export default function TileDetailModal({
                   <div className="flex items-center justify-between text-sm">
                     <span className="flex items-center gap-1.5 font-medium">
                       {row.participantId && (
-                        <PlayerChip iconUrl={row.iconUrl} color={row.iconColor} participantId={row.participantId} rsn={row.label} />
+                        <PlayerChip iconUrl={row.iconUrl} color={row.iconColor} participantId={row.participantId} rsn={row.rsn} />
                       )}
                       {row.label}
                     </span>
@@ -628,7 +646,7 @@ export default function TileDetailModal({
                         <div key={c.key} className="flex items-center justify-between text-xs text-stone-400">
                           <span className="flex items-center gap-1.5">
                             <PlayerChip iconUrl={c.iconUrl} color={c.iconColor} participantId={c.key} rsn={c.rsn} size={12} />
-                            {c.rsn}
+                            {formatPlayerName({ display_name: c.displayName, rsn: c.rsn })}
                           </span>
                           <span>{formatContributionValue(tile.condition, c.value)}</span>
                         </div>
@@ -655,7 +673,7 @@ export default function TileDetailModal({
                         {row.dropLedger.map((d, i) => (
                           <div key={i} className="flex items-center justify-between gap-2 text-xs text-stone-400">
                             <span className="truncate">
-                              {row.participantId === null ? `${d.rsn} -- ` : ''}
+                              {row.participantId === null ? `${formatPlayerName({ display_name: d.displayName, rsn: d.rsn })} -- ` : ''}
                               {d.source} -- {d.items}
                             </span>
                             <span className="shrink-0">{formatContributionValue(tile.condition, d.value)}</span>
@@ -673,7 +691,9 @@ export default function TileDetailModal({
                             <img src={itemIcon(e.itemName)} alt="" className="h-4 w-4 shrink-0 object-contain" />
                             <span className="truncate">
                               {e.itemName}
-                              {row.participantId === null && <span className="text-stone-600"> -- {e.rsn}</span>}
+                              {row.participantId === null && (
+                                <span className="text-stone-600"> -- {formatPlayerName({ display_name: e.displayName, rsn: e.rsn })}</span>
+                              )}
                             </span>
                           </div>
                         ))}

@@ -2733,3 +2733,52 @@ instead of renumbering the existing list.
     placeholder -- a one-time rename back to whatever's wanted, from the
     new Profile page field, is expected. Build/lint/318 tests all
     passed.
+
+58. **Player names now show "<Display Name> (<RSN>)" everywhere, hosts
+    show up even before they join, Admin Accounts gained email/last-login
+    columns, and Coop boards dropped their ranking-flavored UI.** **Shipped
+    2026-09-17.** Follow-up to #57: with `display_name` now player-editable
+    and a real account confirmed to have zero RSNs at all (a host who'd
+    never joined their own dungeon), the call was to keep both fields and
+    combine them, rather than pick one.
+
+    **New `src/lib/playerDisplay.ts`** (`formatPlayerName`) is the one
+    place owning the "<Display Name> (<RSN>)" format, applied everywhere a
+    player's name was previously bare `rsn` in `BoardPage.tsx`,
+    `AdventureColumnModal.tsx`, and `TileDetailModal.tsx` -- the board
+    header, per-tile "who's here" markers, every leaderboard/participant
+    list variant, and both tile-detail modals' contribution/drop/
+    collection-log ledgers. `PlayerChip`'s own fallback-initial glyph still
+    sources from the raw `rsn`/team name, not the combined string.
+    `EditChallengePage.tsx`'s remove-participant dialogs already matched
+    this format from #57 -- no change needed there.
+
+    **A host who hasn't joined their own dungeon as a participant now
+    shows as "Hosted by <name>"** under the challenge title on
+    `BoardPage.tsx` -- previously invisible, since `hostBadge()`/
+    `HostBadge` only ever render attached to a participant row. Confirmed
+    against the real `thralls` dungeon, whose host has never joined.
+
+    **New `api/admin/accounts.ts`** (mirrored in `vite.config.ts`'s
+    `devApi()` plugin, same as every other Vercel function this project
+    tests locally) calls Supabase's Admin Auth API for email +
+    `last_sign_in_at` -- already tracked natively, no new tracking needed
+    -- gated by the existing `requireSiteAdmin`. `AdminAccountsPage.tsx`
+    merges it in by id, tolerating a failed call without blocking the rest
+    of the page.
+
+    **Coop boards** (always a standard grid, never Adventure) dropped
+    three ranking-flavored leftovers that don't fit a shared-progress
+    board: the "<name>'s board" header, the "Leaderboard" heading (now
+    "Participants"), and the participant list's `PlayerChip` icons --
+    confirmed there's no other avatar-circle row on a Coop board; the
+    Adventure "who's here" markers are exclusively an Adventure-board
+    feature and never run for Coop.
+
+    Verified live against real data (session-injection as the real site
+    admin): the real Coop dungeon shows "Participants" with no per-row
+    icons and combined names; the real Adventure/Solo dungeon shows
+    combined names on the board header, leaderboard, and both tile
+    modals; `thralls` shows "Hosted by Player4bbb4a"; Admin Accounts shows
+    real emails and login timestamps for all 7 accounts, sortable.
+    Build/lint/318 tests all passed.

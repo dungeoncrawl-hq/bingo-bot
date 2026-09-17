@@ -8,6 +8,7 @@ import { parseDinkPayload, readRawBody } from './src/server/dinkPayload.js'
 import { selectRows } from './src/server/supabaseAdmin.js'
 import { syncAllParticipants, syncOneParticipant } from './src/server/participantSync.js'
 import { checkChallengeProgress } from './src/server/challengeProgress.js'
+import { requireSiteAdmin } from './src/server/adminAuth.js'
 
 // vite.config.ts runs in a plain Node context -- unlike client code, it
 // doesn't get .env.local values injected automatically, so the webhook's
@@ -103,6 +104,41 @@ function devApi(): Plugin {
           res.statusCode = 500
           res.end(JSON.stringify({ error: err instanceof Error ? err.message : 'Sync failed' }))
         }
+      })
+
+      // Mirrors api/admin/accounts.ts -- BACKLOG.md #58's email/last-login
+      // columns on AdminAccountsPage.tsx.
+      server.middlewares.use('/api/admin/accounts', async (req, res) => {
+        if (req.method !== 'GET') {
+          res.statusCode = 405
+          res.end(JSON.stringify({ error: 'Method not allowed' }))
+          return
+        }
+        const adminId = await requireSiteAdmin(req.headers.authorization as string | undefined)
+        if (!adminId) {
+          res.statusCode = 403
+          res.end(JSON.stringify({ error: 'Forbidden' }))
+          return
+        }
+        const usersRes = await fetch(`${process.env.VITE_SUPABASE_URL}/auth/v1/admin/users?per_page=200`, {
+          headers: {
+            apikey: process.env.SUPABASE_SERVICE_ROLE_KEY ?? '',
+            Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+          },
+        })
+        if (!usersRes.ok) {
+          res.statusCode = 502
+          res.end(JSON.stringify({ error: 'Failed to list accounts' }))
+          return
+        }
+        const { users } = (await usersRes.json()) as { users: { id: string; email?: string; last_sign_in_at?: string }[] }
+        res.setHeader('Content-Type', 'application/json')
+        res.statusCode = 200
+        res.end(
+          JSON.stringify({
+            accounts: users.map((u) => ({ id: u.id, email: u.email ?? null, last_sign_in_at: u.last_sign_in_at ?? null })),
+          }),
+        )
       })
     },
   }

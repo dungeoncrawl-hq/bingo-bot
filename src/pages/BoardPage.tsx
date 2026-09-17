@@ -23,6 +23,7 @@ import { progressColor } from '../lib/progressColor';
 import { colorForParticipant } from '../lib/playerColors';
 import { formatLocalRange, preciseCountdownText } from '../lib/dungeonStatus';
 import { formatRelativeTime } from '../lib/format';
+import { formatPlayerName } from '../lib/playerDisplay';
 import TileDetailModal from '../components/TileDetailModal';
 import AdventureColumnModal from '../components/AdventureColumnModal';
 import AdventureConnector from '../components/AdventureConnector';
@@ -102,6 +103,9 @@ interface ParticipantRow {
   // per-participant fallback in that case, callers should never fall
   // back to a plain default themselves.
   color: string | null;
+  // BACKLOG.md #58 -- same flattening as icon_url/color above. Combined
+  // with rsn via formatPlayerName() everywhere a player's name is shown.
+  display_name: string;
 }
 
 interface CompletionRow {
@@ -143,6 +147,11 @@ export default function BoardPage() {
   const [selectedColumn, setSelectedColumn] = useState<number | null>(null);
   const [baselineBannerDismissed, setBaselineBannerDismissed] = useState(false);
   const [legendOpen, setLegendOpen] = useState(false);
+  // BACKLOG.md #58 -- the primary host's display_name, so a "Hosted by"
+  // line can show even when they haven't joined as a participant (the
+  // only other place a host appears today is hostBadge()/HostBadge,
+  // which only render attached to a participant row).
+  const [hostProfile, setHostProfile] = useState<{ display_name: string } | null>(null);
 
   const myParticipant = session ? participants.find((p) => p.profile_id === session.user.id) : undefined;
   // Which participant's board is currently displayed -- explicit via ?p=,
@@ -184,30 +193,45 @@ export default function BoardPage() {
       return;
     }
     setChallenge(challengeData as Challenge);
-    const [{ data: tilesData }, { data: participantsData }, { data: completionsData }, { data: teamsData }, { data: hostsData }] =
-      await Promise.all([
-        supabase.from('tiles').select('*').eq('challenge_id', challengeData.id),
-        supabase
-          .from('challenge_participants')
-          .select(
-            'id, profile_id, rsn, chosen_lowest_skill, adventure_path, team_id, adventure_baseline_at, adventure_baseline_snapshot, last_webhook_at, profiles(icon_url, color)',
-          )
-          .eq('challenge_id', challengeData.id),
-        supabase
-          .from('tile_completions')
-          .select('participant_id, kind, ref, completed_at')
-          .eq('challenge_id', challengeData.id),
-        supabase.from('teams').select('*').eq('challenge_id', challengeData.id),
-        supabase.from('challenge_hosts').select('profile_id').eq('challenge_id', challengeData.id),
-      ]);
+    const [
+      { data: tilesData },
+      { data: participantsData },
+      { data: completionsData },
+      { data: teamsData },
+      { data: hostsData },
+      { data: hostProfileData },
+    ] = await Promise.all([
+      supabase.from('tiles').select('*').eq('challenge_id', challengeData.id),
+      supabase
+        .from('challenge_participants')
+        .select(
+          'id, profile_id, rsn, chosen_lowest_skill, adventure_path, team_id, adventure_baseline_at, adventure_baseline_snapshot, last_webhook_at, profiles(icon_url, color, display_name)',
+        )
+        .eq('challenge_id', challengeData.id),
+      supabase
+        .from('tile_completions')
+        .select('participant_id, kind, ref, completed_at')
+        .eq('challenge_id', challengeData.id),
+      supabase.from('teams').select('*').eq('challenge_id', challengeData.id),
+      supabase.from('challenge_hosts').select('profile_id').eq('challenge_id', challengeData.id),
+      supabase.from('profiles').select('display_name').eq('id', challengeData.host_id).maybeSingle(),
+    ]);
     setTiles((tilesData as Tile[]) ?? []);
     const rawParticipants =
-      (participantsData as unknown as (Omit<ParticipantRow, 'icon_url' | 'color'> & {
-        profiles: { icon_url: string | null; color: string | null } | null;
+      (participantsData as unknown as (Omit<ParticipantRow, 'icon_url' | 'color' | 'display_name'> & {
+        profiles: { icon_url: string | null; color: string | null; display_name: string } | null;
       })[]) ?? [];
-    setParticipants(rawParticipants.map((p) => ({ ...p, icon_url: p.profiles?.icon_url ?? null, color: p.profiles?.color ?? null })));
+    setParticipants(
+      rawParticipants.map((p) => ({
+        ...p,
+        icon_url: p.profiles?.icon_url ?? null,
+        color: p.profiles?.color ?? null,
+        display_name: p.profiles?.display_name ?? '',
+      })),
+    );
     setCompletions((completionsData as CompletionRow[]) ?? []);
     setTeams((teamsData as Team[]) ?? []);
+    setHostProfile((hostProfileData as { display_name: string } | null) ?? null);
     setCoHostProfileIds(new Set(((hostsData as { profile_id: string }[]) ?? []).map((h) => h.profile_id)));
   }, [slug]);
 
@@ -483,6 +507,11 @@ export default function BoardPage() {
   // split (a co-host can't delete the dungeon) -- this boolean only
   // decides whether the item is worth showing at all.
   const isHost = session?.user.id === challenge.host_id || (session != null && coHostProfileIds.has(session.user.id));
+  // BACKLOG.md #58 -- whether the primary host shows up in the
+  // leaderboard/participant list on their own. When they don't, the
+  // header below shows a standalone "Hosted by" line instead -- without
+  // this, a host who never joins their own dungeon appears nowhere.
+  const hostParticipates = participants.some((p) => p.profile_id === challenge.host_id);
   const viewedParticipant = participants.find((p) => p.id === viewedParticipantId);
   // Coop shows the one shared pooled progress regardless of who's
   // viewing; Team shows the viewed participant's own team's pooled
@@ -649,6 +678,7 @@ export default function BoardPage() {
           <h1 className="text-2xl font-semibold">{challenge.name}</h1>
           <p className="text-sm text-stone-500">{formatLocalRange(challenge.start_date, challenge.end_date, VIEWER_TIMEZONE)}</p>
           {countdown && <p className="mt-1 text-xs font-medium text-amber-500">{countdown}</p>}
+          {!hostParticipates && hostProfile && <p className="mt-1 text-xs text-stone-500">Hosted by {hostProfile.display_name}</p>}
         </div>
         {session && (myParticipant || isHost) && (
           <BoardActionsMenu
@@ -721,7 +751,9 @@ export default function BoardPage() {
               )}
             </div>
           )}
-          {viewedParticipant && <p className="mb-3 text-lg font-semibold text-stone-200">{viewedParticipant.rsn}'s board</p>}
+          {viewedParticipant && challenge.game_mode !== 'coop' && (
+            <p className="mb-3 text-lg font-semibold text-stone-200">{formatPlayerName(viewedParticipant)}'s board</p>
+          )}
           {challenge.board_type === 'adventure' ? (
             <div className="overflow-x-auto pb-16">
               <div
@@ -907,7 +939,7 @@ export default function BoardPage() {
                                       participantId={p.id}
                                       rsn={p.rsn}
                                       size={14}
-                                      title={`${p.rsn} is here`}
+                                      title={`${formatPlayerName(p)} is here`}
                                     />
                                   ))}
                                 </div>
@@ -1079,7 +1111,7 @@ export default function BoardPage() {
         {/* Leaderboard + actions -- above the board on mobile, right column
             (~20%, fixed-width so entries never wrap) on desktop. */}
         <div className="order-1 lg:order-2 lg:w-72 lg:shrink-0">
-          <h2 className="text-lg font-semibold">Leaderboard</h2>
+          <h2 className="text-lg font-semibold">{challenge.game_mode === 'coop' ? 'Participants' : 'Leaderboard'}</h2>
           {challenge.board_type === 'adventure' ? (
             <div className="mt-3 overflow-x-auto">
               <table className="w-full min-w-0 table-fixed text-sm">
@@ -1128,7 +1160,7 @@ export default function BoardPage() {
                         <td className="max-w-0 py-1.5 pr-2">
                           <span className="flex items-center gap-1.5" style={{ color: colorFor(p) }}>
                             <PlayerChip iconUrl={p.icon_url} color={p.color} participantId={p.id} rsn={p.rsn} />
-                            <span className={`truncate ${isViewed ? 'font-semibold underline' : ''}`}>{p.rsn}</span>
+                            <span className={`truncate ${isViewed ? 'font-semibold underline' : ''}`}>{formatPlayerName(p)}</span>
                             {hostBadge(p) && <HostBadge role={hostBadge(p)!} />}
                             {isYou && <span className="shrink-0 text-xs text-stone-500">(you)</span>}
                           </span>
@@ -1162,8 +1194,7 @@ export default function BoardPage() {
               <ul className="space-y-1">
                 {participants.map((p) => (
                   <li key={p.id} className="flex items-center gap-1.5" style={{ color: colorFor(p) }}>
-                    <PlayerChip iconUrl={p.icon_url} color={p.color} participantId={p.id} rsn={p.rsn} />
-                    {p.rsn}
+                    {formatPlayerName(p)}
                     {hostBadge(p) && <HostBadge role={hostBadge(p)!} />}
                   </li>
                 ))}
@@ -1176,7 +1207,7 @@ export default function BoardPage() {
                 const isTeam = challenge.game_mode === 'team';
                 const p = participants.find((pp) => pp.id === entry.participantId);
                 if (!p) return null;
-                const label = isTeam ? (p.team_id && teamNameById.get(p.team_id)) || 'Unknown Team' : p.rsn;
+                const label = isTeam ? (p.team_id && teamNameById.get(p.team_id)) || 'Unknown Team' : formatPlayerName(p);
                 const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : null;
                 const isViewed = isTeam ? p.team_id != null && p.team_id === viewedParticipant?.team_id : entry.participantId === viewedParticipantId;
                 const isYou = isTeam ? p.team_id != null && p.team_id === myParticipant?.team_id : entry.participantId === myParticipant?.id;

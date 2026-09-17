@@ -10,13 +10,19 @@ interface AccountRow {
   default_rsn: string | null;
   hosted: number;
   participating: number;
+  // BACKLOG.md #58 -- null until /api/admin/accounts resolves (or if it
+  // fails -- see load() below), never blocking the rest of the page.
+  email: string | null;
+  last_sign_in_at: string | null;
 }
 
-type SortKey = 'display_name' | 'created_at' | 'hosted' | 'participating' | 'default_rsn' | 'is_site_admin';
+type SortKey = 'display_name' | 'created_at' | 'hosted' | 'participating' | 'default_rsn' | 'is_site_admin' | 'email' | 'last_sign_in_at';
 
 const COLUMNS: { key: SortKey; label: string }[] = [
   { key: 'display_name', label: 'Account' },
+  { key: 'email', label: 'Email' },
   { key: 'created_at', label: 'Created' },
+  { key: 'last_sign_in_at', label: 'Last login' },
   { key: 'hosted', label: 'Dungeons hosted' },
   { key: 'participating', label: 'Participating in' },
   { key: 'default_rsn', label: 'Default RSN' },
@@ -37,6 +43,10 @@ function sortValue(r: AccountRow, key: SortKey): string | number {
       return r.default_rsn?.toLowerCase() ?? '';
     case 'is_site_admin':
       return r.is_site_admin ? 1 : 0;
+    case 'email':
+      return r.email?.toLowerCase() ?? '';
+    case 'last_sign_in_at':
+      return r.last_sign_in_at ?? '';
   }
 }
 
@@ -71,12 +81,33 @@ export default function AdminAccountsPage() {
           participatingCounts.set(p.profile_id, (participatingCounts.get(p.profile_id) ?? 0) + 1);
         }
 
+        // A failure here (network hiccup, service not configured) never
+        // blocks the rest of the page -- Email/Last login just stay blank.
+        const authById = new Map<string, { email: string | null; last_sign_in_at: string | null }>();
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          const token = sessionData.session?.access_token;
+          const res = await fetch('/api/admin/accounts', { headers: { Authorization: `Bearer ${token}` } });
+          if (res.ok) {
+            const { accounts } = (await res.json()) as {
+              accounts: { id: string; email: string | null; last_sign_in_at: string | null }[];
+            };
+            for (const a of accounts) {
+              authById.set(a.id, { email: a.email, last_sign_in_at: a.last_sign_in_at });
+            }
+          }
+        } catch (err) {
+          console.error('Failed to load account emails/last-login', err);
+        }
+
         const merged: AccountRow[] = (
-          (profiles.data as Omit<AccountRow, 'hosted' | 'participating'>[]) ?? []
+          (profiles.data as Omit<AccountRow, 'hosted' | 'participating' | 'email' | 'last_sign_in_at'>[]) ?? []
         ).map((p) => ({
           ...p,
           hosted: hostedCounts.get(p.id) ?? 0,
           participating: participatingCounts.get(p.id) ?? 0,
+          email: authById.get(p.id)?.email ?? null,
+          last_sign_in_at: authById.get(p.id)?.last_sign_in_at ?? null,
         }));
         setRows(merged);
       } catch (err) {
@@ -136,7 +167,7 @@ export default function AdminAccountsPage() {
           {sorted.length > 0 && (
             <>
               <div className="mt-4 hidden overflow-x-auto sm:block">
-                <table className="w-full min-w-[720px] text-left text-sm">
+                <table className="w-full min-w-[960px] text-left text-sm">
                   <thead>
                     <tr className="border-b border-stone-800 text-xs uppercase text-stone-500">
                       {COLUMNS.map((col) => (
@@ -151,7 +182,11 @@ export default function AdminAccountsPage() {
                     {sorted.map((r) => (
                       <tr key={r.id} className="border-b border-stone-900">
                         <td className="py-2 pr-4">{r.display_name}</td>
+                        <td className="py-2 pr-4 text-stone-400">{r.email ?? <span className="text-stone-600">—</span>}</td>
                         <td className="py-2 pr-4 text-stone-400">{new Date(r.created_at).toLocaleDateString()}</td>
+                        <td className="py-2 pr-4 text-stone-400">
+                          {r.last_sign_in_at ? new Date(r.last_sign_in_at).toLocaleString() : <span className="text-stone-600">Never</span>}
+                        </td>
                         <td className="py-2 pr-4">{r.hosted}</td>
                         <td className="py-2 pr-4">{r.participating}</td>
                         <td className="py-2 pr-4 text-stone-400">{r.default_rsn ?? <span className="text-stone-600">—</span>}</td>
@@ -171,9 +206,13 @@ export default function AdminAccountsPage() {
                       <span className="truncate font-medium text-stone-100">{r.display_name}</span>
                       {r.is_site_admin && <span className="shrink-0 text-xs font-medium text-amber-400">Site admin</span>}
                     </div>
+                    {r.email && <div className="mt-1 truncate text-xs text-stone-500">{r.email}</div>}
                     <div className="mt-1 text-xs text-stone-500">
                       Joined {new Date(r.created_at).toLocaleDateString()}
                       {r.default_rsn && <> · {r.default_rsn}</>}
+                    </div>
+                    <div className="mt-1 text-xs text-stone-600">
+                      Last login {r.last_sign_in_at ? new Date(r.last_sign_in_at).toLocaleDateString() : 'Never'}
                     </div>
                     <div className="mt-2 flex gap-4 text-xs text-stone-400">
                       <span>

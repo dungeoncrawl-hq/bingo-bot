@@ -21,11 +21,15 @@ import type { SnapshotRow } from '../lib/hiscoresRecap';
 import { progressColor } from '../lib/progressColor';
 import { resolveAdventureTileWindow, resolveFrontier } from '../lib/adventureProgress';
 import { itemIcon } from '../lib/itemSets';
+import { formatPlayerName } from '../lib/playerDisplay';
 import PlayerChip from './PlayerChip';
 
 interface ParticipantLite {
   id: string;
   rsn: string;
+  // BACKLOG.md #58 -- combined with rsn via formatPlayerName() everywhere
+  // this participant's name is shown.
+  display_name: string;
   chosen_lowest_skill: string | null;
   adventure_path: Record<string, 'top' | 'bottom'>;
   // Adventure logout-gated reset (BACKLOG.md #4) -- null means this
@@ -359,7 +363,7 @@ export default function AdventureColumnModal({
                   <div className="flex items-center justify-between text-sm">
                     <span className="flex items-center gap-1.5 font-medium">
                       <PlayerChip iconUrl={p.icon_url} color={p.color} participantId={p.id} rsn={p.rsn} />
-                      {p.rsn}
+                      {formatPlayerName(p)}
                       <span className="rounded-full border border-stone-700 px-1.5 py-0.5 text-[10px] uppercase text-stone-500">
                         {chosenLane}
                       </span>
@@ -427,7 +431,7 @@ export default function AdventureColumnModal({
               <li key={p.id} className="flex items-center justify-between text-sm text-stone-600">
                 <span className="flex items-center gap-1.5">
                   <PlayerChip iconUrl={p.icon_url} color={p.color} participantId={p.id} rsn={p.rsn} />
-                  {p.rsn}
+                  {formatPlayerName(p)}
                 </span>
                 <span>Not reached yet</span>
               </li>

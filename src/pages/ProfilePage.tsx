@@ -350,7 +350,9 @@ export default function ProfilePage() {
 
       <div className="mt-8 max-w-md">
         <h2 className="text-sm font-semibold text-stone-300">Display name</h2>
-        <p className="mt-1 text-xs text-stone-500">Shown site-wide -- leaderboards, participant lists, anywhere your account is credited.</p>
+        <p className="mt-1 text-xs text-stone-500">
+          Shown alongside your RSN everywhere -- leaderboards, participant lists, anywhere your account is credited.
+        </p>
         <form onSubmit={handleSaveDisplayName} className="mt-2 flex gap-2">
           <input
             required
