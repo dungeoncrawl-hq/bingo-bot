@@ -71,6 +71,7 @@ async function announceDungeonEnded(challenge: ClosedChallenge): Promise<void> {
       challenge: { name: challenge.name, slug: challenge.slug, board_type: challenge.board_type },
       leaderboard,
       participants: embedParticipants,
+      isCoop: challenge.game_mode === 'coop',
     });
     await relayToDiscord(challenge.discord_webhook_url, embed);
   } catch (err) {

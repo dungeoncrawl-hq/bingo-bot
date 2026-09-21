@@ -23,7 +23,11 @@ import { resolveFrontier, resolveAdventureTileWindow } from '../lib/adventurePro
 import type { AdventurePath } from '../lib/adventureProgress.js';
 import type { AdventureLayout, Challenge, GridLayout, Team, Tile } from '../db/types.js';
 
-interface ParticipantRow {
+// Exported so api/board-image/[participantId].ts can pool the same way
+// for a Coop/Team board image (it needs the exact same
+// coop=everyone/team=teammates/solo=self resolution this file's own
+// checkChallengeProgress does -- see that function's own comment).
+export interface ParticipantRow {
   id: string;
   challenge_id: string;
   rsn: string;
@@ -69,7 +73,7 @@ interface PoolStatsResult {
   snapshotsByMember: Map<string, SnapshotRow[]>;
 }
 
-async function fetchPoolStats(
+export async function fetchPoolStats(
   poolMembers: ParticipantRow[],
   window: { start: string; end: string },
 ): Promise<PoolStatsResult> {
@@ -137,7 +141,10 @@ async function fetchPoolStats(
   return { statsList, rawByMember, snapshotsByMember };
 }
 
-const PARTICIPANT_SELECT =
+// Exported so api/board-image/[participantId].ts can fetch the exact
+// same participant shape this file needs before handing rows to
+// fetchPoolStats.
+export const PARTICIPANT_SELECT =
   'id,challenge_id,rsn,chosen_lowest_skill,adventure_path,team_id,adventure_baseline_at,adventure_baseline_snapshot';
 
 // isLogout: whether the Dink event that triggered this check was
@@ -447,6 +454,7 @@ export async function checkChallengeProgress(participantId: string, isLogout: bo
       leaderboard,
       participants: embedParticipants,
       challenge: challengeLite,
+      isCoop: challenge.game_mode === 'coop',
       pools,
       titles,
     });

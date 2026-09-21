@@ -71,6 +71,7 @@ async function sendOneDailySummary(challenge: SummaryChallenge, today: string): 
       leaderboard,
       participants: embedParticipants,
       daysRemaining: Math.max(0, daysBetween(today, challenge.end_date)),
+      isCoop: challenge.game_mode === 'coop',
     });
     await relayToDiscord(challenge.discord_webhook_url, embed);
     return true;

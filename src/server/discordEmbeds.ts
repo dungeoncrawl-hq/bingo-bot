@@ -84,6 +84,11 @@ export function buildTileCompletionEmbed(params: {
   leaderboard: LeaderboardEntry[];
   participants: ParticipantLite[];
   challenge: ChallengeLite;
+  // Coop only: there's no individual score to report either (every
+  // completion credits the whole pool identically -- BACKLOG.md #10),
+  // so the Points/Leaderboard fields are dropped entirely rather than
+  // showing a tied, meaningless ranking.
+  isCoop?: boolean;
   // BACKLOG.md #9 -- the admin-editable pools (discordBanterStore.ts's
   // fetchBanterPools()), defaulting to the hardcoded pools when omitted
   // (every existing caller, including this file's own test suite).
@@ -92,7 +97,8 @@ export function buildTileCompletionEmbed(params: {
   // (discordTitleStore.ts's fetchTitleTemplates()).
   titles?: TitleTemplates;
 }): DiscordEmbed {
-  const { participant, tile, isFirst, firstCompleterRsn, noFirstConcept, leaderboard, participants, challenge, pools, titles } = params;
+  const { participant, tile, isFirst, firstCompleterRsn, noFirstConcept, leaderboard, participants, challenge, isCoop, pools, titles } =
+    params;
   const subject = params.subject ?? participant.rsn;
   // Two tiles can share the same label (e.g. two "Big Drop" tiles with
   // different thresholds) -- spelling out the exact requirement in the
@@ -128,11 +134,13 @@ export function buildTileCompletionEmbed(params: {
     // src/lib/boardImage.ts -- hardcoded to the 5x5 grid) -- omit rather
     // than attach a garbled/wrong image.
     image: challenge.board_type === 'adventure' ? undefined : { url: boardImageUrl(participant.id) },
-    fields: [
-      { name: 'Points', value: `+${totalPoints}`, inline: true },
-      { name: 'Leaderboard', value: formatLeaderboardField(leaderboard, participants) || 'No one has scored yet.' },
-      boardLinkField(challenge),
-    ],
+    fields: isCoop
+      ? [boardLinkField(challenge)]
+      : [
+          { name: 'Points', value: `+${totalPoints}`, inline: true },
+          { name: 'Leaderboard', value: formatLeaderboardField(leaderboard, participants) || 'No one has scored yet.' },
+          boardLinkField(challenge),
+        ],
   };
 }
 
@@ -208,16 +216,20 @@ export function buildDungeonEndedEmbed(params: {
   challenge: ChallengeLite;
   leaderboard: LeaderboardEntry[];
   participants: ParticipantLite[];
+  // Coop only -- see buildTileCompletionEmbed's own isCoop comment.
+  isCoop?: boolean;
 }): DiscordEmbed {
-  const { challenge, leaderboard, participants } = params;
+  const { challenge, leaderboard, participants, isCoop } = params;
   return {
     title: `🏁 ${challenge.name} has ended!`,
     description: 'Final standings:',
     color: ENDED_COLOR,
-    fields: [
-      { name: 'Final Leaderboard', value: formatLeaderboardField(leaderboard, participants) || 'No one scored any points.' },
-      boardLinkField(challenge),
-    ],
+    fields: isCoop
+      ? [boardLinkField(challenge)]
+      : [
+          { name: 'Final Leaderboard', value: formatLeaderboardField(leaderboard, participants) || 'No one scored any points.' },
+          boardLinkField(challenge),
+        ],
   };
 }
 
@@ -233,17 +245,21 @@ export function buildDailySummaryEmbed(params: {
   leaderboard: LeaderboardEntry[];
   participants: ParticipantLite[];
   daysRemaining: number;
+  // Coop only -- see buildTileCompletionEmbed's own isCoop comment.
+  isCoop?: boolean;
 }): DiscordEmbed {
-  const { challenge, tilesCompletedToday, leaderboard, participants, daysRemaining } = params;
+  const { challenge, tilesCompletedToday, leaderboard, participants, daysRemaining, isCoop } = params;
   const tilePlural = tilesCompletedToday === 1 ? '' : 's';
   const dayPlural = daysRemaining === 1 ? '' : 's';
   return {
     title: `📅 Daily update — ${challenge.name}`,
     description: `${tilesCompletedToday} tile${tilePlural} completed in the last 24 hours. ${daysRemaining} day${dayPlural} remaining.`,
     color: SUMMARY_COLOR,
-    fields: [
-      { name: 'Leaderboard', value: formatLeaderboardField(leaderboard.slice(0, 3), participants) || 'No one has scored yet.' },
-      boardLinkField(challenge),
-    ],
+    fields: isCoop
+      ? [boardLinkField(challenge)]
+      : [
+          { name: 'Leaderboard', value: formatLeaderboardField(leaderboard.slice(0, 3), participants) || 'No one has scored yet.' },
+          boardLinkField(challenge),
+        ],
   };
 }

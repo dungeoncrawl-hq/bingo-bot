@@ -2782,3 +2782,69 @@ instead of renumbering the existing list.
     modals; `thralls` shows "Hosted by Player4bbb4a"; Admin Accounts shows
     real emails and login timestamps for all 7 accounts, sortable.
     Build/lint/318 tests all passed.
+
+59. **Fixed the Coop Discord board image, dropped Points/Leaderboard from
+    Coop Discord posts, and reordered the daily cron so hiscores-driven
+    completions post before, not right after, the daily summary.**
+    **Shipped 2026-09-21.** Three separate reports about the same feature
+    area.
+
+    **Board image bug**: `api/board-image/[participantId].ts` (the PNG
+    Discord embeds attach) computed tile-done status from only the
+    *triggering* participant's own raw stats, even for a Coop/Team board
+    -- it never pooled like `challengeProgress.ts`'s own completion
+    detection already does. A tile the group had cleared together (e.g.
+    a shared XP/loot total neither member reached alone) still rendered
+    dark/not-done in the Discord image, even though `tile_completions`
+    (and the live site) already showed it green. Fixed by exporting
+    `fetchPoolStats`/`PARTICIPANT_SELECT`/`ParticipantRow` from
+    `challengeProgress.ts` and reusing them here for the same
+    coop=everyone/team=teammates/solo=self resolution, instead of
+    duplicating a second copy of the pooling logic. Also gated the amber
+    "first" color off entirely for Coop (no individual "first" concept --
+    BACKLOG.md #10), matching `BoardPage.tsx`'s own `game_mode !==
+    'coop'` gate. **Verified against real production data** (the
+    `ototo-dungeon` Coop challenge): the two tiles the group had actually
+    completed together ("Construction XP", "Clue Scrolls") checked as
+    `false` under the old per-individual computation for *both* real
+    participants despite the DB saying `done: true` -- reproducing the
+    exact reported bug -- and checked correctly under the new pooled
+    code for all 25 tiles on the board. A full handler invocation against
+    real data confirmed a valid PNG with the green "done" color present
+    and the amber "first" color never appearing for either participant.
+
+    **Points/Leaderboard removed from Coop Discord embeds**: every
+    completion credits the whole pool identically in Coop, so an
+    individual "Points" total or ranked "Leaderboard" was always
+    tied/meaningless there anyway. `buildTileCompletionEmbed`,
+    `buildDungeonEndedEmbed`, and `buildDailySummaryEmbed`
+    (`discordEmbeds.ts`) all gained an `isCoop?: boolean` param that
+    drops those fields entirely (keeping just the board-link field) --
+    plumbed through from `challenge.game_mode === 'coop'` at each of the
+    three call sites (`challengeProgress.ts`, `challengeLifecycle.ts`,
+    `discordDailySummary.ts`). 3 new tests cover the dropped-fields case
+    for all three builders; the existing 40 kept passing unchanged since
+    `isCoop` defaults to falsy.
+
+    **Tile-completion timing**: traced the full trigger chain
+    (`dinkWebhook.ts` -> `checkChallengeProgress` -> `relayToDiscord`) and
+    found no Coop-specific batching or queue -- Dink-native events (kills,
+    loot, deaths, collection log, pets, slayer tasks) already post
+    immediately today, in every game mode including Coop. The "only
+    posts with the daily update" symptom is specific to
+    *hiscores-backed* tile conditions (XP/skill-level/clue-tier --
+    `tileConditions.ts`'s `conditionNeedsBaseline`), which only refresh
+    on a Dink LOGOUT event or `api/sync-snapshots.ts`'s once-daily
+    `syncAllParticipants()` cron -- true for every mode, but more likely
+    to surface in Coop since a *pooled* hiscores total needs every pool
+    member to have logged out recently, not just one. That part isn't a
+    bug to fix without new infrastructure (polling OSRS hiscores more
+    often), but `api/sync-snapshots.ts` had a real, fixable ordering
+    issue: it posted that day's daily-summary embed *before* running
+    `syncAllParticipants()`, so any hiscores-driven completion the same
+    cron run discovered posted its own embed immediately after the daily
+    update -- reading as "they're the same post." Reordered to sync
+    first, summarize last, so a same-day completion embed now posts
+    before that day's summary instead of right after it.
+
+    Build/lint/321 tests all passed.

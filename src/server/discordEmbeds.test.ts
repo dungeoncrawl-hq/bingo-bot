@@ -136,6 +136,21 @@ describe('buildTileCompletionEmbed', () => {
     const lastField = embed.fields?.at(-1);
     expect(lastField?.value).toBe('[Bingo Time!](https://dungeoncrawl.lol/c/bingo-time)');
   });
+
+  it('drops the Points and Leaderboard fields for Coop, keeping only the board link', () => {
+    const embed = buildTileCompletionEmbed({
+      participant: PARTICIPANTS[0],
+      tile: tile(),
+      isFirst: false,
+      firstCompleterRsn: 'otototo',
+      leaderboard: [entry('a', 10)],
+      participants: PARTICIPANTS,
+      challenge: CHALLENGE,
+      isCoop: true,
+    });
+    expect(embed.fields).toHaveLength(1);
+    expect(embed.fields?.[0]?.value).toBe('[Bingo Time!](https://dungeoncrawl.lol/c/bingo-time)');
+  });
 });
 
 describe('buildTileCompletionEmbed -- game-mode subject swap (BACKLOG.md #10)', () => {
@@ -383,6 +398,17 @@ describe('buildDungeonEndedEmbed', () => {
     expect(embed.image).toBeUndefined();
     expect(embed.thumbnail).toBeUndefined();
   });
+
+  it('drops the Final Leaderboard field for Coop, keeping only the board link', () => {
+    const embed = buildDungeonEndedEmbed({
+      challenge: CHALLENGE,
+      leaderboard: [entry('a', 10), entry('b', 5)],
+      participants: PARTICIPANTS,
+      isCoop: true,
+    });
+    expect(embed.fields).toHaveLength(1);
+    expect(embed.fields?.[0]?.value).toBe('[Bingo Time!](https://dungeoncrawl.lol/c/bingo-time)');
+  });
 });
 
 describe('buildDailySummaryEmbed', () => {
@@ -451,5 +477,18 @@ describe('buildDailySummaryEmbed', () => {
       daysRemaining: 5,
     });
     expect(embed.fields?.at(-1)?.value).toBe('[Bingo Time!](https://dungeoncrawl.lol/c/bingo-time)');
+  });
+
+  it('drops the Leaderboard field for Coop, keeping only the board link', () => {
+    const embed = buildDailySummaryEmbed({
+      challenge: CHALLENGE,
+      tilesCompletedToday: 4,
+      leaderboard: [entry('a', 4), entry('b', 3)],
+      participants: PARTICIPANTS,
+      daysRemaining: 5,
+      isCoop: true,
+    });
+    expect(embed.fields).toHaveLength(1);
+    expect(embed.fields?.[0]?.value).toBe('[Bingo Time!](https://dungeoncrawl.lol/c/bingo-time)');
   });
 });
