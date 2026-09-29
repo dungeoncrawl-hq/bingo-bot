@@ -1,8 +1,11 @@
-// A daily pulse per active dungeon -- last-24h tile-completion count,
-// top-3 standings, and days remaining -- run once a day from
+// A daily pulse per active dungeon -- run once a day from
 // api/sync-snapshots.ts's existing cron, right after closeEndedChallenges
 // (so a dungeon that just closed today gets its ended-embed instead of
 // also getting a same-day summary -- see that function's own comment).
+// Solo/Team get last-24h tile count, top-3 standings, and days remaining.
+// Coop has no individual standings (BACKLOG.md #10), so it gets a
+// cumulative "X/Y rooms completed" line, the same-day room-name list, and
+// the board image instead -- see buildDailySummaryEmbed's isCoop params.
 import { selectRows } from './supabaseAdmin.js';
 import { relayToDiscord } from './discordRelay.js';
 import { buildDailySummaryEmbed, resolveLeaderboardParticipants, type ParticipantLite } from './discordEmbeds.js';
@@ -52,7 +55,14 @@ async function sendOneDailySummary(challenge: SummaryChallenge, today: string): 
     ]);
     const teamNameById = new Map(allTeams.map((t) => [t.id, t.name]));
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const tilesCompletedToday = completions.filter((c) => c.completed_at >= cutoff).length;
+    // Distinct rooms, not raw rows -- a pooled (Coop/Team) completion
+    // fans out one tile_completions row per pool member sharing that
+    // credit (insertForPool, challengeProgress.ts), so counting rows
+    // over-reports by the pool's size. Confirmed live: a 2-person Coop
+    // dungeon's single room completion reported "2 tiles completed" from
+    // its 2 rows before this fix.
+    const completionsToday = completions.filter((c) => c.completed_at >= cutoff);
+    const tilesCompletedToday = new Set(completionsToday.map((c) => c.ref)).size;
     // computeLeaderboard needs a `kind` field per completion -- every row
     // here is already kind='tile' (filtered in the query above), so it's
     // safe to stamp it back on rather than select a column we'd discard.
@@ -65,13 +75,36 @@ async function sendOneDailySummary(challenge: SummaryChallenge, today: string): 
     // No first-completer bonuses in a daily standings snapshot -- nobody's
     // "first" here, just where points currently stand.
     const leaderboard = computeLeaderboard(tiles, completionsForLeaderboard, leaderboardParticipantIds, {});
+
+    // Coop-only extras (buildDailySummaryEmbed's own isCoop comment) --
+    // cheap to compute unconditionally from data already fetched above,
+    // simply unused when the embed builder ignores them for Solo/Team.
+    const isCoop = challenge.game_mode === 'coop';
+    const tileById = new Map(tiles.map((t) => [t.id, t]));
+    // Earliest completion per distinct ref (a pooled room has several
+    // same-timestamp-ish rows, one per member -- only the room itself,
+    // once, belongs in this list), sorted chronologically.
+    const earliestByRef = new Map<string, string>();
+    for (const c of completionsToday) {
+      const current = earliestByRef.get(c.ref);
+      if (!current || c.completed_at < current) earliestByRef.set(c.ref, c.completed_at);
+    }
+    const roomsCompletedToday = [...earliestByRef.entries()]
+      .sort((a, b) => a[1].localeCompare(b[1]))
+      .map(([ref]) => tileById.get(ref)?.label)
+      .filter((label): label is string => label != null);
+
     const embed = buildDailySummaryEmbed({
       challenge: { name: challenge.name, slug: challenge.slug, board_type: challenge.board_type },
       tilesCompletedToday,
       leaderboard,
       participants: embedParticipants,
       daysRemaining: Math.max(0, daysBetween(today, challenge.end_date)),
-      isCoop: challenge.game_mode === 'coop',
+      isCoop,
+      tilesTotal: tiles.length,
+      tilesCompletedTotal: new Set(completions.map((c) => c.ref)).size,
+      roomsCompletedToday,
+      imageParticipantId: allParticipants[0]?.id,
     });
     await relayToDiscord(challenge.discord_webhook_url, embed);
     return true;

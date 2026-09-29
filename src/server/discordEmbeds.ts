@@ -245,18 +245,53 @@ export function buildDailySummaryEmbed(params: {
   leaderboard: LeaderboardEntry[];
   participants: ParticipantLite[];
   daysRemaining: number;
-  // Coop only -- see buildTileCompletionEmbed's own isCoop comment.
+  // Coop only -- see buildTileCompletionEmbed's own isCoop comment. Coop
+  // has one shared board instead of individual standings, so it trades
+  // the Leaderboard field for a cumulative "X/Y rooms completed" line, a
+  // same-day room-name list, and the board image (none of which have an
+  // unambiguous per-participant meaning in Solo/Team, which keep today's
+  // Leaderboard-based summary).
   isCoop?: boolean;
+  // Coop only -- total rooms on the board and how many are done overall
+  // (not just today), for the "X/Y rooms completed" field.
+  tilesTotal?: number;
+  tilesCompletedTotal?: number;
+  // Coop only -- labels of whichever rooms were newly completed in the
+  // last 24h, earliest first. Empty (not omitted) reads as "None",
+  // matching this embed's existing "post every day, even a quiet one"
+  // philosophy rather than silently dropping the field.
+  roomsCompletedToday?: string[];
+  // Coop only -- any one pool member's id, to attach the same
+  // colored-squares board image the tile-completion embeds use (Coop's
+  // board state is identical for every member, so it doesn't matter
+  // which). Omitted (no participants yet) skips the image.
+  imageParticipantId?: string;
 }): DiscordEmbed {
-  const { challenge, tilesCompletedToday, leaderboard, participants, daysRemaining, isCoop } = params;
+  const {
+    challenge,
+    tilesCompletedToday,
+    leaderboard,
+    participants,
+    daysRemaining,
+    isCoop,
+    tilesTotal,
+    tilesCompletedTotal,
+    roomsCompletedToday,
+    imageParticipantId,
+  } = params;
   const tilePlural = tilesCompletedToday === 1 ? '' : 's';
   const dayPlural = daysRemaining === 1 ? '' : 's';
   return {
     title: `📅 Daily update — ${challenge.name}`,
     description: `${tilesCompletedToday} tile${tilePlural} completed in the last 24 hours. ${daysRemaining} day${dayPlural} remaining.`,
     color: SUMMARY_COLOR,
+    image: isCoop && imageParticipantId ? { url: boardImageUrl(imageParticipantId) } : undefined,
     fields: isCoop
-      ? [boardLinkField(challenge)]
+      ? [
+          { name: 'Board Progress', value: `${tilesCompletedTotal ?? 0}/${tilesTotal ?? 0} rooms completed` },
+          { name: 'Completed in the last 24 hours', value: roomsCompletedToday?.length ? roomsCompletedToday.join('\n') : 'None' },
+          boardLinkField(challenge),
+        ]
       : [
           { name: 'Leaderboard', value: formatLeaderboardField(leaderboard.slice(0, 3), participants) || 'No one has scored yet.' },
           boardLinkField(challenge),

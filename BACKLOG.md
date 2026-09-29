@@ -2848,3 +2848,46 @@ instead of renumbering the existing list.
     before that day's summary instead of right after it.
 
     Build/lint/321 tests all passed.
+
+60. **Improved the Coop daily Discord summary, and fixed a real double-
+    counting bug it had.** **Shipped 2026-09-29.** #58/#59 had already
+    dropped Coop's meaningless individual Leaderboard field from the
+    daily summary, leaving it thin -- just "N tiles completed today, M
+    days left" and a bare link. Replaced with content that actually fits
+    a shared board: a cumulative **"X/Y rooms completed"** field, a
+    **same-day room-name list** ("Completed in the last 24 hours"), and
+    the **board image** attached (same colored-squares PNG the
+    completion embeds use -- no daily summary had an image before this,
+    for any mode). Solo/Team keep today's Leaderboard-based summary
+    unchanged -- none of these three have an unambiguous single-board
+    meaning outside Coop.
+
+    **Found and fixed a real bug while investigating**: `tilesCompletedToday`
+    counted raw `tile_completions` *rows* in the last 24h, but a pooled
+    (Coop/Team) completion writes one row per pool member sharing that
+    credit (`insertForPool`, `challengeProgress.ts`) -- so a single room
+    finished by a 2-person Coop group was reported as "2 tiles
+    completed," not 1. Confirmed against the real `ototo-dungeon`
+    channel, which had posted exactly that inflated count. Fixed by
+    counting distinct `ref` values instead of rows -- affects the
+    description line for every mode, though it was only ever visibly
+    wrong for a pooled one. The same distinct-`ref` approach now also
+    powers the new room-name list (earliest completion per ref, so a
+    pooled room's several rows collapse to one line) and the cumulative
+    total (distinct completed refs, all-time).
+
+    `buildDailySummaryEmbed` (`discordEmbeds.ts`) gained `tilesTotal`/
+    `tilesCompletedTotal`/`roomsCompletedToday`/`imageParticipantId`,
+    used only when `isCoop`. `discordDailySummary.ts` computes them from
+    data it already fetches -- no new queries. 6 new tests in
+    `discordEmbeds.test.ts` cover the new fields, the "None" fallback on
+    a quiet day (matching this embed's existing "post every day, even a
+    quiet one" philosophy), and the image being present only for Coop
+    with at least one participant.
+
+    **Verified against real production data** (`ototo-dungeon`,
+    read-only computation, nothing sent): the real 2-row/1-room same-day
+    completion now correctly computes as "1 tile completed" (was "2"),
+    "3/25 rooms completed" matches the 3 real distinct completions on
+    record, and the room list correctly reads "Clue Scrolls" for today's
+    completion. Build/lint/324 tests all passed.

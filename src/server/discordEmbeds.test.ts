@@ -479,16 +479,75 @@ describe('buildDailySummaryEmbed', () => {
     expect(embed.fields?.at(-1)?.value).toBe('[Bingo Time!](https://dungeoncrawl.lol/c/bingo-time)');
   });
 
-  it('drops the Leaderboard field for Coop, keeping only the board link', () => {
+  it('drops the Leaderboard field for Coop, replacing it with Board Progress and a room list', () => {
     const embed = buildDailySummaryEmbed({
       challenge: CHALLENGE,
-      tilesCompletedToday: 4,
+      tilesCompletedToday: 2,
       leaderboard: [entry('a', 4), entry('b', 3)],
       participants: PARTICIPANTS,
       daysRemaining: 5,
       isCoop: true,
+      tilesTotal: 25,
+      tilesCompletedTotal: 8,
+      roomsCompletedToday: ['Wintertodt KC', 'Clue Scrolls'],
+      imageParticipantId: 'a',
     });
-    expect(embed.fields).toHaveLength(1);
-    expect(embed.fields?.[0]?.value).toBe('[Bingo Time!](https://dungeoncrawl.lol/c/bingo-time)');
+    expect(embed.fields?.find((f) => f.name === 'Leaderboard')).toBeUndefined();
+    expect(embed.fields).toHaveLength(3);
+    expect(embed.fields?.find((f) => f.name === 'Board Progress')?.value).toBe('8/25 rooms completed');
+    expect(embed.fields?.find((f) => f.name === 'Completed in the last 24 hours')?.value).toBe('Wintertodt KC\nClue Scrolls');
+    expect(embed.fields?.at(-1)?.value).toBe('[Bingo Time!](https://dungeoncrawl.lol/c/bingo-time)');
+  });
+
+  it('shows "None" for the same-day room list on a quiet Coop day, rather than omitting the field', () => {
+    const embed = buildDailySummaryEmbed({
+      challenge: CHALLENGE,
+      tilesCompletedToday: 0,
+      leaderboard: [],
+      participants: PARTICIPANTS,
+      daysRemaining: 5,
+      isCoop: true,
+      tilesTotal: 25,
+      tilesCompletedTotal: 8,
+      roomsCompletedToday: [],
+      imageParticipantId: 'a',
+    });
+    expect(embed.fields?.find((f) => f.name === 'Completed in the last 24 hours')?.value).toBe('None');
+  });
+
+  it('attaches the board image for Coop, keyed off any one participant', () => {
+    const embed = buildDailySummaryEmbed({
+      challenge: CHALLENGE,
+      tilesCompletedToday: 0,
+      leaderboard: [],
+      participants: PARTICIPANTS,
+      daysRemaining: 5,
+      isCoop: true,
+      tilesTotal: 25,
+      tilesCompletedTotal: 0,
+      roomsCompletedToday: [],
+      imageParticipantId: 'a',
+    });
+    expect(embed.image?.url).toContain('/api/board-image/a');
+  });
+
+  it('has no image for Solo/Team, or for Coop with no participants yet', () => {
+    const soloEmbed = buildDailySummaryEmbed({
+      challenge: CHALLENGE,
+      tilesCompletedToday: 0,
+      leaderboard: [],
+      participants: PARTICIPANTS,
+      daysRemaining: 5,
+    });
+    expect(soloEmbed.image).toBeUndefined();
+    const emptyCoopEmbed = buildDailySummaryEmbed({
+      challenge: CHALLENGE,
+      tilesCompletedToday: 0,
+      leaderboard: [],
+      participants: PARTICIPANTS,
+      daysRemaining: 5,
+      isCoop: true,
+    });
+    expect(emptyCoopEmbed.image).toBeUndefined();
   });
 });
