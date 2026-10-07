@@ -2891,3 +2891,11 @@ instead of renumbering the existing list.
     "3/25 rooms completed" matches the 3 real distinct completions on
     record, and the room list correctly reads "Clue Scrolls" for today's
     completion. Build/lint/324 tests all passed.
+
+61. **Dropped the redundant "N tiles completed in the last 24 hours" line
+    from the Coop daily Discord summary.** **Shipped 2026-10-07.** #60 added
+    a "Completed in the last 24 hours" room-name field to Coop's daily
+    summary, which left the description repeating the same information as a
+    bare count. For Coop the description is now just "N days remaining."
+    Solo/Team have no such field and keep the count. 1 new test; build/lint/
+    325 tests passed.

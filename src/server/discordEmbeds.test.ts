@@ -499,6 +499,22 @@ describe('buildDailySummaryEmbed', () => {
     expect(embed.fields?.at(-1)?.value).toBe('[Bingo Time!](https://dungeoncrawl.lol/c/bingo-time)');
   });
 
+  it('drops the redundant 24h count from the Coop description, keeping only days remaining', () => {
+    const embed = buildDailySummaryEmbed({
+      challenge: CHALLENGE,
+      tilesCompletedToday: 2,
+      leaderboard: [],
+      participants: PARTICIPANTS,
+      daysRemaining: 5,
+      isCoop: true,
+      tilesTotal: 25,
+      tilesCompletedTotal: 8,
+      roomsCompletedToday: ['Wintertodt KC', 'Clue Scrolls'],
+      imageParticipantId: 'a',
+    });
+    expect(embed.description).toBe('5 days remaining.');
+  });
+
   it('shows "None" for the same-day room list on a quiet Coop day, rather than omitting the field', () => {
     const embed = buildDailySummaryEmbed({
       challenge: CHALLENGE,

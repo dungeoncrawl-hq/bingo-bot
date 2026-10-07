@@ -283,7 +283,12 @@ export function buildDailySummaryEmbed(params: {
   const dayPlural = daysRemaining === 1 ? '' : 's';
   return {
     title: `📅 Daily update — ${challenge.name}`,
-    description: `${tilesCompletedToday} tile${tilePlural} completed in the last 24 hours. ${daysRemaining} day${dayPlural} remaining.`,
+    // Coop's "Completed in the last 24 hours" field below already carries
+    // the same-day rooms, so repeating the count up here was redundant --
+    // Solo/Team have no such field and keep it.
+    description: isCoop
+      ? `${daysRemaining} day${dayPlural} remaining.`
+      : `${tilesCompletedToday} tile${tilePlural} completed in the last 24 hours. ${daysRemaining} day${dayPlural} remaining.`,
     color: SUMMARY_COLOR,
     image: isCoop && imageParticipantId ? { url: boardImageUrl(imageParticipantId) } : undefined,
     fields: isCoop
