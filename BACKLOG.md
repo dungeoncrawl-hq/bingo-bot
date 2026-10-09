@@ -2899,3 +2899,18 @@ instead of renumbering the existing list.
     bare count. For Coop the description is now just "N days remaining."
     Solo/Team have no such field and keep the count. 1 new test; build/lint/
     325 tests passed.
+
+62. **A boss's first in-window kill now counts as 1 KC gained.** **Shipped
+    2026-10-09.** `kcGainedByBoss` (`participantStats.ts`) treated the first
+    in-window KC event for a boss as a zero-credit baseline whenever there was
+    no earlier event, so a player's first kill of a boss in a dungeon never
+    counted (reported on the October coop board: a Hespori kill, KC 15,
+    contributed nothing to Total Boss KC). The baseline is now that event's KC
+    minus 1: the first event credits exactly 1 kill, later events credit their
+    own increase. Still avoids the original over-credit problem (a lifetime-
+    609kc grinder gets 1, not 609). Safe because Dink KILL_COUNT is only sent
+    per kill and the logout sync is LOGOUT-only. Two tests rewritten; verified
+    against the real dungeon's data (Hespori now credits). Build/lint/325
+    tests passed. Note: already-written `tile_completions` aren't
+    retroactively recomputed -- a tile this would have completed lands on the
+    pool's next Dink event.

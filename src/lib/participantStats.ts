@@ -82,15 +82,17 @@ function inWindow(isoTimestamp: string, window: DateWindow): boolean {
 // polling needed.
 //
 // When there's no event before the window start, we don't know the
-// participant's KC as of that moment -- only that it was *at most* the
-// first in-window event's KC. Crediting that whole lifetime figure as
-// "gained during the window" would massively over-credit anyone whose
-// first-ever kill notification for a boss happens to land after a KC
-// tile unlocks (e.g. a lifetime-609kc Brutus grinder's very next kill
-// would instantly clear a "gain 2 KC" tile). So the first in-window
-// event instead establishes the baseline with 0 credit, and only kills
-// strictly after it count toward the threshold -- matching what a host
-// actually means by "KC gained during the tile."
+// participant's KC as of that moment -- only that the first in-window
+// event's KC is the count *after* the kill that produced it. Crediting
+// that whole lifetime figure as "gained during the window" would
+// massively over-credit anyone whose first-ever kill notification for a
+// boss happens to land after a KC tile unlocks (e.g. a lifetime-609kc
+// Brutus grinder's very next kill would instantly clear a "gain 2 KC"
+// tile). But that one kill is known to have happened in the window, so
+// the baseline is that event's KC minus 1: the first event credits
+// exactly 1 kill, and each later one credits its own increase. Safe
+// because Dink's KILL_COUNT is only ever sent per kill (confirmed --
+// the logout sync is LOGOUT-only, never a KC report).
 function kcGainedByBoss(bossKills: RawParticipantData['bossKills'], window: DateWindow): Record<string, number> {
   const byBoss = new Map<string, RawParticipantData['bossKills']>();
   for (const kill of bossKills) {
@@ -107,7 +109,7 @@ function kcGainedByBoss(bossKills: RawParticipantData['bossKills'], window: Date
     const beforeStart = sorted.filter((e) => Date.parse(e.created_at) < startMs);
     const atOrBeforeEnd = sorted.filter((e) => Date.parse(e.created_at) <= endMs);
     if (atOrBeforeEnd.length === 0) continue;
-    const kcBefore = beforeStart.length > 0 ? beforeStart[beforeStart.length - 1].kc : atOrBeforeEnd[0].kc;
+    const kcBefore = beforeStart.length > 0 ? beforeStart[beforeStart.length - 1].kc : atOrBeforeEnd[0].kc - 1;
     const kcAtEnd = atOrBeforeEnd[atOrBeforeEnd.length - 1].kc;
     const gained = Math.max(0, kcAtEnd - kcBefore);
     if (gained > 0) result[boss] = gained;

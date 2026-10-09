@@ -173,26 +173,26 @@ describe('computeParticipantStats', () => {
     expect(s.bossKcGained).toBe(5);
   });
 
-  it('treats the first in-window event as establishing the baseline, not full credit, when there is no event prior to the window', () => {
+  it('credits exactly 1 kill (not the lifetime KC) for the first in-window event when there is no event prior to the window', () => {
     const raw: RawParticipantData = {
       ...EMPTY_RAW,
-      bossKills: [{ boss: 'Zulrah', kc: 3, created_at: '2026-09-01T00:00:00Z' }],
+      bossKills: [{ boss: 'Zulrah', kc: 609, created_at: '2026-09-01T00:00:00Z' }],
     };
     const s = computeParticipantStats(raw, WINDOW, null);
-    expect(s.kcGainedByActivity.Zulrah).toBeUndefined();
-    expect(s.bossKcGained).toBe(0);
+    expect(s.kcGainedByActivity.Zulrah).toBe(1);
+    expect(s.bossKcGained).toBe(1);
   });
 
-  it('counts real gains after that first in-window event establishes the baseline', () => {
+  it('counts the first kill plus every real gain after it', () => {
     const raw: RawParticipantData = {
       ...EMPTY_RAW,
       bossKills: [
-        { boss: 'Zulrah', kc: 3, created_at: '2026-09-01T00:00:00Z' }, // first ever -- baseline, no credit
-        { boss: 'Zulrah', kc: 5, created_at: '2026-09-02T00:00:00Z' }, // 2 real kills after
+        { boss: 'Zulrah', kc: 3, created_at: '2026-09-01T00:00:00Z' }, // first ever -- credits 1
+        { boss: 'Zulrah', kc: 5, created_at: '2026-09-02T00:00:00Z' }, // 2 more kills
       ],
     };
     const s = computeParticipantStats(raw, WINDOW, null);
-    expect(s.kcGainedByActivity.Zulrah).toBe(2);
+    expect(s.kcGainedByActivity.Zulrah).toBe(3);
   });
 
   it('omits a boss from kcGainedByActivity entirely when gained is 0 (or negative)', () => {
